@@ -132,44 +132,76 @@ export default function PostDetailPage() {
 
     if (!user) return;
 
-    if (isLiked) {
-      await supabase
-        .from("likes")
-        .delete()
-        .eq("post_id", id)
-        .eq("user_id", user.id);
-    } else {
-      await supabase.from("likes").insert({
-        post_id: id,
-        user_id: user.id,
-      });
-    }
-
-    setIsLiked(!isLiked);
-
+    // 🔥 OPTIMISTIC UPDATE
+    const currentlyLiked = isLiked;
+    setIsLiked(!currentlyLiked);
     setPost((prev: any) => ({
       ...prev,
-      likes_count: isLiked ? prev.likes_count - 1 : prev.likes_count + 1,
+      likes_count: !currentlyLiked
+        ? (prev.likes_count || 0) + 1
+        : Math.max(0, (prev.likes_count || 0) - 1),
     }));
+
+    try {
+      if (currentlyLiked) {
+        await supabase
+          .from("likes")
+          .delete()
+          .eq("post_id", id)
+          .eq("user_id", user.id);
+      } else {
+        await supabase.from("likes").insert({
+          post_id: id,
+          user_id: user.id,
+        });
+      }
+    } catch (err) {
+      // Lỗi thì roll-back (trả lại trạng thái cũ)
+      setIsLiked(currentlyLiked);
+      setPost((prev: any) => ({
+        ...prev,
+        likes_count: currentlyLiked
+          ? (prev.likes_count || 0) + 1
+          : Math.max(0, (prev.likes_count || 0) - 1),
+      }));
+    }
   };
 
   // ================= COMMENT =================
   const handleComment = async () => {
     if (!user || !comment.trim()) return;
 
-    await supabase.from("comments").insert({
-      post_id: id,
+    const text = comment;
+    setComment(""); // Clear immediately
+
+    // 🔥 OPTIMISTIC UPDATE
+    const tempId = `temp-${Date.now()}`;
+    const tempComment = {
+      id: tempId,
+      content: text,
       user_id: user.id,
-      content: comment,
-    });
+      users: {
+        id: user.id,
+        name:
+          user.user_metadata?.name || user.user_metadata?.full_name || "Bạn",
+        avatar_url: user.user_metadata?.avatar_url,
+      },
+    };
 
-    setComment("");
-    loadComments();
-
+    setComments((prev) => [...prev, tempComment]);
     setPost((prev: any) => ({
       ...prev,
       comments_count: (prev.comments_count || 0) + 1,
     }));
+
+    try {
+      await supabase
+        .from("comments")
+        .insert({ post_id: id, user_id: user.id, content: text });
+      loadComments(); // Fetch để lấy id thật
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   // ================= DELETE COMMENT =================

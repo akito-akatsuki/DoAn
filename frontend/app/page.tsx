@@ -55,7 +55,9 @@ export default function HomePage() {
   const [modalCommentText, setModalCommentText] = useState("");
 
   // ================= COMMENT MENUS & EDIT =================
-  const [openCommentMenuId, setOpenCommentMenuId] = useState<string | null>(null);
+  const [openCommentMenuId, setOpenCommentMenuId] = useState<string | null>(
+    null,
+  );
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState("");
 
@@ -123,26 +125,49 @@ export default function HomePage() {
       setTimeout(() => setShowHeartId(null), 1000);
     }
 
-    const res = await toggleLike(postId);
-
+    // 🔥 OPTIMISTIC UPDATE: Cập nhật UI ngay lập tức
     setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? {
-              ...p,
-              is_liked: res.is_liked,
-              likes_count: res.likes_count,
-            }
-          : p,
-      ),
+      prev.map((p) => {
+        if (p.id === postId) {
+          const isLiked = !p.is_liked;
+          return {
+            ...p,
+            is_liked: isLiked,
+            likes_count: isLiked
+              ? (p.likes_count || 0) + 1
+              : Math.max(0, (p.likes_count || 0) - 1),
+          };
+        }
+        return p;
+      }),
     );
 
     if (selectedPost && selectedPost.id === postId) {
-      setSelectedPost((prev: any) => ({
-        ...prev,
-        is_liked: res.is_liked,
-        likes_count: res.likes_count,
-      }));
+      setSelectedPost((prev: any) => {
+        const isLiked = !prev.is_liked;
+        return {
+          ...prev,
+          is_liked: isLiked,
+          likes_count: isLiked
+            ? (prev.likes_count || 0) + 1
+            : Math.max(0, (prev.likes_count || 0) - 1),
+        };
+      });
+    }
+
+    // Gọi API ngầm phía sau để đồng bộ dữ liệu thật
+    try {
+      const res = await toggleLike(postId);
+      // Tùy chọn: Đồng bộ lại chính xác số đếm từ server
+      setPosts((prev) =>
+        prev.map((p) =>
+          p.id === postId
+            ? { ...p, is_liked: res.is_liked, likes_count: res.likes_count }
+            : p,
+        ),
+      );
+    } catch (error) {
+      console.error("Lỗi khi like:", error);
     }
   };
 
@@ -156,14 +181,41 @@ export default function HomePage() {
     const text = commentInput[postId];
     if (!text) return;
 
-    const newComment = await createComment(postId, text);
+    // Xóa input ngay lập tức
+    setCommentInput((prev) => ({ ...prev, [postId]: "" }));
+
+    // 🔥 OPTIMISTIC UPDATE
+    const tempId = `temp-${Date.now()}`;
+    const tempComment = {
+      id: tempId,
+      content: text,
+      user_id: user?.id,
+      users: {
+        id: user?.id,
+        name:
+          user?.user_metadata?.name || user?.user_metadata?.full_name || "Bạn",
+        avatar_url: user?.user_metadata?.avatar_url,
+      },
+    };
 
     setCommentsMap((prev) => ({
       ...prev,
-      [postId]: [...(prev[postId] || []), newComment],
+      [postId]: [...(prev[postId] || []), tempComment],
     }));
 
-    setCommentInput((prev) => ({ ...prev, [postId]: "" }));
+    // Gọi API ngầm
+    try {
+      const newComment = await createComment(postId, text);
+      // Đổi comment ảo thành comment thật (để có ID thật dùng cho việc xóa/sửa)
+      setCommentsMap((prev) => ({
+        ...prev,
+        [postId]: (prev[postId] || []).map((c) =>
+          c.id === tempId ? newComment : c,
+        ),
+      }));
+    } catch (err) {
+      console.error("Lỗi khi bình luận", err);
+    }
   };
 
   // ================= OPEN MODAL =================
@@ -182,18 +234,51 @@ export default function HomePage() {
   const handleModalComment = async () => {
     if (!user || !modalCommentText.trim() || !selectedPost) return;
 
-    const newCmt = await createComment(selectedPost.id, modalCommentText);
-    setModalComments((prev) => [...prev, newCmt]);
-    setModalCommentText("");
+    const text = modalCommentText;
+    setModalCommentText(""); // Xóa input ngay lập tức
 
+    // 🔥 OPTIMISTIC UPDATE
+    const tempId = `temp-${Date.now()}`;
+    const tempComment = {
+      id: tempId,
+      content: text,
+      user_id: user?.id,
+      users: {
+        id: user?.id,
+        name:
+          user?.user_metadata?.name || user?.user_metadata?.full_name || "Bạn",
+        avatar_url: user?.user_metadata?.avatar_url,
+      },
+    };
+
+    setModalComments((prev) => [...prev, tempComment]);
     setCommentsMap((prev) => ({
       ...prev,
-      [selectedPost.id]: [...(prev[selectedPost.id] || []), newCmt],
+      [selectedPost.id]: [...(prev[selectedPost.id] || []), tempComment],
     }));
+
+    try {
+      const newCmt = await createComment(selectedPost.id, text);
+      setModalComments((prev) =>
+        prev.map((c) => (c.id === tempId ? newCmt : c)),
+      );
+      setCommentsMap((prev) => ({
+        ...prev,
+        [selectedPost.id]: (prev[selectedPost.id] || []).map((c) =>
+          c.id === tempId ? newCmt : c,
+        ),
+      }));
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   // ================= DELETE COMMENT =================
-  const handleDeleteComment = async (commentId: string, postId: string, isModal = false) => {
+  const handleDeleteComment = async (
+    commentId: string,
+    postId: string,
+    isModal = false,
+  ) => {
     if (!confirm("Bạn có chắc chắn muốn xóa bình luận này?")) return;
     try {
       await deleteComment(commentId);
@@ -212,16 +297,23 @@ export default function HomePage() {
   };
 
   // ================= EDIT COMMENT =================
-  const submitEditComment = async (commentId: string, postId: string, isModal = false) => {
+  const submitEditComment = async (
+    commentId: string,
+    postId: string,
+    isModal = false,
+  ) => {
     if (!editCommentText.trim()) return;
     try {
       const updated = await updateComment(commentId, editCommentText);
       if (isModal) {
-        setModalComments((prev) => prev.map((c) => (c.id === commentId ? updated : c)));
+        setModalComments((prev) =>
+          prev.map((c) => (c.id === commentId ? updated : c)),
+        );
       }
       setCommentsMap((prev) => ({
         ...prev,
-        [postId]: prev[postId]?.map((c) => (c.id === commentId ? updated : c)) || [],
+        [postId]:
+          prev[postId]?.map((c) => (c.id === commentId ? updated : c)) || [],
       }));
       setEditingCommentId(null);
       setOpenCommentMenuId(null);
@@ -431,7 +523,10 @@ export default function HomePage() {
                 </div>
 
                 {/* 3 DOT MENU */}
-                <div className="relative" onDoubleClick={(e) => e.stopPropagation()}>
+                <div
+                  className="relative"
+                  onDoubleClick={(e) => e.stopPropagation()}
+                >
                   <MoreHorizontal
                     className="w-5 h-5 cursor-pointer p-1 hover:bg-secondary rounded-full transition-all"
                     onClick={(e) => {
@@ -529,7 +624,10 @@ export default function HomePage() {
                 {/* COMMENTS SECTION */}
                 <div className="mt-2 space-y-1 select-text">
                   {commentsMap[post.id]?.map((c: any, idx: number) => (
-                    <div key={c.id ?? idx} className="text-sm flex justify-between items-start group">
+                    <div
+                      key={c.id ?? idx}
+                      className="text-sm flex justify-between items-start group"
+                    >
                       <div className="flex-1">
                         <span className="font-bold mr-1">
                           {c?.users?.name || "user"}:
@@ -539,16 +637,30 @@ export default function HomePage() {
                             <input
                               className="border px-2 py-1 rounded w-full outline-none text-sm bg-transparent"
                               value={editCommentText}
-                              onChange={(e) => setEditCommentText(e.target.value)}
+                              onChange={(e) =>
+                                setEditCommentText(e.target.value)
+                              }
                               onKeyDown={(e) => {
-                                if (e.key === "Enter") submitEditComment(c.id, post.id);
-                                if (e.key === "Escape") setEditingCommentId(null);
+                                if (e.key === "Enter")
+                                  submitEditComment(c.id, post.id);
+                                if (e.key === "Escape")
+                                  setEditingCommentId(null);
                               }}
                               autoFocus
                             />
                             <div className="flex gap-2 text-xs">
-                              <button onClick={() => submitEditComment(c.id, post.id)} className="text-blue-500 font-semibold">Lưu</button>
-                              <button onClick={() => setEditingCommentId(null)} className="text-gray-500">Hủy</button>
+                              <button
+                                onClick={() => submitEditComment(c.id, post.id)}
+                                className="text-blue-500 font-semibold"
+                              >
+                                Lưu
+                              </button>
+                              <button
+                                onClick={() => setEditingCommentId(null)}
+                                className="text-gray-500"
+                              >
+                                Hủy
+                              </button>
                             </div>
                           </div>
                         ) : (
@@ -562,7 +674,9 @@ export default function HomePage() {
                             className="w-4 h-4 cursor-pointer text-gray-500 hover:text-black"
                             onClick={(e) => {
                               e.stopPropagation();
-                              setOpenCommentMenuId(openCommentMenuId === c.id ? null : c.id);
+                              setOpenCommentMenuId(
+                                openCommentMenuId === c.id ? null : c.id,
+                              );
                             }}
                           />
                           {openCommentMenuId === c.id && (
@@ -578,7 +692,9 @@ export default function HomePage() {
                                 Sửa
                               </button>
                               <button
-                                onClick={() => handleDeleteComment(c.id, post.id)}
+                                onClick={() =>
+                                  handleDeleteComment(c.id, post.id)
+                                }
                                 className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-gray-100"
                               >
                                 Xóa
@@ -629,7 +745,6 @@ export default function HomePage() {
           ))}
         </div>
       </main>
-
       {/* ================= MODAL POST ================= */}
       {selectedPost && (
         <div
@@ -695,13 +810,18 @@ export default function HomePage() {
                     <span className="font-semibold text-sm mr-2">
                       {selectedPost.users?.name || "Người dùng"}
                     </span>
-                    <span className="text-sm whitespace-pre-wrap">{selectedPost.content}</span>
+                    <span className="text-sm whitespace-pre-wrap">
+                      {selectedPost.content}
+                    </span>
                   </div>
                 </div>
 
                 {/* Comments */}
                 {modalComments.map((c: any) => (
-                  <div key={c.id} className="flex items-start gap-3 group relative">
+                  <div
+                    key={c.id}
+                    className="flex items-start gap-3 group relative"
+                  >
                     <img
                       src={
                         c.users?.avatar_url ||
@@ -721,18 +841,33 @@ export default function HomePage() {
                             value={editCommentText}
                             onChange={(e) => setEditCommentText(e.target.value)}
                             onKeyDown={(e) => {
-                              if (e.key === "Enter") submitEditComment(c.id, selectedPost.id, true);
+                              if (e.key === "Enter")
+                                submitEditComment(c.id, selectedPost.id, true);
                               if (e.key === "Escape") setEditingCommentId(null);
                             }}
                             autoFocus
                           />
                           <div className="flex gap-2 text-xs">
-                            <button onClick={() => submitEditComment(c.id, selectedPost.id, true)} className="text-blue-500 font-semibold">Lưu</button>
-                            <button onClick={() => setEditingCommentId(null)} className="text-gray-500">Hủy</button>
+                            <button
+                              onClick={() =>
+                                submitEditComment(c.id, selectedPost.id, true)
+                              }
+                              className="text-blue-500 font-semibold"
+                            >
+                              Lưu
+                            </button>
+                            <button
+                              onClick={() => setEditingCommentId(null)}
+                              className="text-gray-500"
+                            >
+                              Hủy
+                            </button>
                           </div>
                         </div>
                       ) : (
-                        <span className="text-sm whitespace-pre-wrap">{c.content}</span>
+                        <span className="text-sm whitespace-pre-wrap">
+                          {c.content}
+                        </span>
                       )}
                     </div>
 
@@ -742,7 +877,9 @@ export default function HomePage() {
                           className="w-4 h-4 cursor-pointer text-gray-500 hover:text-black dark:hover:text-white"
                           onClick={(e) => {
                             e.stopPropagation();
-                            setOpenCommentMenuId(openCommentMenuId === c.id ? null : c.id);
+                            setOpenCommentMenuId(
+                              openCommentMenuId === c.id ? null : c.id,
+                            );
                           }}
                         />
                         {openCommentMenuId === c.id && (
@@ -758,7 +895,9 @@ export default function HomePage() {
                               Sửa
                             </button>
                             <button
-                              onClick={() => handleDeleteComment(c.id, selectedPost.id, true)}
+                              onClick={() =>
+                                handleDeleteComment(c.id, selectedPost.id, true)
+                              }
                               className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-gray-100 dark:hover:bg-zinc-700"
                             >
                               Xóa
@@ -782,7 +921,9 @@ export default function HomePage() {
                         : "stroke-[2px] text-foreground"
                     }`}
                   />
-                  <span className="font-semibold text-sm">{selectedPost.likes_count || 0} lượt thích</span>
+                  <span className="font-semibold text-sm">
+                    {selectedPost.likes_count || 0} lượt thích
+                  </span>
                 </div>
                 <div className="flex gap-2 mt-3">
                   <input
@@ -790,7 +931,7 @@ export default function HomePage() {
                     value={modalCommentText}
                     onChange={(e) => setModalCommentText(e.target.value)}
                     placeholder="Thêm bình luận..."
-                    onKeyDown={(e) => e.key === 'Enter' && handleModalComment()}
+                    onKeyDown={(e) => e.key === "Enter" && handleModalComment()}
                   />
                   <button
                     onClick={handleModalComment}
@@ -805,7 +946,6 @@ export default function HomePage() {
           </div>
         </div>
       )}
-
       {/* FIXED CHAT UI */}
       <div className="fixed bottom-6 right-6 z-[999] flex flex-col items-end gap-4">
         {/* Khung ChatBox hiện lên khi nhấn nút */}
