@@ -1,0 +1,13 @@
+# Chặn toàn bộ node_modules ở mọi nơi
+node_modules/
+frontend/node_modules/
+backend/node_modules/
+
+# Chặn các file môi trường và build
+.env
+.env*
+frontend/.next/
+frontend/build/
+frontend/dist/
+backend/dist/
+.vercel

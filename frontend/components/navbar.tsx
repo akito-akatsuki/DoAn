@@ -1,0 +1,221 @@
+"use client";
+
+import { supabase } from "@/lib/supabaseClient";
+import { useState, useEffect } from "react";
+import {
+  Sun,
+  Moon,
+  Home,
+  Heart,
+  PlusCircle,
+  MessageCircle,
+} from "lucide-react";
+
+export default function Navbar({ user }: any) {
+  const [open, setOpen] = useState(false);
+  const [isDark, setIsDark] = useState(false);
+
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<any[]>([]);
+
+  const [selectedUser, setSelectedUser] = useState<any>(null);
+  const [isFollowing, setIsFollowing] = useState(false);
+
+  useEffect(() => {
+    const root = window.document.documentElement;
+    const theme = localStorage.getItem("theme");
+
+    if (
+      theme === "dark" ||
+      (!theme && window.matchMedia("(prefers-color-scheme: dark)").matches)
+    ) {
+      setIsDark(true);
+      root.dataset.theme = "dark";
+    }
+  }, []);
+
+  const toggleDark = () => {
+    const root = window.document.documentElement;
+    const newDark = !isDark;
+
+    setIsDark(newDark);
+    localStorage.setItem("theme", newDark ? "dark" : "light");
+
+    root.dataset.theme = newDark ? "dark" : "";
+  };
+
+  useEffect(() => {
+    const delay = setTimeout(async () => {
+      if (query.length < 2) {
+        setResults([]);
+        return;
+      }
+
+      const { data } = await supabase
+        .from("users")
+        .select("id, name, avatar_url")
+        .ilike("name", `%${query}%`)
+        .limit(5);
+
+      setResults(data || []);
+    }, 300);
+
+    return () => clearTimeout(delay);
+  }, [query]);
+
+  const toggleFollow = async () => {
+    if (!user || !selectedUser) return;
+
+    if (!isFollowing) {
+      await supabase.from("follows").insert({
+        follower_id: user.id,
+        following_id: selectedUser.id,
+      });
+      setIsFollowing(true);
+    } else {
+      await supabase.from("follows").delete().match({
+        follower_id: user.id,
+        following_id: selectedUser.id,
+      });
+      setIsFollowing(false);
+    }
+  };
+
+  // ✅ FIX LOGOUT
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+
+    setOpen(false); // đóng dropdown
+    setSelectedUser(null); // reset state follow
+    setResults([]);
+
+    window.location.reload(); // QUAN TRỌNG: refresh UI
+  };
+
+  return (
+    <nav className="fixed top-0 w-full bg-background z-[9999] shadow-ig">
+      <div className="max-w-[935px] mx-auto flex items-center justify-between h-[60px] px-4">
+        {/* SEARCH */}
+        <div className="hidden md:block relative">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search user..."
+            className="w-[215px] bg-secondary px-4 py-[10px] rounded-full text-sm"
+          />
+
+          {results.length > 0 && (
+            <div className="absolute top-full mt-2 w-full bg-background border rounded-xl shadow-lg z-50">
+              {results.map((u) => (
+                <div
+                  key={u.id}
+                  onClick={() => {
+                    setSelectedUser(u);
+                    setResults([]);
+                    setQuery("");
+                  }}
+                  className="flex items-center gap-3 p-2 hover:bg-secondary cursor-pointer"
+                >
+                  <img
+                    src={
+                      u.avatar_url ||
+                      `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
+                    }
+                    className="w-7 h-7 rounded-full"
+                  />
+                  <span className="text-sm">{u.name}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* LOGO */}
+        <h1 className="font-bold text-xl">InstaMini</h1>
+
+        {/* ICONS */}
+        <div className="flex items-center gap-1">
+          <button className="p-2">
+            <Home />
+          </button>
+          <button className="p-2">
+            <MessageCircle />
+          </button>
+          <button className="p-2">
+            <Heart />
+          </button>
+          <button className="p-2">
+            <PlusCircle />
+          </button>
+
+          <button onClick={toggleDark} className="p-2">
+            {isDark ? <Sun /> : <Moon />}
+          </button>
+
+          {/* USER */}
+          <div className="relative">
+            {user ? (
+              <>
+                <img
+                  onClick={() => setOpen((prev) => !prev)}
+                  src={
+                    user?.user_metadata?.avatar_url ||
+                    `https://api.dicebear.com/7.x/identicon/svg?seed=${user.id}`
+                  }
+                  className="w-8 h-8 rounded-full cursor-pointer"
+                />
+
+                {open && (
+                  <div className="absolute right-0 mt-2 w-48 bg-background border rounded-xl shadow-ig py-2 z-[99999]">
+                    <div className="px-3 py-2 text-sm border-b">
+                      {user.email}
+                    </div>
+
+                    <button className="w-full text-left px-3 py-2 hover:bg-secondary">
+                      Hồ sơ
+                    </button>
+
+                    <button className="w-full text-left px-3 py-2 hover:bg-secondary">
+                      Cài đặt
+                    </button>
+
+                    {/* ✅ FIX HERE */}
+                    <button
+                      onClick={handleLogout}
+                      className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-50"
+                    >
+                      Đăng xuất
+                    </button>
+
+                    {selectedUser && (
+                      <div className="border-t mt-2 pt-2 px-3">
+                        <button
+                          onClick={toggleFollow}
+                          className={`w-full py-1 rounded text-sm ${
+                            isFollowing
+                              ? "bg-red-100 text-red-600"
+                              : "bg-blue-500 text-white"
+                          }`}
+                        >
+                          {isFollowing ? "Unfollow" : "Follow"}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            ) : (
+              <button
+                onClick={() =>
+                  supabase.auth.signInWithOAuth({ provider: "google" })
+                }
+              >
+                Login
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    </nav>
+  );
+}
