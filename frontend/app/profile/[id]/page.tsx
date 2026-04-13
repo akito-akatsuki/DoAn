@@ -4,7 +4,7 @@ import { use, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Navbar from "@/components/navbar";
 import Link from "next/link";
-import { Heart, MoreHorizontal, X } from "lucide-react";
+import { Heart, MoreHorizontal, X, Trash2 } from "lucide-react";
 import { useRef } from "react";
 import {
   getComments,
@@ -43,13 +43,22 @@ export default function ProfilePage({
   const [openCommentMenuId, setOpenCommentMenuId] = useState<string | null>(
     null,
   );
+  const [openPostMenu, setOpenPostMenu] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState("");
+
+  // ================= EDIT PROFILE STATES =================
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [editName, setEditName] = useState("");
+  const [editBio, setEditBio] = useState("");
+  const [editAvatar, setEditAvatar] = useState<File | null>(null);
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   // ================= CLICK OUTSIDE =================
   useEffect(() => {
     const handleClickOutside = () => {
       setOpenCommentMenuId(null);
+      setOpenPostMenu(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
@@ -271,6 +280,75 @@ export default function ProfilePage({
     }
   };
 
+  // ================= DELETE POST =================
+  const handleDeletePost = async (postId: string) => {
+    if (!confirm("Xóa bài viết này?")) return;
+    try {
+      const { error } = await supabase.from("posts").delete().eq("id", postId);
+      if (error) throw error;
+
+      setPosts((prev) => prev.filter((p) => p.id !== postId));
+      closeModal();
+    } catch (err) {
+      console.error("DELETE ERROR:", err);
+      alert("Xóa bài viết thất bại.");
+    }
+  };
+
+  // ================= EDIT PROFILE HANDLERS =================
+  const openEditProfile = () => {
+    setEditName(profile?.name || "");
+    setEditBio(profile?.bio || "");
+    setEditAvatar(null);
+    setIsEditProfileOpen(true);
+  };
+
+  const saveProfile = async () => {
+    if (!currentUser || !profile) return;
+    setIsSavingProfile(true);
+    try {
+      let newAvatarUrl = profile.avatar_url;
+
+      // Nếu có chọn ảnh mới, upload lên bucket "posts"
+      if (editAvatar) {
+        const cleanName = editAvatar.name.replace(/[^a-zA-Z0-9.]/g, "_");
+        const fileName = `avatar_${Date.now()}_${cleanName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("posts")
+          .upload(fileName, editAvatar);
+
+        if (!uploadError) {
+          const { data } = supabase.storage
+            .from("posts")
+            .getPublicUrl(fileName);
+          newAvatarUrl = data.publicUrl;
+        }
+      }
+
+      // Cập nhật thông tin vào bảng users
+      const { error } = await supabase
+        .from("users")
+        .update({ name: editName, bio: editBio, avatar_url: newAvatarUrl })
+        .eq("id", currentUser.id);
+
+      if (error) throw error;
+
+      // Cập nhật giao diện ngay lập tức
+      setProfile({
+        ...profile,
+        name: editName,
+        bio: editBio,
+        avatar_url: newAvatarUrl,
+      });
+      setIsEditProfileOpen(false);
+    } catch (err) {
+      console.error(err);
+      alert("Lỗi khi lưu thông tin. Hãy kiểm tra quyền (RLS) của bảng users.");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
   // ================= UI =================
   if (loading) {
     return (
@@ -308,7 +386,7 @@ export default function ProfilePage({
             <div className="flex items-center gap-4">
               <h1 className="text-xl font-semibold">{profile.name}</h1>
 
-              {currentUser?.id !== id && (
+              {currentUser?.id !== id ? (
                 <button
                   onClick={toggleFollow}
                   className={`px-4 py-1.5 rounded-lg font-semibold text-sm transition-colors ${
@@ -318,6 +396,13 @@ export default function ProfilePage({
                   }`}
                 >
                   {isFollowing ? "Đang theo dõi" : "Theo dõi"}
+                </button>
+              ) : (
+                <button
+                  onClick={openEditProfile}
+                  className="px-4 py-1.5 rounded-lg font-semibold text-sm transition-colors bg-secondary text-foreground border border-border hover:bg-secondary/80"
+                >
+                  Sửa thông tin
                 </button>
               )}
             </div>
@@ -401,18 +486,47 @@ export default function ProfilePage({
             {/* Phần Thông tin / Bình luận */}
             <div className="w-full md:w-[400px] flex flex-col border-l border-border bg-background h-[50vh] md:h-auto transition-colors duration-500">
               {/* Header */}
-              <div className="flex items-center gap-3 p-4 border-b border-border">
-                <img
-                  src={
-                    selectedPost.users?.avatar_url ||
-                    `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPost.users?.id}`
-                  }
-                  className="w-10 h-10 rounded-full border object-cover"
-                  alt="avatar"
-                />
-                <span className="font-semibold text-sm">
-                  {selectedPost.users?.name || "Người dùng"}
-                </span>
+              <div className="flex items-center justify-between p-4 border-b border-border relative">
+                <div className="flex items-center gap-3">
+                  <img
+                    src={
+                      selectedPost.users?.avatar_url ||
+                      `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPost.users?.id}`
+                    }
+                    className="w-10 h-10 rounded-full border object-cover"
+                    alt="avatar"
+                  />
+                  <span className="font-semibold text-sm">
+                    {selectedPost.users?.name || "Người dùng"}
+                  </span>
+                </div>
+
+                {currentUser?.id === selectedPost.user_id && (
+                  <div className="relative">
+                    <MoreHorizontal
+                      className="w-5 h-5 cursor-pointer text-foreground hover:text-muted-foreground transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenPostMenu(!openPostMenu);
+                      }}
+                    />
+                    {openPostMenu && (
+                      <div className="absolute right-0 mt-2 w-44 bg-background border border-border rounded-xl shadow-xl py-1 z-[100] transition-colors duration-500">
+                        <button
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDeletePost(selectedPost.id);
+                          }}
+                          className="flex items-center gap-3 px-4 py-2 text-red-500 hover:bg-secondary w-full text-sm font-semibold transition-all"
+                        >
+                          <Trash2 size={18} />
+                          Xóa bài viết
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Content / Caption & Comments */}
@@ -588,6 +702,87 @@ export default function ProfilePage({
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL EDIT PROFILE ================= */}
+      {isEditProfileOpen && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-md p-4 transition-all">
+          <div className="bg-background text-foreground w-full max-w-md rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-border">
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h2 className="font-bold text-lg">Sửa thông tin</h2>
+              <button
+                onClick={() => setIsEditProfileOpen(false)}
+                className="hover:text-muted-foreground transition-colors"
+              >
+                <X />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4">
+              <div className="flex flex-col gap-2 items-center">
+                <img
+                  src={
+                    editAvatar
+                      ? URL.createObjectURL(editAvatar)
+                      : profile?.avatar_url ||
+                        `https://api.dicebear.com/7.x/identicon/svg?seed=${profile?.id}`
+                  }
+                  className="w-20 h-20 rounded-full object-cover border border-border"
+                  alt="Preview Avatar"
+                />
+                <label className="text-blue-500 font-semibold text-sm cursor-pointer hover:text-blue-600 transition-colors">
+                  Đổi ảnh đại diện
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/*"
+                    onChange={(e) => setEditAvatar(e.target.files?.[0] || null)}
+                  />
+                </label>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-1">
+                  Tên hiển thị
+                </label>
+                <input
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  className="w-full border border-border bg-secondary/50 rounded-lg px-3 py-2 outline-none focus:bg-background transition-colors"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-1">
+                  Tiểu sử (Bio)
+                </label>
+                <textarea
+                  value={editBio}
+                  onChange={(e) => setEditBio(e.target.value)}
+                  className="w-full border border-border bg-secondary/50 rounded-lg px-3 py-2 outline-none focus:bg-background transition-colors resize-none"
+                  rows={3}
+                  placeholder="Giới thiệu đôi nét về bản thân..."
+                />
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-border flex justify-end gap-2">
+              <button
+                onClick={() => setIsEditProfileOpen(false)}
+                className="px-4 py-2 rounded-lg font-semibold text-sm hover:bg-secondary transition-colors"
+              >
+                Hủy
+              </button>
+              <button
+                onClick={saveProfile}
+                disabled={isSavingProfile}
+                className="px-4 py-2 rounded-lg font-semibold text-sm bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
+              >
+                {isSavingProfile ? "Đang lưu..." : "Lưu thay đổi"}
+              </button>
             </div>
           </div>
         </div>

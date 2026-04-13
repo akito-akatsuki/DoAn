@@ -431,30 +431,16 @@ export default function HomePage() {
     if (!confirm("Xóa bài viết này?")) return;
 
     try {
-      // 🔥 lấy token từ Supabase session
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      const res = await fetch(`http://localhost:5000/posts/${postId}`, {
-        method: "DELETE",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session?.access_token}`,
-        },
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data?.error || "Delete failed");
-      }
+      // Gọi trực tiếp Supabase để xóa bài
+      const { error } = await supabase.from("posts").delete().eq("id", postId);
+      if (error) throw error;
 
       // 🔥 update UI ngay
       setPosts((prev) => prev.filter((p) => p.id !== postId));
       setOpenMenuId(null);
     } catch (err) {
       console.error("DELETE ERROR:", err);
+      alert("Xóa bài viết thất bại.");
     }
   };
 
@@ -506,7 +492,7 @@ export default function HomePage() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="Bạn đang nghĩ gì?"
-                className="w-full text-base resize-none outline-none min-h-[80px] placeholder:text-muted bg-transparent pt-1 select-text" // Cho phép chọn text ở đây
+                className="w-full text-base resize-none outline-none min-h-[80px] placeholder:text-muted-foreground text-foreground bg-transparent pt-1 select-text" // Cho phép chọn text ở đây
                 rows={2}
               />
               <div className="flex items-center justify-between pt-1">
@@ -648,7 +634,11 @@ export default function HomePage() {
                       className="absolute right-0 mt-2 w-44 bg-background border ring-1 ring-border rounded-xl shadow-xl py-1 z-[100] transition-colors duration-500"
                     >
                       <button
-                        onClick={() => handleSavePost(post.id)}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleSavePost(post.id);
+                        }}
                         className="flex items-center gap-3 px-4 py-2 hover:bg-secondary w-full text-sm font-semibold transition-all"
                       >
                         <Bookmark size={18} />
@@ -656,7 +646,11 @@ export default function HomePage() {
                       </button>
 
                       <button
-                        onClick={() => handleReportPost(post.id)}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleReportPost(post.id);
+                        }}
                         className="flex items-center gap-3 px-4 py-2 hover:bg-secondary w-full text-sm font-semibold transition-all"
                       >
                         <Flag size={18} />
@@ -666,7 +660,11 @@ export default function HomePage() {
                       {/* Chỉ hiện nút Xóa nếu là bài viết của chính người dùng */}
                       {user?.id === post.user_id && (
                         <button
-                          onClick={() => handleDeletePost(post.id)}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDeletePost(post.id);
+                          }}
                           className="flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-500/10 w-full text-sm font-semibold transition-all"
                         >
                           <Trash2 size={18} />

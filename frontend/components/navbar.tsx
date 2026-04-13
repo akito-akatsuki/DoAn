@@ -74,7 +74,7 @@ export default function Navbar({ user }: any) {
   };
 
   return (
-    <nav className="fixed top-0 w-full bg-background z-[9999] shadow-ig transition-colors duration-500">
+    <nav className="fixed top-0 w-full bg-background/80 backdrop-blur-md z-[9999] shadow-ig transition-colors duration-500">
       <div className="max-w-[935px] mx-auto flex items-center justify-between h-[60px] px-4">
         {/* SEARCH */}
         <div className="hidden md:block relative">
