@@ -1,67 +1,65 @@
 import { supabase } from "./supabaseClient";
 
-/* ==============================
-   GET OR CREATE CONVERSATION
-============================== */
+/* ======================================
+   GET OR CREATE CONVERSATION (OPTIMIZED)
+====================================== */
 export const getOrCreateConversation = async (user1: string, user2: string) => {
   if (!user1 || !user2) throw new Error("Missing users");
 
-  // tìm conversation chung
-  const { data, error } = await supabase
-    .from("conversation_members")
-    .select("conversation_id, user_id");
-
-  if (error) {
-    console.error("conversation_members error:", error);
-    throw error;
-  }
-
-  const convMap = new Map<string, Set<string>>();
-
-  data?.forEach((row) => {
-    if (!convMap.has(row.conversation_id)) {
-      convMap.set(row.conversation_id, new Set());
-    }
-    convMap.get(row.conversation_id)!.add(row.user_id);
-  });
-
-  for (const [convId, members] of convMap.entries()) {
-    if (members.has(user1) && members.has(user2)) {
-      return convId;
-    }
-  }
-
-  // tạo conversation mới
-  const { data: convo, error: convoError } = await supabase
+  // 1. tìm conversation tồn tại
+  const { data: existing, error: findError } = await supabase
     .from("conversations")
-    .insert({})
+    .select("id")
+    .or(
+      `and(user1_id.eq.${user1},user2_id.eq.${user2}),and(user1_id.eq.${user2},user2_id.eq.${user1})`,
+    )
+    .maybeSingle();
+
+  if (findError) {
+    console.error("Find conversation error:", findError);
+  }
+
+  if (existing?.id) return existing.id;
+
+  // 2. tạo conversation (FIX HERE)
+  const { data: convo, error: createError } = await supabase
+    .from("conversations")
+    .insert({
+      user1_id: user1,
+      user2_id: user2,
+    })
     .select()
     .single();
 
-  if (convoError) throw convoError;
-
-  // add members
-  const { error: memberError } = await supabase
-    .from("conversation_members")
-    .insert([
-      { conversation_id: convo.id, user_id: user1 },
-      { conversation_id: convo.id, user_id: user2 },
-    ]);
-
-  if (memberError) throw memberError;
+  if (createError) {
+    console.error("Create conversation error:", createError);
+    throw createError;
+  }
 
   return convo.id;
 };
 
-/* ==============================
-   GET MESSAGES
-============================== */
+/* ======================================
+   GET MESSAGES (WITH USER INFO)
+====================================== */
 export const getMessages = async (conversationId: string) => {
   if (!conversationId) return [];
 
   const { data, error } = await supabase
     .from("messages")
-    .select("*, users(*)")
+    .select(
+      `
+      id,
+      content,
+      created_at,
+      sender_id,
+      users:sender_id (
+        id,
+        name,
+        avatar_url
+      )
+    `,
+    )
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true });
 
@@ -73,9 +71,9 @@ export const getMessages = async (conversationId: string) => {
   return data || [];
 };
 
-/* ==============================
-   SEND MESSAGE
-============================== */
+/* ======================================
+   SEND MESSAGE (FAST + NO REFETCH)
+====================================== */
 export const sendMessage = async (
   conversationId: string,
   senderId: string,
@@ -87,17 +85,18 @@ export const sendMessage = async (
 
   const { data, error } = await supabase
     .from("messages")
-    .insert([
-      {
-        conversation_id: conversationId,
-        sender_id: senderId,
-        content,
-      },
-    ])
-    .select("*, users(*)")
+    .insert({
+      conversation_id: conversationId,
+      sender_id: senderId,
+      content,
+    })
+    .select("*")
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error("sendMessage SUPABASE ERROR:", error);
+    throw error;
+  }
 
   return data;
 };

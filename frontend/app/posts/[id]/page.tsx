@@ -306,7 +306,7 @@ export default function PostDetailPage() {
             <Heart
               onClick={toggleLike}
               className={`cursor-pointer transition ${
-                isLiked ? "text-red-500 fill-red-500" : ""
+                isLiked ? "text-red-500 fill-red-500" : "text-foreground"
               }`}
             />
 
@@ -400,20 +400,20 @@ export default function PostDetailPage() {
                     }}
                   />
                   {openCommentMenuId === c.id && (
-                    <div className="absolute right-0 mt-1 w-28 bg-white border shadow-lg rounded-xl py-1 z-50">
+                    <div className="absolute right-0 mt-1 w-28 bg-background border border-border shadow-lg rounded-xl py-1 z-50">
                       <button
                         onClick={() => {
                           setEditingCommentId(c.id);
                           setEditCommentText(c.content);
                           setOpenCommentMenuId(null);
                         }}
-                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 transition"
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-secondary transition"
                       >
                         Sửa
                       </button>
                       <button
                         onClick={() => handleDeleteComment(c.id)}
-                        className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-gray-100 transition"
+                        className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-secondary transition"
                       >
                         Xóa
                       </button>

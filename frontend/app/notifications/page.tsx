@@ -132,12 +132,12 @@ export default function NotificationsPage() {
       {/* FIXED CHAT UI */}
       <div className="fixed bottom-6 right-6 z-[999] flex flex-col items-end gap-4">
         {isChatOpen && user && (
-          <div className="w-[380px] h-[550px] bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className="p-3 border-b flex justify-between items-center bg-gray-50">
+          <div className="w-[380px] h-[550px] bg-background text-foreground rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
+            <div className="p-3 border-b border-border flex justify-between items-center bg-secondary/50">
               <span className="font-bold text-sm">Tin nhắn mới</span>
               <button
                 onClick={() => setIsChatOpen(false)}
-                className="hover:bg-gray-200 rounded-full p-1 transition-colors"
+                className="hover:bg-secondary rounded-full p-1 transition-colors"
               >
                 <X size={18} />
               </button>
@@ -149,7 +149,7 @@ export default function NotificationsPage() {
           onClick={() => setIsChatOpen(!isChatOpen)}
           className={`shadow-2xl transition-all active:scale-90 p-4 rounded-full flex items-center justify-center ${
             isChatOpen
-              ? "bg-white text-black border border-gray-200"
+              ? "bg-background text-foreground border border-border"
               : "bg-[#0095F6] text-white hover:bg-blue-600"
           }`}
         >

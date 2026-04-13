@@ -15,36 +15,29 @@ router.post("/conversation", async (req, res) => {
     }
 
     // tìm conversation đã tồn tại
-    const { data: members } = await supabaseAdmin
-      .from("conversation_members")
-      .select("conversation_id")
-      .in("user_id", [user1, user2]);
+    const { data: existing } = await supabaseAdmin
+      .from("conversations")
+      .select("id")
+      .or(
+        `and(user1_id.eq.${user1},user2_id.eq.${user2}),and(user1_id.eq.${user2},user2_id.eq.${user1})`,
+      )
+      .maybeSingle();
 
-    const countMap = {};
-    members?.forEach((m) => {
-      countMap[m.conversation_id] = (countMap[m.conversation_id] || 0) + 1;
-    });
-
-    const existingId = Object.keys(countMap).find((id) => countMap[id] >= 2);
-
-    if (existingId) {
-      return res.json({ conversationId: existingId });
+    if (existing) {
+      return res.json({ conversationId: existing.id });
     }
 
-    // create conversation (TABLE chỉ cần id + created_at)
+    // create conversation
     const { data: conv, error } = await supabaseAdmin
       .from("conversations")
-      .insert({})
+      .insert({ user1_id: user1, user2_id: user2 })
       .select()
       .single();
 
-    if (error) return res.status(500).json(error);
-
-    // insert members
-    await supabaseAdmin.from("conversation_members").insert([
-      { conversation_id: conv.id, user_id: user1 },
-      { conversation_id: conv.id, user_id: user2 },
-    ]);
+    if (error)
+      return res
+        .status(500)
+        .json({ error: error.message || "Internal Server Error" });
 
     return res.json({ conversationId: conv.id });
   } catch (err) {
@@ -69,7 +62,10 @@ router.get("/messages/:id", async (req, res) => {
       .eq("conversation_id", id)
       .order("created_at", { ascending: true });
 
-    if (error) return res.status(400).json(error);
+    if (error)
+      return res
+        .status(400)
+        .json({ error: error.message || "Failed to fetch messages" });
 
     return res.json(data || []);
   } catch (err) {
@@ -98,7 +94,10 @@ router.post("/messages", async (req, res) => {
       .select()
       .single();
 
-    if (error) return res.status(400).json(error);
+    if (error)
+      return res
+        .status(400)
+        .json({ error: error.message || "Failed to send message" });
 
     return res.json(data);
   } catch (err) {

@@ -598,7 +598,7 @@ export default function HomePage() {
                     className={`cursor-pointer transition-all active:scale-150 hover:scale-110 w-7 h-7 ${
                       (post.is_liked ?? false)
                         ? "text-red-500 fill-red-500" // Đổi từ destructive sang red-500 cho chắc chắn
-                        : "stroke-[2px] text-black"
+                        : "stroke-[2px] text-foreground"
                     }`}
                   />
                   <MessageCircle
@@ -680,14 +680,14 @@ export default function HomePage() {
                             }}
                           />
                           {openCommentMenuId === c.id && (
-                            <div className="absolute right-0 mt-1 w-24 bg-white border shadow-lg rounded-lg py-1 z-50">
+                            <div className="absolute right-0 mt-1 w-24 bg-background border border-border shadow-lg rounded-lg py-1 z-50">
                               <button
                                 onClick={() => {
                                   setEditingCommentId(c.id);
                                   setEditCommentText(c.content);
                                   setOpenCommentMenuId(null);
                                 }}
-                                className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100"
+                                className="w-full text-left px-3 py-1 text-sm hover:bg-secondary"
                               >
                                 Sửa
                               </button>
@@ -695,7 +695,7 @@ export default function HomePage() {
                                 onClick={() =>
                                   handleDeleteComment(c.id, post.id)
                                 }
-                                className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-gray-100"
+                                className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-secondary"
                               >
                                 Xóa
                               </button>
@@ -759,7 +759,7 @@ export default function HomePage() {
           </button>
 
           <div
-            className="bg-white dark:bg-zinc-950 flex flex-col md:flex-row w-full max-w-5xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 cursor-default"
+            className="bg-background text-foreground flex flex-col md:flex-row w-full max-w-5xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 cursor-default"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Phần Ảnh */}
@@ -778,7 +778,7 @@ export default function HomePage() {
             </div>
 
             {/* Phần Thông tin / Bình luận */}
-            <div className="w-full md:w-[400px] flex flex-col border-l border-border bg-white dark:bg-zinc-950 h-[50vh] md:h-auto">
+            <div className="w-full md:w-[400px] flex flex-col border-l border-border bg-background h-[50vh] md:h-auto">
               {/* Header */}
               <div className="flex items-center gap-3 p-4 border-b border-border">
                 <img
@@ -883,14 +883,14 @@ export default function HomePage() {
                           }}
                         />
                         {openCommentMenuId === c.id && (
-                          <div className="absolute right-0 mt-1 w-24 bg-white dark:bg-zinc-800 border shadow-lg rounded-lg py-1 z-50">
+                          <div className="absolute right-0 mt-1 w-24 bg-background border border-border shadow-lg rounded-lg py-1 z-50">
                             <button
                               onClick={() => {
                                 setEditingCommentId(c.id);
                                 setEditCommentText(c.content);
                                 setOpenCommentMenuId(null);
                               }}
-                              className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-zinc-700"
+                              className="w-full text-left px-3 py-1 text-sm hover:bg-secondary"
                             >
                               Sửa
                             </button>
@@ -898,7 +898,7 @@ export default function HomePage() {
                               onClick={() =>
                                 handleDeleteComment(c.id, selectedPost.id, true)
                               }
-                              className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-gray-100 dark:hover:bg-zinc-700"
+                              className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-secondary"
                             >
                               Xóa
                             </button>
@@ -950,13 +950,13 @@ export default function HomePage() {
       <div className="fixed bottom-6 right-6 z-[999] flex flex-col items-end gap-4">
         {/* Khung ChatBox hiện lên khi nhấn nút */}
         {isChatOpen && user && (
-          <div className="w-[380px] h-[550px] bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="w-[380px] h-[550px] bg-background text-foreground rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
             {/* Header thanh Chat */}
-            <div className="p-3 border-b flex justify-between items-center bg-gray-50">
+            <div className="p-3 border-b border-border flex justify-between items-center bg-secondary/50">
               <span className="font-bold text-sm">Tin nhắn mới</span>
               <button
                 onClick={() => setIsChatOpen(false)}
-                className="hover:bg-gray-200 rounded-full p-1 transition-colors"
+                className="hover:bg-secondary rounded-full p-1 transition-colors"
               >
                 <X size={18} />
               </button>
@@ -972,7 +972,7 @@ export default function HomePage() {
           onClick={() => setIsChatOpen(!isChatOpen)}
           className={`shadow-2xl transition-all active:scale-90 p-4 rounded-full flex items-center justify-center ${
             isChatOpen
-              ? "bg-white text-black border border-gray-200"
+              ? "bg-background text-foreground border border-border"
               : "bg-[#0095F6] text-white hover:bg-blue-600"
           }`}
         >
