@@ -167,7 +167,7 @@ export default function Navbar({ user }: any) {
 
                     <button
                       onClick={handleLogout}
-                      className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-50"
+                      className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-500/10 transition-colors"
                     >
                       Đăng xuất
                     </button>

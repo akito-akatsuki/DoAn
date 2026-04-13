@@ -99,6 +99,15 @@ router.post("/messages", async (req, res) => {
         .status(400)
         .json({ error: error.message || "Failed to send message" });
 
+    // Cập nhật last_message và thời gian cho conversation để list chat tự động nhảy
+    await supabaseAdmin
+      .from("conversations")
+      .update({
+        last_message: content,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", conversationId);
+
     return res.json(data);
   } catch (err) {
     return res.status(500).json({ error: err.message });

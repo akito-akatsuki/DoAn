@@ -68,7 +68,7 @@ export default function SavedPage() {
         {loading && <div className="text-center py-10">Đang tải...</div>}
 
         {!loading && savedPosts.length === 0 && (
-          <div className="text-center py-20 text-gray-500">
+          <div className="text-center py-20 text-muted-foreground">
             Bạn chưa lưu bài viết nào.
           </div>
         )}

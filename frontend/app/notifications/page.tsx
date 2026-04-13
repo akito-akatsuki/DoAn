@@ -79,7 +79,7 @@ export default function NotificationsPage() {
         )}
 
         {!loading && notifications.length === 0 && (
-          <div className="text-center py-10 text-gray-500">
+          <div className="text-center py-10 text-muted-foreground">
             Bạn chưa có thông báo nào.
           </div>
         )}
@@ -98,9 +98,9 @@ export default function NotificationsPage() {
                   }
                   className="w-11 h-11 rounded-full object-cover ring-1 ring-border"
                 />
-                <div className="absolute -bottom-1 -right-1 bg-white dark:bg-black rounded-full p-1 border border-border shadow-sm">
+                <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-1 border border-border shadow-sm">
                   {iconMap[n.type] || (
-                    <Heart className="w-4 h-4 text-gray-500" />
+                    <Heart className="w-4 h-4 text-muted-foreground" />
                   )}
                 </div>
               </div>

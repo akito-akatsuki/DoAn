@@ -47,17 +47,16 @@ export default function ChatBox({ userId }: ChatBoxProps) {
           event: "INSERT",
           schema: "public",
           table: "messages",
-          filter: `conversation_id=eq.${conversationId}`,
         },
         (payload) => {
-          setMessages((prev) => {
-            const newMsg = payload.new;
-
-            // ❌ tránh duplicate
-            if (prev.some((m) => m.id === newMsg.id)) return prev;
-
-            return [...prev, newMsg];
-          });
+          const newMsg = payload.new;
+          // Tự filter bằng client để luôn nhận được event (vượt qua lỗi RLS của Supabase)
+          if (newMsg.conversation_id === conversationId) {
+            setMessages((prev) => {
+              if (prev.some((m) => m.id === newMsg.id)) return prev;
+              return [...prev, newMsg];
+            });
+          }
         },
       )
       .subscribe();
@@ -66,6 +65,34 @@ export default function ChatBox({ userId }: ChatBoxProps) {
       supabase.removeChannel(channel);
     };
   }, [conversationId]);
+
+  // ================= REALTIME DANH SÁCH CHAT BÊN NGOÀI =================
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel(`conversations_list_${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // Lắng nghe mọi cập nhật (thêm mới / update tin nhắn cuối)
+          schema: "public",
+          table: "conversations",
+        },
+        (payload) => {
+          const { user1_id, user2_id } = payload.new || payload.old || {};
+          // Nếu cuộc hội thoại được cập nhật thuộc về user này thì reload danh sách
+          if (user1_id === userId || user2_id === userId) {
+            loadConversations();
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, loadConversations]);
 
   // ================= LOAD CONVERSATIONS (OPTIMIZED) =================
   const loadConversations = useCallback(async () => {
@@ -210,12 +237,12 @@ export default function ChatBox({ userId }: ChatBoxProps) {
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2">
         {!targetUser ? (
           <>
-            <div className="flex items-center gap-2 border p-2 rounded-xl">
+            <div className="flex items-center gap-2 border border-border bg-secondary/50 p-2 rounded-xl">
               <Search size={16} />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 outline-none text-sm"
+                className="flex-1 outline-none text-sm bg-transparent"
                 placeholder="Tìm người dùng..."
               />
             </div>
@@ -224,7 +251,7 @@ export default function ChatBox({ userId }: ChatBoxProps) {
               <div
                 key={u.id}
                 onClick={() => handleOpenChat(u)}
-                className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer"
+                className="flex items-center gap-2 p-2 hover:bg-secondary rounded cursor-pointer transition-colors"
               >
                 <img src={u.avatar_url} className="w-8 h-8 rounded-full" />
                 <span>{u.name}</span>
@@ -235,7 +262,7 @@ export default function ChatBox({ userId }: ChatBoxProps) {
               <div
                 key={c.id}
                 onClick={() => handleOpenExisting(c)}
-                className="flex items-center gap-2 p-2 hover:bg-gray-100 rounded cursor-pointer"
+                className="flex items-center gap-2 p-2 hover:bg-secondary rounded cursor-pointer transition-colors"
               >
                 <img
                   src={c.otherUser?.avatar_url}
@@ -243,7 +270,7 @@ export default function ChatBox({ userId }: ChatBoxProps) {
                 />
                 <div>
                   <p className="text-sm font-semibold">{c.otherUser?.name}</p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted-foreground">
                     {c.last_message || "Bắt đầu chat"}
                   </p>
                 </div>
@@ -258,7 +285,7 @@ export default function ChatBox({ userId }: ChatBoxProps) {
             >
               <div
                 className={`px-3 py-2 rounded-2xl text-sm max-w-[75%]
-                ${m.sender_id === userId ? "bg-blue-500 text-white" : "bg-gray-200"}
+                ${m.sender_id === userId ? "bg-blue-500 text-white" : "bg-secondary text-foreground"}
               `}
               >
                 {m.content}
@@ -270,17 +297,17 @@ export default function ChatBox({ userId }: ChatBoxProps) {
 
       {/* INPUT */}
       {targetUser && (
-        <div className="p-3 border-t flex gap-2">
+        <div className="p-3 border-t border-border bg-background flex gap-2">
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            className="flex-1 border rounded-xl px-3 py-2 text-sm"
+            className="flex-1 border border-border bg-secondary/30 focus:bg-background transition-colors outline-none rounded-xl px-3 py-2 text-sm"
             placeholder="Nhập tin nhắn..."
           />
           <button
             onClick={handleSend}
-            className="bg-blue-500 text-white px-3 rounded-xl"
+            className="bg-blue-500 hover:bg-blue-600 transition-colors text-white px-3 rounded-xl"
           >
             <Send size={18} />
           </button>
@@ -288,8 +315,8 @@ export default function ChatBox({ userId }: ChatBoxProps) {
       )}
 
       {loading && (
-        <div className="absolute inset-0 bg-white/60 flex items-center justify-center">
-          <Loader2 className="animate-spin" />
+        <div className="absolute inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center z-50">
+          <Loader2 className="animate-spin text-primary" />
         </div>
       )}
     </div>

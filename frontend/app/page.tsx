@@ -562,7 +562,7 @@ export default function HomePage() {
                       {user?.id === post.user_id && (
                         <button
                           onClick={() => handleDeletePost(post.id)}
-                          className="flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-50 w-full text-sm font-semibold transition-all"
+                          className="flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-500/10 w-full text-sm font-semibold transition-all"
                         >
                           <Trash2 size={18} />
                           Xóa bài viết
@@ -657,7 +657,7 @@ export default function HomePage() {
                               </button>
                               <button
                                 onClick={() => setEditingCommentId(null)}
-                                className="text-gray-500"
+                                className="text-muted-foreground"
                               >
                                 Hủy
                               </button>
@@ -671,7 +671,7 @@ export default function HomePage() {
                       {user?.id === c.user_id && !editingCommentId && (
                         <div className="relative opacity-0 group-hover:opacity-100 transition-opacity ml-2">
                           <MoreHorizontal
-                            className="w-4 h-4 cursor-pointer text-gray-500 hover:text-black"
+                            className="w-4 h-4 cursor-pointer text-muted-foreground hover:text-foreground"
                             onClick={(e) => {
                               e.stopPropagation();
                               setOpenCommentMenuId(
@@ -858,7 +858,7 @@ export default function HomePage() {
                             </button>
                             <button
                               onClick={() => setEditingCommentId(null)}
-                              className="text-gray-500"
+                              className="text-muted-foreground"
                             >
                               Hủy
                             </button>
@@ -874,7 +874,7 @@ export default function HomePage() {
                     {user?.id === c.user_id && !editingCommentId && (
                       <div className="relative opacity-0 group-hover:opacity-100 transition-opacity ml-2 mt-1">
                         <MoreHorizontal
-                          className="w-4 h-4 cursor-pointer text-gray-500 hover:text-black dark:hover:text-white"
+                          className="w-4 h-4 cursor-pointer text-muted-foreground hover:text-foreground"
                           onClick={(e) => {
                             e.stopPropagation();
                             setOpenCommentMenuId(
