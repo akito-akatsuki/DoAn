@@ -10,6 +10,7 @@ import {
   MessageCircle,
   Heart,
   PlusCircle,
+  Bookmark,
 } from "lucide-react";
 
 export default function Navbar({ user }: any) {
@@ -124,6 +125,9 @@ export default function Navbar({ user }: any) {
           <button className="p-2" onClick={() => router.push("/notifications")}>
             <Heart />
           </button>
+          <button className="p-2" onClick={() => router.push("/saved")}>
+            <Bookmark />
+          </button>
           <button onClick={toggleDark} className="p-2">
             {isDark ? <Sun /> : <Moon />}
           </button>
@@ -152,6 +156,13 @@ export default function Navbar({ user }: any) {
                       className="w-full text-left px-3 py-2 hover:bg-secondary"
                     >
                       Hồ sơ
+                    </button>
+
+                    <button
+                      onClick={() => router.push("/saved")}
+                      className="w-full text-left px-3 py-2 hover:bg-secondary"
+                    >
+                      Đã lưu
                     </button>
 
                     <button

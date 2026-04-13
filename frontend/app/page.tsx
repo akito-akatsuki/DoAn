@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Navbar from "@/components/navbar";
 import ChatBox from "@/components/ChatBox";
+import { useRouter } from "next/navigation";
 
 import {
   Heart,
@@ -13,6 +14,8 @@ import {
   MoreHorizontal,
   MessageSquare, // Thêm cái này
   X, // Thêm cái này
+  Bookmark, // Icon lưu
+  Flag, // Icon báo cáo
 } from "lucide-react";
 import {
   getFeed,
@@ -20,9 +23,15 @@ import {
   toggleLike,
   getComments,
   createComment,
+  savePost,
+  reportPost,
+  deleteComment,
+  updateComment,
 } from "@/lib/api";
 
 export default function HomePage() {
+  const router = useRouter();
+
   const [user, setUser] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [content, setContent] = useState("");
@@ -39,6 +48,16 @@ export default function HomePage() {
   // State cho hiệu ứng tim bay khi double click
   const [showHeartId, setShowHeartId] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
+
+  // ================= MODAL POST =================
+  const [selectedPost, setSelectedPost] = useState<any | null>(null);
+  const [modalComments, setModalComments] = useState<any[]>([]);
+  const [modalCommentText, setModalCommentText] = useState("");
+
+  // ================= COMMENT MENUS & EDIT =================
+  const [openCommentMenuId, setOpenCommentMenuId] = useState<string | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editCommentText, setEditCommentText] = useState("");
 
   // ================= INIT =================
   useEffect(() => {
@@ -72,6 +91,7 @@ export default function HomePage() {
       ) {
         setOpenMenuId(null);
       }
+      setOpenCommentMenuId(null); // Đóng menu bình luận khi bấm ra ngoài
     };
 
     document.addEventListener("mousedown", handleClickOutside);
@@ -106,8 +126,24 @@ export default function HomePage() {
     const res = await toggleLike(postId);
 
     setPosts((prev) =>
-      prev.map((p) => (p.id === postId ? { ...p, ...res } : p)),
+      prev.map((p) =>
+        p.id === postId
+          ? {
+              ...p,
+              is_liked: res.is_liked,
+              likes_count: res.likes_count,
+            }
+          : p,
+      ),
     );
+
+    if (selectedPost && selectedPost.id === postId) {
+      setSelectedPost((prev: any) => ({
+        ...prev,
+        is_liked: res.is_liked,
+        likes_count: res.likes_count,
+      }));
+    }
   };
 
   // ================= COMMENTS =================
@@ -128,6 +164,71 @@ export default function HomePage() {
     }));
 
     setCommentInput((prev) => ({ ...prev, [postId]: "" }));
+  };
+
+  // ================= OPEN MODAL =================
+  const openPostModal = async (post: any) => {
+    setSelectedPost(post);
+    const data = await getComments(post.id);
+    setModalComments(data || []);
+  };
+
+  const closeModal = () => {
+    setSelectedPost(null);
+    setModalComments([]);
+    setModalCommentText("");
+  };
+
+  const handleModalComment = async () => {
+    if (!user || !modalCommentText.trim() || !selectedPost) return;
+
+    const newCmt = await createComment(selectedPost.id, modalCommentText);
+    setModalComments((prev) => [...prev, newCmt]);
+    setModalCommentText("");
+
+    setCommentsMap((prev) => ({
+      ...prev,
+      [selectedPost.id]: [...(prev[selectedPost.id] || []), newCmt],
+    }));
+  };
+
+  // ================= DELETE COMMENT =================
+  const handleDeleteComment = async (commentId: string, postId: string, isModal = false) => {
+    if (!confirm("Bạn có chắc chắn muốn xóa bình luận này?")) return;
+    try {
+      await deleteComment(commentId);
+      if (isModal) {
+        setModalComments((prev) => prev.filter((c) => c.id !== commentId));
+      }
+      setCommentsMap((prev) => ({
+        ...prev,
+        [postId]: prev[postId]?.filter((c) => c.id !== commentId) || [],
+      }));
+      setOpenCommentMenuId(null);
+    } catch (err) {
+      console.error(err);
+      alert("Xóa bình luận thất bại.");
+    }
+  };
+
+  // ================= EDIT COMMENT =================
+  const submitEditComment = async (commentId: string, postId: string, isModal = false) => {
+    if (!editCommentText.trim()) return;
+    try {
+      const updated = await updateComment(commentId, editCommentText);
+      if (isModal) {
+        setModalComments((prev) => prev.map((c) => (c.id === commentId ? updated : c)));
+      }
+      setCommentsMap((prev) => ({
+        ...prev,
+        [postId]: prev[postId]?.map((c) => (c.id === commentId ? updated : c)) || [],
+      }));
+      setEditingCommentId(null);
+      setOpenCommentMenuId(null);
+    } catch (err) {
+      console.error(err);
+      alert("Sửa bình luận thất bại.");
+    }
   };
 
   // ================= DELETE POST =================
@@ -159,6 +260,32 @@ export default function HomePage() {
       setOpenMenuId(null);
     } catch (err) {
       console.error("DELETE ERROR:", err);
+    }
+  };
+
+  // ================= SAVE POST =================
+  const handleSavePost = async (postId: string) => {
+    try {
+      await savePost(postId);
+      alert("Đã lưu bài viết thành công!");
+      setOpenMenuId(null);
+    } catch (err) {
+      console.error("SAVE POST ERROR:", err);
+      alert("Đã xảy ra lỗi khi lưu bài viết.");
+    }
+  };
+
+  // ================= REPORT POST =================
+  const handleReportPost = async (postId: string) => {
+    const reason = prompt("Vui lòng nhập lý do báo cáo bài viết này:");
+    if (!reason) return;
+    try {
+      await reportPost(postId, reason);
+      alert("Đã gửi báo cáo thành công!");
+      setOpenMenuId(null);
+    } catch (err) {
+      console.error("REPORT POST ERROR:", err);
+      alert("Đã xảy ra lỗi khi báo cáo bài viết.");
     }
   };
 
@@ -270,8 +397,16 @@ export default function HomePage() {
           {posts.map((post) => (
             <div
               key={post.id}
-              className="bg-background shadow-ig rounded-lg overflow-hidden border ring-1 ring-border mb-2"
+              className="bg-background shadow-ig rounded-lg overflow-hidden border ring-1 ring-border mb-2 relative"
+              onDoubleClick={() => handleLike(post.id, true)}
             >
+              {/* BIG HEART POP ANIMATION */}
+              {showHeartId === String(post.id) && (
+                <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
+                  <Heart className="w-24 h-24 text-white fill-white drop-shadow-[0_0_15px_rgba(0,0,0,0.4)] animate-heart-pop opacity-90" />
+                </div>
+              )}
+
               {/* HEADER */}
               <div className="flex items-center justify-between p-4 relative">
                 <div className="flex items-center gap-3">
@@ -296,7 +431,7 @@ export default function HomePage() {
                 </div>
 
                 {/* 3 DOT MENU */}
-                <div className="relative">
+                <div className="relative" onDoubleClick={(e) => e.stopPropagation()}>
                   <MoreHorizontal
                     className="w-5 h-5 cursor-pointer p-1 hover:bg-secondary rounded-full transition-all"
                     onClick={(e) => {
@@ -313,12 +448,31 @@ export default function HomePage() {
                       className="absolute right-0 mt-2 w-44 bg-background border ring-1 ring-border rounded-xl shadow-xl py-1 z-[100]"
                     >
                       <button
-                        onClick={() => handleDeletePost(post.id)}
-                        className="flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-50 w-full text-sm font-semibold transition-all"
+                        onClick={() => handleSavePost(post.id)}
+                        className="flex items-center gap-3 px-4 py-2 hover:bg-secondary w-full text-sm font-semibold transition-all"
                       >
-                        <Trash2 size={18} />
-                        Xóa bài viết
+                        <Bookmark size={18} />
+                        Lưu bài viết
                       </button>
+
+                      <button
+                        onClick={() => handleReportPost(post.id)}
+                        className="flex items-center gap-3 px-4 py-2 hover:bg-secondary w-full text-sm font-semibold transition-all"
+                      >
+                        <Flag size={18} />
+                        Báo cáo
+                      </button>
+
+                      {/* Chỉ hiện nút Xóa nếu là bài viết của chính người dùng */}
+                      {user?.id === post.user_id && (
+                        <button
+                          onClick={() => handleDeletePost(post.id)}
+                          className="flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-50 w-full text-sm font-semibold transition-all"
+                        >
+                          <Trash2 size={18} />
+                          Xóa bài viết
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>
@@ -326,25 +480,18 @@ export default function HomePage() {
 
               {/* IMAGE WITH DOUBLE CLICK LIKE */}
               {post.image_url && (
-                <div
-                  className="relative overflow-hidden bg-secondary/20"
-                  onDoubleClick={() => handleLike(post.id, true)}
-                >
+                <div className="relative overflow-hidden bg-secondary/20">
                   <img
                     src={post.image_url}
                     className="w-full aspect-square object-cover cursor-pointer hover:brightness-[0.98] transition-all duration-300 select-none pointer-events-none"
                     alt="Post content"
                   />
 
-                  {/* BIG HEART POP ANIMATION */}
-                  {showHeartId === String(post.id) && (
-                    <div className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
-                      <Heart className="w-24 h-24 text-white fill-white animate-heart-pop opacity-90" />
-                    </div>
-                  )}
-
                   {/* Overlay ẩn để catch event tốt hơn */}
-                  <div className="absolute inset-0 z-10 cursor-pointer" />
+                  <div
+                    className="absolute inset-0 z-10 cursor-pointer"
+                    onClick={() => openPostModal(post)}
+                  />
                 </div>
               )}
 
@@ -360,7 +507,7 @@ export default function HomePage() {
                     }`}
                   />
                   <MessageCircle
-                    onClick={() => loadComments(post.id)}
+                    onClick={() => openPostModal(post)}
                     className="w-7 h-7 cursor-pointer stroke-[2px]"
                   />
                   <Send className="w-7 h-7 cursor-pointer stroke-[2px]" />
@@ -382,12 +529,65 @@ export default function HomePage() {
                 {/* COMMENTS SECTION */}
                 <div className="mt-2 space-y-1 select-text">
                   {commentsMap[post.id]?.map((c: any, idx: number) => (
-                    <p key={c.id ?? idx} className="text-sm">
-                      <span className="font-bold mr-1">
-                        {c?.users?.name || "user"}:
-                      </span>{" "}
-                      {c.content}
-                    </p>
+                    <div key={c.id ?? idx} className="text-sm flex justify-between items-start group">
+                      <div className="flex-1">
+                        <span className="font-bold mr-1">
+                          {c?.users?.name || "user"}:
+                        </span>
+                        {editingCommentId === c.id ? (
+                          <div className="flex flex-col gap-1 mt-1">
+                            <input
+                              className="border px-2 py-1 rounded w-full outline-none text-sm bg-transparent"
+                              value={editCommentText}
+                              onChange={(e) => setEditCommentText(e.target.value)}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") submitEditComment(c.id, post.id);
+                                if (e.key === "Escape") setEditingCommentId(null);
+                              }}
+                              autoFocus
+                            />
+                            <div className="flex gap-2 text-xs">
+                              <button onClick={() => submitEditComment(c.id, post.id)} className="text-blue-500 font-semibold">Lưu</button>
+                              <button onClick={() => setEditingCommentId(null)} className="text-gray-500">Hủy</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <span>{c.content}</span>
+                        )}
+                      </div>
+
+                      {user?.id === c.user_id && !editingCommentId && (
+                        <div className="relative opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                          <MoreHorizontal
+                            className="w-4 h-4 cursor-pointer text-gray-500 hover:text-black"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenCommentMenuId(openCommentMenuId === c.id ? null : c.id);
+                            }}
+                          />
+                          {openCommentMenuId === c.id && (
+                            <div className="absolute right-0 mt-1 w-24 bg-white border shadow-lg rounded-lg py-1 z-50">
+                              <button
+                                onClick={() => {
+                                  setEditingCommentId(c.id);
+                                  setEditCommentText(c.content);
+                                  setOpenCommentMenuId(null);
+                                }}
+                                className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100"
+                              >
+                                Sửa
+                              </button>
+                              <button
+                                onClick={() => handleDeleteComment(c.id, post.id)}
+                                className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-gray-100"
+                              >
+                                Xóa
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                   ))}
                 </div>
 
@@ -411,6 +611,7 @@ export default function HomePage() {
                         [post.id]: value,
                       }));
                     }}
+                    onDoubleClick={(e) => e.stopPropagation()}
                     className="flex-1 text-sm outline-none bg-transparent select-text"
                     placeholder="Thêm bình luận..."
                   />
@@ -428,6 +629,183 @@ export default function HomePage() {
           ))}
         </div>
       </main>
+
+      {/* ================= MODAL POST ================= */}
+      {selectedPost && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 p-4 md:p-10 cursor-pointer"
+          onClick={closeModal}
+        >
+          <button
+            onClick={closeModal}
+            className="absolute top-4 right-4 text-white hover:text-gray-300 z-[10000] p-2"
+          >
+            <X className="w-8 h-8" />
+          </button>
+
+          <div
+            className="bg-white dark:bg-zinc-950 flex flex-col md:flex-row w-full max-w-5xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 cursor-default"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Phần Ảnh */}
+            <div className="flex-1 bg-black flex items-center justify-center min-h-[300px] md:min-h-[500px]">
+              {selectedPost.image_url ? (
+                <img
+                  src={selectedPost.image_url}
+                  className="max-w-full max-h-full object-contain"
+                  alt="Post"
+                />
+              ) : (
+                <div className="p-8 text-center text-white text-xl font-medium">
+                  {selectedPost.content}
+                </div>
+              )}
+            </div>
+
+            {/* Phần Thông tin / Bình luận */}
+            <div className="w-full md:w-[400px] flex flex-col border-l border-border bg-white dark:bg-zinc-950 h-[50vh] md:h-auto">
+              {/* Header */}
+              <div className="flex items-center gap-3 p-4 border-b border-border">
+                <img
+                  src={
+                    selectedPost.users?.avatar_url ||
+                    `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPost.users?.id}`
+                  }
+                  className="w-10 h-10 rounded-full border object-cover"
+                  alt="avatar"
+                />
+                <span className="font-semibold text-sm">
+                  {selectedPost.users?.name || "Người dùng"}
+                </span>
+              </div>
+
+              {/* Content / Caption & Comments */}
+              <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                {/* Caption */}
+                <div className="flex items-start gap-3">
+                  <img
+                    src={
+                      selectedPost.users?.avatar_url ||
+                      `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPost.users?.id}`
+                    }
+                    className="w-10 h-10 rounded-full border object-cover flex-shrink-0"
+                    alt="avatar"
+                  />
+                  <div className="mt-1">
+                    <span className="font-semibold text-sm mr-2">
+                      {selectedPost.users?.name || "Người dùng"}
+                    </span>
+                    <span className="text-sm whitespace-pre-wrap">{selectedPost.content}</span>
+                  </div>
+                </div>
+
+                {/* Comments */}
+                {modalComments.map((c: any) => (
+                  <div key={c.id} className="flex items-start gap-3 group relative">
+                    <img
+                      src={
+                        c.users?.avatar_url ||
+                        `https://api.dicebear.com/7.x/identicon/svg?seed=${c.user_id}`
+                      }
+                      className="w-10 h-10 rounded-full border object-cover flex-shrink-0"
+                      alt="avatar"
+                    />
+                    <div className="mt-1 flex-1">
+                      <span className="font-semibold text-sm mr-2">
+                        {c.users?.name || "Người dùng"}
+                      </span>
+                      {editingCommentId === c.id ? (
+                        <div className="flex flex-col gap-1 mt-1">
+                          <input
+                            className="border px-2 py-1 rounded w-full outline-none text-sm bg-transparent"
+                            value={editCommentText}
+                            onChange={(e) => setEditCommentText(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") submitEditComment(c.id, selectedPost.id, true);
+                              if (e.key === "Escape") setEditingCommentId(null);
+                            }}
+                            autoFocus
+                          />
+                          <div className="flex gap-2 text-xs">
+                            <button onClick={() => submitEditComment(c.id, selectedPost.id, true)} className="text-blue-500 font-semibold">Lưu</button>
+                            <button onClick={() => setEditingCommentId(null)} className="text-gray-500">Hủy</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-sm whitespace-pre-wrap">{c.content}</span>
+                      )}
+                    </div>
+
+                    {user?.id === c.user_id && !editingCommentId && (
+                      <div className="relative opacity-0 group-hover:opacity-100 transition-opacity ml-2 mt-1">
+                        <MoreHorizontal
+                          className="w-4 h-4 cursor-pointer text-gray-500 hover:text-black dark:hover:text-white"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenCommentMenuId(openCommentMenuId === c.id ? null : c.id);
+                          }}
+                        />
+                        {openCommentMenuId === c.id && (
+                          <div className="absolute right-0 mt-1 w-24 bg-white dark:bg-zinc-800 border shadow-lg rounded-lg py-1 z-50">
+                            <button
+                              onClick={() => {
+                                setEditingCommentId(c.id);
+                                setEditCommentText(c.content);
+                                setOpenCommentMenuId(null);
+                              }}
+                              className="w-full text-left px-3 py-1 text-sm hover:bg-gray-100 dark:hover:bg-zinc-700"
+                            >
+                              Sửa
+                            </button>
+                            <button
+                              onClick={() => handleDeleteComment(c.id, selectedPost.id, true)}
+                              className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-gray-100 dark:hover:bg-zinc-700"
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              {/* Action / Input */}
+              <div className="p-4 border-t border-border">
+                <div className="flex items-center gap-3">
+                  <Heart
+                    onClick={() => handleLike(selectedPost.id)}
+                    className={`cursor-pointer transition-all active:scale-150 hover:scale-110 w-7 h-7 ${
+                      (selectedPost.is_liked ?? false)
+                        ? "text-red-500 fill-red-500"
+                        : "stroke-[2px] text-foreground"
+                    }`}
+                  />
+                  <span className="font-semibold text-sm">{selectedPost.likes_count || 0} lượt thích</span>
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <input
+                    className="border border-border flex-1 px-3 py-2 rounded-full text-sm outline-none bg-secondary/50 focus:bg-background transition-colors"
+                    value={modalCommentText}
+                    onChange={(e) => setModalCommentText(e.target.value)}
+                    placeholder="Thêm bình luận..."
+                    onKeyDown={(e) => e.key === 'Enter' && handleModalComment()}
+                  />
+                  <button
+                    onClick={handleModalComment}
+                    disabled={!modalCommentText.trim()}
+                    className="text-blue-500 font-semibold text-sm disabled:opacity-50 px-2"
+                  >
+                    Đăng
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* FIXED CHAT UI */}
       <div className="fixed bottom-6 right-6 z-[999] flex flex-col items-end gap-4">
         {/* Khung ChatBox hiện lên khi nhấn nút */}

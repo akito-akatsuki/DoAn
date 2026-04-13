@@ -1,12 +1,23 @@
 -- ======================================================
--- 🛠️ KHỞI TẠO EXTENSIONS
+-- 🔥 1. EXTENSIONS & FUNCTIONS CƠ BẢN
 -- ======================================================
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Hàm tự động cập nhật updated_at
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 -- ======================================================
--- 👤 BẢNG USERS (Người dùng)
+-- 👤 2. TABLES (BẢNG DỮ LIỆU)
 -- ======================================================
-CREATE TABLE public.users (
+
+-- USERS
+CREATE TABLE IF NOT EXISTS public.users (
     id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
     name TEXT,
     email TEXT UNIQUE,
@@ -17,10 +28,8 @@ CREATE TABLE public.users (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- ======================================================
--- 📝 BẢNG POSTS (Bài viết)
--- ======================================================
-CREATE TABLE public.posts (
+-- POSTS
+CREATE TABLE IF NOT EXISTS public.posts (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
     content TEXT,
@@ -30,10 +39,8 @@ CREATE TABLE public.posts (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- ======================================================
--- 💬 BẢNG COMMENTS (Bình luận)
--- ======================================================
-CREATE TABLE public.comments (
+-- COMMENTS
+CREATE TABLE IF NOT EXISTS public.comments (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
     post_id UUID REFERENCES public.posts(id) ON DELETE CASCADE,
@@ -41,10 +48,8 @@ CREATE TABLE public.comments (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- ======================================================
--- ❤️ BẢNG LIKES (Lượt thích)
--- ======================================================
-CREATE TABLE public.likes (
+-- LIKES
+CREATE TABLE IF NOT EXISTS public.likes (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
     post_id UUID REFERENCES public.posts(id) ON DELETE CASCADE,
@@ -52,10 +57,8 @@ CREATE TABLE public.likes (
     UNIQUE (user_id, post_id)
 );
 
--- ======================================================
--- 👥 BẢNG FOLLOWS (Theo dõi)
--- ======================================================
-CREATE TABLE public.follows (
+-- FOLLOWS
+CREATE TABLE IF NOT EXISTS public.follows (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     follower_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     following_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -63,10 +66,8 @@ CREATE TABLE public.follows (
     UNIQUE (follower_id, following_id)
 );
 
--- ======================================================
--- 💬 HỆ THỐNG TIN NHẮN (Conversations & Messages)
--- ======================================================
-CREATE TABLE public.conversations (
+-- CONVERSATIONS
+CREATE TABLE IF NOT EXISTS public.conversations (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user1_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     user2_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
@@ -75,14 +76,16 @@ CREATE TABLE public.conversations (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
-CREATE TABLE public.conversation_members (
+-- CONVERSATION MEMBERS
+CREATE TABLE IF NOT EXISTS public.conversation_members (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     conversation_id UUID REFERENCES public.conversations(id) ON DELETE CASCADE,
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
     UNIQUE (conversation_id, user_id)
 );
 
-CREATE TABLE public.messages (
+-- MESSAGES
+CREATE TABLE IF NOT EXISTS public.messages (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     conversation_id UUID REFERENCES public.conversations(id) ON DELETE CASCADE,
     sender_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
@@ -90,10 +93,8 @@ CREATE TABLE public.messages (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- ======================================================
--- 🔔 BẢNG NOTIFICATIONS (Thông báo)
--- ======================================================
-CREATE TABLE public.notifications (
+-- NOTIFICATIONS
+CREATE TABLE IF NOT EXISTS public.notifications (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
     type TEXT,
@@ -102,33 +103,42 @@ CREATE TABLE public.notifications (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- ======================================================
--- ⚡ INDEXES (Tối ưu hóa truy vấn)
--- ======================================================
-CREATE INDEX idx_posts_user_id ON public.posts(user_id);
-CREATE INDEX idx_comments_post_id ON public.comments(post_id);
-CREATE INDEX idx_likes_post_id ON public.likes(post_id);
-CREATE INDEX idx_messages_conversation_id ON public.messages(conversation_id);
-CREATE INDEX idx_users_name_search ON public.users USING gin (to_tsvector('simple', name));
+-- SAVED POSTS
+CREATE TABLE IF NOT EXISTS public.saved_posts (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    post_id UUID REFERENCES public.posts(id) ON DELETE CASCADE,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+-- REPORTS
+CREATE TABLE IF NOT EXISTS public.reports (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    user_id UUID REFERENCES public.users(id) ON DELETE CASCADE,
+    post_id UUID REFERENCES public.posts(id) ON DELETE CASCADE,
+    reason TEXT,
+    created_at TIMESTAMP DEFAULT NOW()
+);
 
 -- ======================================================
--- 🔄 FUNCTIONS & TRIGGERS (Tự động hóa)
+-- ⚡ 3. INDEXES (TỐI ƯU TRUY VẤN)
+-- ======================================================
+CREATE INDEX IF NOT EXISTS idx_posts_user_id ON posts(user_id);
+CREATE INDEX IF NOT EXISTS idx_comments_post_id ON comments(post_id);
+CREATE INDEX IF NOT EXISTS idx_likes_post_id ON likes(post_id);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_users_name_search ON users USING gin (to_tsvector('simple', COALESCE(name, '')));
+
+-- ======================================================
+-- 🔄 4. TRIGGERS & FUNCTIONS (TỰ ĐỘNG HÓA)
 -- ======================================================
 
--- 1. Cập nhật updated_at
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = NOW();
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
+-- Trigger cập nhật thời gian
+CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_posts_updated_at BEFORE UPDATE ON posts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+CREATE TRIGGER update_conversations_updated_at BEFORE UPDATE ON conversations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
-CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON public.users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_posts_updated_at BEFORE UPDATE ON public.posts FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-CREATE TRIGGER update_conversations_updated_at BEFORE UPDATE ON public.conversations FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
--- 2. Tự động tạo profile khi có user mới trong Auth
+-- Auth: Đồng bộ user từ Supabase Auth sang public.users
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -144,57 +154,56 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
-CREATE TRIGGER on_auth_user_created
-AFTER INSERT ON auth.users
-FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+CREATE TRIGGER on_auth_user_created AFTER INSERT ON auth.users FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
--- 3. Thông báo Like (có chống spam 10s)
+-- Notifications: Like (có chống spam 10s)
 CREATE OR REPLACE FUNCTION notify_like()
 RETURNS TRIGGER AS $$
 BEGIN
     IF EXISTS (
-        SELECT 1 FROM public.notifications
-        WHERE user_id = (SELECT user_id FROM public.posts WHERE id = NEW.post_id)
+        SELECT 1 FROM notifications
+        WHERE user_id = (SELECT user_id FROM posts WHERE id = NEW.post_id)
         AND type = 'like' AND reference_id = NEW.post_id
-        AND created_at > NOW() - INTERVAL '10 seconds'
+        AND created_at > (now() - interval '10 seconds')
     ) THEN RETURN NEW; END IF;
 
-    INSERT INTO public.notifications (user_id, type, reference_id)
-    SELECT user_id, 'like', NEW.post_id FROM public.posts WHERE id = NEW.post_id;
+    INSERT INTO notifications (user_id, type, reference_id)
+    SELECT user_id, 'like', NEW.post_id FROM posts WHERE id = NEW.post_id;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trigger_like AFTER INSERT ON public.likes FOR EACH ROW EXECUTE FUNCTION notify_like();
+CREATE TRIGGER trigger_like AFTER INSERT ON likes FOR EACH ROW EXECUTE FUNCTION notify_like();
 
--- 4. Thông báo Comment & Follow
+-- Notifications: Comment
 CREATE OR REPLACE FUNCTION notify_comment()
 RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO public.notifications (user_id, type, reference_id)
-    SELECT user_id, 'comment', NEW.post_id FROM public.posts WHERE id = NEW.post_id;
+    INSERT INTO notifications (user_id, type, reference_id)
+    SELECT user_id, 'comment', NEW.post_id FROM posts WHERE id = NEW.post_id;
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trigger_comment AFTER INSERT ON public.comments FOR EACH ROW EXECUTE FUNCTION notify_comment();
+CREATE TRIGGER trigger_comment AFTER INSERT ON comments FOR EACH ROW EXECUTE FUNCTION notify_comment();
 
+-- Notifications: Follow
 CREATE OR REPLACE FUNCTION notify_follow()
 RETURNS TRIGGER AS $$
 BEGIN
-    INSERT INTO public.notifications (user_id, type, reference_id)
+    INSERT INTO notifications (user_id, type, reference_id)
     VALUES (NEW.following_id, 'follow', NEW.follower_id);
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trigger_follow AFTER INSERT ON public.follows FOR EACH ROW EXECUTE FUNCTION notify_follow();
+CREATE TRIGGER trigger_follow AFTER INSERT ON follows FOR EACH ROW EXECUTE FUNCTION notify_follow();
 
 -- ======================================================
--- 🔥 VIEWS & RPC FUNCTIONS
+-- 🔥 5. VIEWS & RPC (TRUY VẤN NÂNG CAO)
 -- ======================================================
 
--- View Feed tổng quát
+-- Feed tổng quát
 CREATE OR REPLACE VIEW feed_view AS
 SELECT
     p.id, p.content, p.image_url, p.created_at, u.id AS user_id, u.name, u.avatar,
@@ -202,7 +211,7 @@ SELECT
     (SELECT COUNT(*) FROM comments WHERE post_id = p.id) AS comment_count
 FROM posts p JOIN users u ON u.id = p.user_id;
 
--- Hàm lấy feed cá nhân hóa (theo follow)
+-- Feed theo Follow
 CREATE OR REPLACE FUNCTION get_feed(p_user_id UUID)
 RETURNS TABLE (post_id UUID, content TEXT, image_url TEXT, created_at TIMESTAMP, user_id UUID, name TEXT, avatar TEXT, like_count BIGINT, comment_count BIGINT)
 LANGUAGE sql AS $$
@@ -214,16 +223,16 @@ LANGUAGE sql AS $$
     ORDER BY p.created_at DESC;
 $$;
 
--- Tìm kiếm User
+-- Search User
 CREATE OR REPLACE FUNCTION search_users(keyword TEXT)
-RETURNS SETOF public.users LANGUAGE sql AS $$
-    SELECT * FROM public.users
-    WHERE to_tsvector('simple', name) @@ plainto_tsquery(keyword)
-    OR name ILIKE '%' || keyword || '%';
+RETURNS SETOF users LANGUAGE sql AS $$
+    SELECT * FROM users
+    WHERE name ILIKE '%' || keyword || '%'
+    OR to_tsvector('simple', COALESCE(name, '')) @@ plainto_tsquery(keyword);
 $$;
 
 -- ======================================================
--- 🔒 ROW LEVEL SECURITY (RLS)
+-- 🔒 6. RLS POLICIES (BẢO MẬT)
 -- ======================================================
 
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
@@ -235,41 +244,54 @@ ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversation_members ENABLE ROW LEVEL SECURITY;
 ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE saved_posts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
 
--- Users
+-- Policy: Users
 CREATE POLICY "Public profiles" ON users FOR SELECT USING (true);
 CREATE POLICY "Update own profile" ON users FOR UPDATE USING (auth.uid() = id);
 CREATE POLICY "allow insert from trigger" ON users FOR INSERT WITH CHECK (true);
 
--- Posts
+-- Policy: Posts
 CREATE POLICY "View posts" ON posts FOR SELECT USING (true);
 CREATE POLICY "Create post" ON posts FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Update own post" ON posts FOR UPDATE USING (auth.uid() = user_id);
 CREATE POLICY "Delete own post" ON posts FOR DELETE USING (auth.uid() = user_id);
 
--- Comments & Likes & Follows
+-- Policy: Comments
 CREATE POLICY "View comments" ON comments FOR SELECT USING (true);
 CREATE POLICY "Create comment" ON comments FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Delete own comment" ON comments FOR DELETE USING (auth.uid() = user_id);
 
+-- Policy: Likes
 CREATE POLICY "View likes" ON likes FOR SELECT USING (true);
 CREATE POLICY "Like post" ON likes FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Unlike" ON likes FOR DELETE USING (auth.uid() = user_id);
 
+-- Policy: Follows
 CREATE POLICY "View follows" ON follows FOR SELECT USING (true);
 CREATE POLICY "Follow" ON follows FOR INSERT WITH CHECK (auth.uid() = follower_id);
 CREATE POLICY "Unfollow" ON follows FOR DELETE USING (auth.uid() = follower_id);
 
--- Messaging
-CREATE POLICY "View conversations" ON conversations FOR SELECT USING (auth.uid() IN (SELECT user_id FROM conversation_members WHERE conversation_id = id));
+-- Policy: Messaging
+CREATE POLICY "View conversations" ON conversations FOR SELECT USING (id IN (SELECT conversation_id FROM conversation_members WHERE user_id = auth.uid()));
 CREATE POLICY "Create conversation" ON conversations FOR INSERT WITH CHECK (true);
-
 CREATE POLICY "View messages" ON messages FOR SELECT USING (auth.uid() IN (SELECT user_id FROM conversation_members WHERE conversation_id = messages.conversation_id));
 CREATE POLICY "Send message" ON messages FOR INSERT WITH CHECK (auth.uid() = sender_id);
+CREATE POLICY "View members" ON conversation_members FOR SELECT USING (true);
+CREATE POLICY "Join member" ON conversation_members FOR INSERT WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "View conversation members" ON conversation_members FOR SELECT USING (true);
-CREATE POLICY "Join conversation" ON conversation_members FOR INSERT WITH CHECK (auth.uid() = user_id);
-
--- Notifications
+-- Policy: Notifications
 CREATE POLICY "View own notifications" ON notifications FOR SELECT USING (auth.uid() = user_id);
-CREATE POLICY "Update notification" ON notifications FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Update own notifications" ON notifications FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "System insert notifications" ON notifications FOR INSERT WITH CHECK (true);
+
+-- Policy: Saved Posts
+CREATE POLICY "View own saved" ON saved_posts FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Save post" ON saved_posts FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Unsave post" ON saved_posts FOR DELETE USING (auth.uid() = user_id);
+
+-- Policy: Reports
+CREATE POLICY "View own reports" ON reports FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Create report" ON reports FOR INSERT WITH CHECK (auth.uid() = user_id);
+
