@@ -133,16 +133,7 @@ export default function NotificationsPage() {
       <div className="fixed bottom-6 right-6 z-[999] flex flex-col items-end gap-4">
         {isChatOpen && user && (
           <div className="w-[380px] h-[550px] bg-background text-foreground rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className="p-3 border-b border-border flex justify-between items-center bg-secondary/50">
-              <span className="font-bold text-sm">Tin nhắn mới</span>
-              <button
-                onClick={() => setIsChatOpen(false)}
-                className="hover:bg-secondary rounded-full p-1 transition-colors"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <ChatBox userId={user.id} />
+            <ChatBox userId={user.id} onClose={() => setIsChatOpen(false)} />
           </div>
         )}
         <button

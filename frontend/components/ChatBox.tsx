@@ -11,9 +11,10 @@ import {
 
 interface ChatBoxProps {
   userId: string;
+  onClose?: () => void;
 }
 
-export default function ChatBox({ userId }: ChatBoxProps) {
+export default function ChatBox({ userId, onClose }: ChatBoxProps) {
   const [targetUser, setTargetUser] = useState<any>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -207,7 +208,7 @@ export default function ChatBox({ userId }: ChatBoxProps) {
   };
 
   return (
-    <div className="w-[380px] h-[550px] flex flex-col bg-background border border-border rounded-2xl shadow-2xl overflow-hidden relative">
+    <div className="w-full h-full flex flex-col bg-background text-foreground overflow-hidden relative">
       {/* HEADER */}
       <div className="p-4 border-b flex items-center justify-between">
         {targetUser ? (
@@ -232,7 +233,13 @@ export default function ChatBox({ userId }: ChatBoxProps) {
           <span className="font-bold">Tin nhắn</span>
         )}
 
-        <X size={18} />
+        {onClose && (
+          <X
+            size={20}
+            className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors"
+            onClick={onClose}
+          />
+        )}
       </div>
 
       {/* BODY */}

@@ -5,6 +5,13 @@ import { supabase } from "@/lib/supabaseClient";
 import { useParams } from "next/navigation";
 import { Heart, MessageCircle, MoreHorizontal } from "lucide-react";
 import Navbar from "@/components/navbar";
+import { useRef } from "react";
+import {
+  toggleLike as apiToggleLike,
+  createComment as apiCreateComment,
+  deleteComment as apiDeleteComment,
+  updateComment as apiUpdateComment,
+} from "@/lib/api";
 
 export default function PostDetailPage() {
   const { id } = useParams();
@@ -23,6 +30,8 @@ export default function PostDetailPage() {
   );
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState("");
+
+  const commentInputRef = useRef<HTMLInputElement | null>(null);
 
   // ================= LOAD USER =================
   useEffect(() => {
@@ -91,14 +100,16 @@ export default function PostDetailPage() {
       .select("*", { count: "exact", head: true })
       .eq("post_id", id);
 
+    const currentUser = user || (await supabase.auth.getUser()).data?.user;
+
     // check user liked
     let liked = false;
-    if (user?.id) {
+    if (currentUser?.id) {
       const { data: likeData } = await supabase
         .from("likes")
         .select("*")
         .eq("post_id", id)
-        .eq("user_id", user.id)
+        .eq("user_id", currentUser.id)
         .maybeSingle();
 
       liked = !!likeData;
@@ -143,18 +154,15 @@ export default function PostDetailPage() {
     }));
 
     try {
-      if (currentlyLiked) {
-        await supabase
-          .from("likes")
-          .delete()
-          .eq("post_id", id)
-          .eq("user_id", user.id);
-      } else {
-        await supabase.from("likes").insert({
-          post_id: id,
-          user_id: user.id,
-        });
-      }
+      const res = await apiToggleLike(id as string);
+      setIsLiked(res.is_liked);
+      setPost((prev: any) => ({
+        ...prev,
+        likes_count:
+          (res as any).likes !== undefined
+            ? (res as any).likes
+            : res.likes_count,
+      }));
     } catch (err) {
       // Lỗi thì roll-back (trả lại trạng thái cũ)
       setIsLiked(currentlyLiked);
@@ -195,12 +203,11 @@ export default function PostDetailPage() {
     }));
 
     try {
-      await supabase
-        .from("comments")
-        .insert({ post_id: id, user_id: user.id, content: text });
-      loadComments(); // Fetch để lấy id thật
+      const newCmt = await apiCreateComment(id as string, text);
+      setComments((prev) => prev.map((c) => (c.id === tempId ? newCmt : c)));
     } catch (err) {
       console.error(err);
+      alert("Không thể lưu bình luận!");
     }
   };
 
@@ -208,13 +215,7 @@ export default function PostDetailPage() {
   const handleDeleteComment = async (commentId: string) => {
     if (!confirm("Bạn có chắc chắn muốn xóa bình luận này?")) return;
     try {
-      const { error } = await supabase
-        .from("comments")
-        .delete()
-        .eq("id", commentId)
-        .eq("user_id", user.id);
-
-      if (error) throw error;
+      await apiDeleteComment(commentId);
 
       setComments((prev) => prev.filter((c) => c.id !== commentId));
       setPost((prev: any) => ({
@@ -231,22 +232,29 @@ export default function PostDetailPage() {
   const submitEditComment = async (commentId: string) => {
     if (!editCommentText.trim()) return;
     try {
-      const { data, error } = await supabase
-        .from("comments")
-        .update({ content: editCommentText })
-        .eq("id", commentId)
-        .eq("user_id", user.id)
-        .select("*, users:user_id(id, name, avatar_url)")
-        .single();
+      const updated = await apiUpdateComment(commentId, editCommentText);
 
-      if (error) throw error;
-
-      setComments((prev) => prev.map((c) => (c.id === commentId ? data : c)));
+      setComments((prev) =>
+        prev.map((c) => (c.id === commentId ? updated : c)),
+      );
       setEditingCommentId(null);
     } catch (err) {
       console.error(err);
       alert("Sửa bình luận thất bại");
     }
+  };
+
+  // ================= REPLY COMMENT =================
+  const handleReplyClick = (username: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!username) return;
+
+    const newText = comment.startsWith(`@${username} `)
+      ? comment
+      : `@${username} ${comment}`;
+
+    setComment(newText);
+    setTimeout(() => commentInputRef.current?.focus(), 50);
   };
 
   // ================= INIT =================
@@ -268,8 +276,8 @@ export default function PostDetailPage() {
       {/* FIX NAVBAR OVERLAP */}
       <div className="max-w-xl mx-auto p-4 pt-20">
         {/* POST */}
-        <div className="border rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2">
+        <div className="border border-border rounded-xl p-4">
+          <div className="flex items-center gap-3 mb-3">
             <img
               src={
                 post.users?.avatar_url ||
@@ -277,10 +285,22 @@ export default function PostDetailPage() {
               }
               className="w-10 h-10 rounded-full"
             />
-            <b>{post.users?.name}</b>
+            <div>
+              <b className="block text-sm">{post.users?.name}</b>
+              <span className="text-xs text-muted-foreground block">
+                {new Date(post.created_at).toLocaleDateString("vi-VN", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  day: "numeric",
+                  month: "short",
+                })}
+              </span>
+            </div>
           </div>
 
-          <p className="mb-2">{post.content}</p>
+          {post.content && (
+            <p className="mb-3 text-sm whitespace-pre-wrap">{post.content}</p>
+          )}
 
           {post.image_url && (
             <div
@@ -325,6 +345,7 @@ export default function PostDetailPage() {
         {/* COMMENT INPUT */}
         <div className="mt-4 flex gap-2">
           <input
+            ref={commentInputRef}
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             placeholder="Viết bình luận..."
@@ -342,94 +363,119 @@ export default function PostDetailPage() {
         <div className="mt-4">
           <h2 className="font-bold mb-4">Bình luận</h2>
 
-          {comments.map((c) => (
-            <div key={c.id} className="flex gap-3 mb-4 group items-start">
-              <img
-                src={
-                  c.users?.avatar_url ||
-                  `https://api.dicebear.com/7.x/identicon/svg?seed=${c.user_id}`
-                }
-                className="w-10 h-10 rounded-full object-cover border"
-              />
-              <div className="flex-1">
-                <b className="text-sm">{c.users?.name}</b>
+          {comments.map((c) => {
+            const isReply = c.content?.trim().startsWith("@");
+            return (
+              <div
+                key={c.id}
+                className={`flex gap-3 group items-start cursor-pointer ${
+                  isReply ? "ml-10 mb-2" : "mb-5"
+                }`}
+                onDoubleClick={(e) => handleReplyClick(c.users?.name, e)}
+              >
+                <img
+                  src={
+                    c.users?.avatar_url ||
+                    `https://api.dicebear.com/7.x/identicon/svg?seed=${c.user_id}`
+                  }
+                  className={`${
+                    isReply ? "w-7 h-7" : "w-10 h-10"
+                  } rounded-full object-cover border`}
+                />
+                <div className="flex-1">
+                  <b className={`${isReply ? "text-xs" : "text-sm"}`}>
+                    {c.users?.name}
+                  </b>
 
-                {editingCommentId === c.id ? (
-                  <div className="flex flex-col gap-2 mt-1">
-                    <input
-                      className="border px-3 py-1.5 rounded-lg w-full outline-none text-sm bg-transparent"
-                      value={editCommentText}
-                      onChange={(e) => setEditCommentText(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter") submitEditComment(c.id);
-                        if (e.key === "Escape") setEditingCommentId(null);
-                      }}
-                      autoFocus
-                    />
-                    <div className="flex gap-3 text-xs">
-                      <button
-                        onClick={() => submitEditComment(c.id)}
-                        className="text-blue-500 font-semibold hover:underline"
-                      >
-                        Lưu
-                      </button>
-                      <button
-                        onClick={() => setEditingCommentId(null)}
-                        className="text-gray-500 hover:underline"
-                      >
-                        Hủy
-                      </button>
-                    </div>
-                  </div>
-                ) : (
-                  <p className="text-sm mt-0.5 whitespace-pre-wrap">
-                    {c.content}
-                  </p>
-                )}
-              </div>
-
-              {user?.id === c.user_id && !editingCommentId && (
-                <div className="relative opacity-0 group-hover:opacity-100 transition-opacity ml-2">
-                  <MoreHorizontal
-                    className="w-5 h-5 cursor-pointer text-gray-500 hover:text-black"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setOpenCommentMenuId(
-                        openCommentMenuId === c.id ? null : c.id,
-                      );
-                    }}
-                  />
-                  {openCommentMenuId === c.id && (
-                    <div className="absolute right-0 mt-1 w-28 bg-background border border-border shadow-lg rounded-xl py-1 z-50">
-                      <button
-                        onClick={() => {
-                          setEditingCommentId(c.id);
-                          setEditCommentText(c.content);
-                          setOpenCommentMenuId(null);
+                  {editingCommentId === c.id ? (
+                    <div className="flex flex-col gap-2 mt-1">
+                      <input
+                        className="border px-3 py-1.5 rounded-lg w-full outline-none text-sm bg-transparent"
+                        value={editCommentText}
+                        onChange={(e) => setEditCommentText(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") submitEditComment(c.id);
+                          if (e.key === "Escape") setEditingCommentId(null);
                         }}
-                        className="w-full text-left px-4 py-2 text-sm hover:bg-secondary transition"
-                      >
-                        Sửa
-                      </button>
-                      <button
-                        onClick={() => handleDeleteComment(c.id)}
-                        className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-secondary transition"
-                      >
-                        Xóa
-                      </button>
+                        autoFocus
+                      />
+                      <div className="flex gap-3 text-xs">
+                        <button
+                          onClick={() => submitEditComment(c.id)}
+                          className="text-blue-500 font-semibold hover:underline"
+                        >
+                          Lưu
+                        </button>
+                        <button
+                          onClick={() => setEditingCommentId(null)}
+                          className="text-gray-500 hover:underline"
+                        >
+                          Hủy
+                        </button>
+                      </div>
                     </div>
+                  ) : (
+                    <p
+                      className={`mt-0.5 whitespace-pre-wrap ${
+                        isReply
+                          ? "text-[13px] text-muted-foreground"
+                          : "text-sm"
+                      }`}
+                    >
+                      {c.content}
+                    </p>
                   )}
                 </div>
-              )}
-            </div>
-          ))}
+
+                {user?.id === c.user_id && !editingCommentId && (
+                  <div className="relative opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                    <MoreHorizontal
+                      className="w-5 h-5 cursor-pointer text-gray-500 hover:text-black"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenCommentMenuId(
+                          openCommentMenuId === c.id ? null : c.id,
+                        );
+                      }}
+                    />
+                    {openCommentMenuId === c.id && (
+                      <div className="absolute right-0 mt-1 w-28 bg-background border border-border shadow-lg rounded-xl py-1 z-50">
+                        <button
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setEditingCommentId(c.id);
+                            setEditCommentText(c.content);
+                            setOpenCommentMenuId(null);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-secondary transition"
+                        >
+                          Sửa
+                        </button>
+                        <button
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleDeleteComment(c.id);
+                          }}
+                          className="w-full text-left px-4 py-2 text-sm text-red-500 hover:bg-secondary transition"
+                        >
+                          Xóa
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </div>
 
       {/* IMAGE PREVIEW MODAL */}
       {isImageModalOpen && post?.image_url && (
         <div
-          className="fixed inset-0 z-[9999] bg-black/90 flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200"
+          className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200"
           onClick={() => setIsImageModalOpen(false)}
         >
           <img
