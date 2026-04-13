@@ -1,17 +1,28 @@
 import express from "express";
-import { supabase } from "../lib/supabase.js";
 import { supabaseAdmin } from "../lib/supabaseAdmin.js";
 
 const router = express.Router();
 
-/* ======================
-   GET FEED (PUBLIC)
-====================== */
+/* =========================
+   GET USER FROM TOKEN
+========================= */
+const getUserFromToken = async (token) => {
+  const { data, error } = await supabaseAdmin.auth.getUser(token);
+
+  if (error || !data?.user) return null;
+
+  return data.user;
+};
+
+/* =========================
+   GET FEED
+========================= */
 router.get("/feed", async (req, res) => {
   try {
-    const userId = req.headers["x-user-id"] || null;
+    const token = req.headers.authorization?.replace("Bearer ", "");
+    const user = token ? await getUserFromToken(token) : null;
 
-    const { data, error } = await supabase
+    const { data, error } = await supabaseAdmin
       .from("posts")
       .select(
         `
@@ -20,12 +31,17 @@ router.get("/feed", async (req, res) => {
         image_url,
         created_at,
         user_id,
-        users!posts_user_id_fkey (
+        users (
+          id,
           name,
           avatar_url
         ),
-        likes:likes(user_id),
-        comments:comments(id)
+        likes (
+          user_id
+        ),
+        comments (
+          id
+        )
       `,
       )
       .order("created_at", { ascending: false });
@@ -39,7 +55,7 @@ router.get("/feed", async (req, res) => {
       ...p,
       likes_count: p.likes?.length || 0,
       comments_count: p.comments?.length || 0,
-      is_liked: userId ? p.likes?.some((l) => l.user_id === userId) : false,
+      is_liked: user ? p.likes?.some((l) => l.user_id === user.id) : false,
     }));
 
     res.json(formatted);
@@ -48,28 +64,35 @@ router.get("/feed", async (req, res) => {
   }
 });
 
-/* ======================
+/* =========================
    CREATE POST
-====================== */
+========================= */
 router.post("/", async (req, res) => {
   try {
-    const { content, image_url, user_id } = req.body;
+    const token = req.headers.authorization?.replace("Bearer ", "");
+    const user = await getUserFromToken(token);
 
-    if (!user_id) {
-      return res.status(400).json({ error: "Missing user_id" });
+    if (!user) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
+
+    const { content, image_url } = req.body;
 
     const { data, error } = await supabaseAdmin
       .from("posts")
       .insert({
-        user_id,
+        user_id: user.id,
         content,
         image_url,
       })
       .select(
         `
-        *,
-        users!posts_user_id_fkey (
+        id,
+        content,
+        image_url,
+        created_at,
+        user_id,
+        users (
           name,
           avatar_url
         )
@@ -93,22 +116,25 @@ router.post("/", async (req, res) => {
   }
 });
 
-/* ======================
-   LIKE TOGGLE
-====================== */
+/* =========================
+   TOGGLE LIKE
+========================= */
 router.put("/:id/like", async (req, res) => {
   try {
-    const { id } = req.params;
-    const { user_id } = req.body;
+    const token = req.headers.authorization?.replace("Bearer ", "");
+    const user = await getUserFromToken(token);
 
-    if (!user_id) {
-      return res.status(400).json({ error: "Missing user_id" });
+    if (!user) {
+      return res.status(401).json({ error: "Unauthorized" });
     }
 
-    const { data: existing } = await supabase
+    const user_id = user.id;
+    const post_id = req.params.id;
+
+    const { data: existing } = await supabaseAdmin
       .from("likes")
       .select("*")
-      .eq("post_id", id)
+      .eq("post_id", post_id)
       .eq("user_id", user_id)
       .maybeSingle();
 
@@ -116,19 +142,19 @@ router.put("/:id/like", async (req, res) => {
       await supabaseAdmin
         .from("likes")
         .delete()
-        .eq("post_id", id)
+        .eq("post_id", post_id)
         .eq("user_id", user_id);
     } else {
       await supabaseAdmin.from("likes").insert({
-        post_id: id,
+        post_id,
         user_id,
       });
     }
 
-    const { count } = await supabase
+    const { count } = await supabaseAdmin
       .from("likes")
       .select("*", { count: "exact", head: true })
-      .eq("post_id", id);
+      .eq("post_id", post_id);
 
     res.json({
       likes: count || 0,

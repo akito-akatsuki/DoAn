@@ -103,14 +103,10 @@ export default function HomePage() {
       setTimeout(() => setShowHeartId(null), 1000);
     }
 
-    const res = await toggleLike(postId, user.id);
+    const res = await toggleLike(postId);
 
     setPosts((prev) =>
-      prev.map((p) =>
-        p.id === postId
-          ? { ...p, likes_count: res.likes, is_liked: res.is_liked }
-          : p,
-      ),
+      prev.map((p) => (p.id === postId ? { ...p, ...res } : p)),
     );
   };
 
@@ -139,10 +135,26 @@ export default function HomePage() {
     if (!confirm("Xóa bài viết này?")) return;
 
     try {
-      await fetch(`http://localhost:5000/posts/${postId}`, {
+      // 🔥 lấy token từ Supabase session
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const res = await fetch(`http://localhost:5000/posts/${postId}`, {
         method: "DELETE",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session?.access_token}`,
+        },
       });
 
+      const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data?.error || "Delete failed");
+      }
+
+      // 🔥 update UI ngay
       setPosts((prev) => prev.filter((p) => p.id !== postId));
       setOpenMenuId(null);
     } catch (err) {
@@ -188,25 +200,54 @@ export default function HomePage() {
                 <button
                   onClick={async () => {
                     if (!content && !file) return;
-                    let imageUrl = null;
-                    if (file) {
-                      const cleanName = file.name.replace(
-                        /[^a-zA-Z0-9.]/g,
-                        "_",
-                      );
-                      const fileName = `${Date.now()}_${cleanName}`;
-                      await supabase.storage
-                        .from("posts")
-                        .upload(fileName, file);
-                      const { data } = supabase.storage
-                        .from("posts")
-                        .getPublicUrl(fileName);
-                      imageUrl = data.publicUrl;
+
+                    try {
+                      let imageUrl = null;
+
+                      // ================= UPLOAD IMAGE =================
+                      if (file) {
+                        const cleanName = file.name.replace(
+                          /[^a-zA-Z0-9.]/g,
+                          "_",
+                        );
+                        const fileName = `${Date.now()}_${cleanName}`;
+
+                        const { error: uploadError } = await supabase.storage
+                          .from("posts")
+                          .upload(fileName, file);
+
+                        if (uploadError) {
+                          console.error("UPLOAD ERROR:", uploadError.message);
+                          return;
+                        }
+
+                        const { data } = supabase.storage
+                          .from("posts")
+                          .getPublicUrl(fileName);
+
+                        imageUrl = data.publicUrl;
+                      }
+
+                      // ================= CREATE POST =================
+                      const newPost = await createPost({
+                        content,
+                        image_url: imageUrl,
+                      });
+
+                      if (!newPost) {
+                        console.error("CREATE POST FAILED");
+                        return;
+                      }
+
+                      // ================= UPDATE UI =================
+                      setPosts((prev) => [newPost, ...prev]);
+
+                      // ================= RESET =================
+                      setContent("");
+                      setFile(null);
+                    } catch (err) {
+                      console.error("POST ERROR:", err);
                     }
-                    await createPost({ content, image_url: imageUrl });
-                    setContent("");
-                    setFile(null);
-                    loadFeed();
                   }}
                   disabled={!content && !file}
                   className="bg-gradient-to-r from-primary to-accent text-primary-fg px-5 py-1.5 rounded-full font-semibold text-sm shadow-ig hover:brightness-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
@@ -313,7 +354,7 @@ export default function HomePage() {
                   <Heart
                     onClick={() => handleLike(post.id)}
                     className={`cursor-pointer transition-all active:scale-150 hover:scale-110 w-7 h-7 ${
-                      post.is_liked // Kiểm tra biến này từ database/API trả về
+                      (post.is_liked ?? false)
                         ? "text-red-500 fill-red-500" // Đổi từ destructive sang red-500 cho chắc chắn
                         : "stroke-[2px] text-black"
                     }`}
@@ -361,13 +402,15 @@ export default function HomePage() {
                     alt="User"
                   />
                   <input
-                    value={commentInput[post.id] || ""}
-                    onChange={(e) =>
-                      setCommentInput({
-                        ...commentInput,
-                        [post.id]: e.target.value,
-                      })
-                    }
+                    value={commentInput[post.id] ?? ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+
+                      setCommentInput((prev) => ({
+                        ...prev,
+                        [post.id]: value,
+                      }));
+                    }}
                     className="flex-1 text-sm outline-none bg-transparent select-text"
                     placeholder="Thêm bình luận..."
                   />

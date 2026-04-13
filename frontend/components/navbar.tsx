@@ -1,28 +1,29 @@
 "use client";
 
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
-import { useState, useEffect } from "react";
 import {
   Sun,
   Moon,
   Home,
+  MessageCircle,
   Heart,
   PlusCircle,
-  MessageCircle,
 } from "lucide-react";
 
 export default function Navbar({ user }: any) {
+  const router = useRouter();
+
   const [open, setOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
 
-  const [selectedUser, setSelectedUser] = useState<any>(null);
-  const [isFollowing, setIsFollowing] = useState(false);
-
+  // ================= THEME =================
   useEffect(() => {
-    const root = window.document.documentElement;
+    const root = document.documentElement;
     const theme = localStorage.getItem("theme");
 
     if (
@@ -35,7 +36,7 @@ export default function Navbar({ user }: any) {
   }, []);
 
   const toggleDark = () => {
-    const root = window.document.documentElement;
+    const root = document.documentElement;
     const newDark = !isDark;
 
     setIsDark(newDark);
@@ -44,6 +45,7 @@ export default function Navbar({ user }: any) {
     root.dataset.theme = newDark ? "dark" : "";
   };
 
+  // ================= SEARCH =================
   useEffect(() => {
     const delay = setTimeout(async () => {
       if (query.length < 2) {
@@ -63,33 +65,11 @@ export default function Navbar({ user }: any) {
     return () => clearTimeout(delay);
   }, [query]);
 
-  const toggleFollow = async () => {
-    if (!user || !selectedUser) return;
-
-    if (!isFollowing) {
-      await supabase.from("follows").insert({
-        follower_id: user.id,
-        following_id: selectedUser.id,
-      });
-      setIsFollowing(true);
-    } else {
-      await supabase.from("follows").delete().match({
-        follower_id: user.id,
-        following_id: selectedUser.id,
-      });
-      setIsFollowing(false);
-    }
-  };
-
-  // ✅ FIX LOGOUT
+  // ================= LOGOUT =================
   const handleLogout = async () => {
     await supabase.auth.signOut();
-
-    setOpen(false); // đóng dropdown
-    setSelectedUser(null); // reset state follow
-    setResults([]);
-
-    window.location.reload(); // QUAN TRỌNG: refresh UI
+    setOpen(false);
+    window.location.reload();
   };
 
   return (
@@ -110,7 +90,7 @@ export default function Navbar({ user }: any) {
                 <div
                   key={u.id}
                   onClick={() => {
-                    setSelectedUser(u);
+                    router.push(`/profile/${u.id}`);
                     setResults([]);
                     setQuery("");
                   }}
@@ -134,7 +114,7 @@ export default function Navbar({ user }: any) {
         <h1 className="font-bold text-xl">InstaMini</h1>
 
         {/* ICONS */}
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-2">
           <button className="p-2">
             <Home />
           </button>
@@ -157,7 +137,7 @@ export default function Navbar({ user }: any) {
             {user ? (
               <>
                 <img
-                  onClick={() => setOpen((prev) => !prev)}
+                  onClick={() => setOpen(!open)}
                   src={
                     user?.user_metadata?.avatar_url ||
                     `https://api.dicebear.com/7.x/identicon/svg?seed=${user.id}`
@@ -166,48 +146,34 @@ export default function Navbar({ user }: any) {
                 />
 
                 {open && (
-                  <div className="absolute right-0 mt-2 w-48 bg-background border rounded-xl shadow-ig py-2 z-[99999]">
+                  <div className="absolute right-0 mt-2 w-48 bg-background border rounded-xl shadow-ig py-2">
                     <div className="px-3 py-2 text-sm border-b">
                       {user.email}
                     </div>
 
-                    <button className="w-full text-left px-3 py-2 hover:bg-secondary">
+                    <button
+                      onClick={() => router.push(`/profile/${user.id}`)}
+                      className="w-full text-left px-3 py-2 hover:bg-secondary"
+                    >
                       Hồ sơ
                     </button>
 
-                    <button className="w-full text-left px-3 py-2 hover:bg-secondary">
-                      Cài đặt
-                    </button>
-
-                    {/* ✅ FIX HERE */}
                     <button
                       onClick={handleLogout}
                       className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-50"
                     >
                       Đăng xuất
                     </button>
-
-                    {selectedUser && (
-                      <div className="border-t mt-2 pt-2 px-3">
-                        <button
-                          onClick={toggleFollow}
-                          className={`w-full py-1 rounded text-sm ${
-                            isFollowing
-                              ? "bg-red-100 text-red-600"
-                              : "bg-blue-500 text-white"
-                          }`}
-                        >
-                          {isFollowing ? "Unfollow" : "Follow"}
-                        </button>
-                      </div>
-                    )}
                   </div>
                 )}
               </>
             ) : (
               <button
                 onClick={() =>
-                  supabase.auth.signInWithOAuth({ provider: "google" })
+                  supabase.auth.signInWithOAuth({
+                    provider: "google",
+                    options: { redirectTo: window.location.origin },
+                  })
                 }
               >
                 Login
