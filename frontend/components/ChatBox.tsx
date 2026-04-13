@@ -66,34 +66,6 @@ export default function ChatBox({ userId }: ChatBoxProps) {
     };
   }, [conversationId]);
 
-  // ================= REALTIME DANH SÁCH CHAT BÊN NGOÀI =================
-  useEffect(() => {
-    if (!userId) return;
-
-    const channel = supabase
-      .channel(`conversations_list_${userId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*", // Lắng nghe mọi cập nhật (thêm mới / update tin nhắn cuối)
-          schema: "public",
-          table: "conversations",
-        },
-        (payload) => {
-          const { user1_id, user2_id } = payload.new || payload.old || {};
-          // Nếu cuộc hội thoại được cập nhật thuộc về user này thì reload danh sách
-          if (user1_id === userId || user2_id === userId) {
-            loadConversations();
-          }
-        },
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [userId, loadConversations]);
-
   // ================= LOAD CONVERSATIONS (OPTIMIZED) =================
   const loadConversations = useCallback(async () => {
     if (!userId) return;
@@ -123,6 +95,34 @@ export default function ChatBox({ userId }: ChatBoxProps) {
 
     setConversations(enriched);
   }, [userId]);
+
+  // ================= REALTIME DANH SÁCH CHAT BÊN NGOÀI =================
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel(`conversations_list_${userId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*", // Lắng nghe mọi cập nhật (thêm mới / update tin nhắn cuối)
+          schema: "public",
+          table: "conversations",
+        },
+        (payload) => {
+          const { user1_id, user2_id } = payload.new || payload.old || {};
+          // Nếu cuộc hội thoại được cập nhật thuộc về user này thì reload danh sách
+          if (user1_id === userId || user2_id === userId) {
+            loadConversations();
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId, loadConversations]);
 
   useEffect(() => {
     loadConversations();
