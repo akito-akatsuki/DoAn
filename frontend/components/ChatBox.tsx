@@ -208,7 +208,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
   };
 
   return (
-    <div className="w-full h-full flex flex-col bg-background text-foreground overflow-hidden relative">
+    <div className="w-full h-full flex flex-col bg-background text-foreground overflow-hidden relative transition-colors duration-500">
       {/* HEADER */}
       <div className="p-4 border-b flex items-center justify-between">
         {targetUser ? (
@@ -246,7 +246,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2">
         {!targetUser ? (
           <>
-            <div className="flex items-center gap-2 border border-border bg-secondary/50 p-2 rounded-xl">
+            <div className="flex items-center gap-2 border border-border bg-secondary/50 focus-within:bg-background focus-within:ring-1 focus-within:ring-border transition-all p-2 rounded-xl">
               <Search size={16} />
               <input
                 value={search}
@@ -306,7 +306,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
 
       {/* INPUT */}
       {targetUser && (
-        <div className="p-3 border-t border-border bg-background flex gap-2">
+        <div className="p-3 border-t border-border bg-background flex gap-2 transition-colors duration-500">
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}

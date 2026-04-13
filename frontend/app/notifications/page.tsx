@@ -66,7 +66,7 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background transition-colors duration-500">
       <Navbar user={user} />
 
       <main className="max-w-[600px] mx-auto pt-24 px-4 pb-20">
@@ -132,7 +132,7 @@ export default function NotificationsPage() {
       {/* FIXED CHAT UI */}
       <div className="fixed bottom-6 right-6 z-[999] flex flex-col items-end gap-4">
         {isChatOpen && user && (
-          <div className="w-[380px] h-[550px] bg-background text-foreground rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="w-[380px] h-[550px] bg-background text-foreground rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 transition-colors duration-500">
             <ChatBox userId={user.id} onClose={() => setIsChatOpen(false)} />
           </div>
         )}

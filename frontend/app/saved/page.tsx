@@ -56,7 +56,7 @@ export default function SavedPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background transition-colors duration-500">
       <Navbar user={user} />
 
       <main className="max-w-[935px] mx-auto pt-24 px-4 pb-20">

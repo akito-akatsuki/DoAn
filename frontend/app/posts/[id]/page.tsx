@@ -269,7 +269,7 @@ export default function PostDetailPage() {
   if (!post) return <p className="p-4">Post not found</p>;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background transition-colors duration-500">
       {/* NAVBAR */}
       <Navbar user={user} />
 
@@ -439,7 +439,7 @@ export default function PostDetailPage() {
                       }}
                     />
                     {openCommentMenuId === c.id && (
-                      <div className="absolute right-0 mt-1 w-28 bg-background border border-border shadow-lg rounded-xl py-1 z-50">
+                      <div className="absolute right-0 mt-1 w-28 bg-background border border-border shadow-lg rounded-xl py-1 z-50 transition-colors duration-500">
                         <button
                           onMouseDown={(e) => {
                             e.preventDefault();

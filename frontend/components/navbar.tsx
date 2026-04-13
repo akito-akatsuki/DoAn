@@ -74,7 +74,7 @@ export default function Navbar({ user }: any) {
   };
 
   return (
-    <nav className="fixed top-0 w-full bg-background z-[9999] shadow-ig">
+    <nav className="fixed top-0 w-full bg-background z-[9999] shadow-ig transition-colors duration-500">
       <div className="max-w-[935px] mx-auto flex items-center justify-between h-[60px] px-4">
         {/* SEARCH */}
         <div className="hidden md:block relative">
@@ -82,11 +82,11 @@ export default function Navbar({ user }: any) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search user..."
-            className="w-[215px] bg-secondary px-4 py-[10px] rounded-full text-sm"
+            className="w-[215px] bg-secondary border border-border px-4 py-[10px] rounded-full text-sm outline-none focus:bg-background transition-colors"
           />
 
           {results.length > 0 && (
-            <div className="absolute top-full mt-2 w-full bg-background border rounded-xl shadow-lg z-50">
+            <div className="absolute top-full mt-2 w-full bg-background border border-border rounded-xl shadow-lg z-50 transition-colors duration-500">
               {results.map((u) => (
                 <div
                   key={u.id}
@@ -146,7 +146,7 @@ export default function Navbar({ user }: any) {
                 />
 
                 {open && (
-                  <div className="absolute right-0 mt-2 w-48 bg-background border rounded-xl shadow-ig py-2">
+                  <div className="absolute right-0 mt-2 w-48 bg-background border rounded-xl shadow-ig py-2 transition-colors duration-500">
                     <div className="px-3 py-2 text-sm border-b">
                       {user.email}
                     </div>

@@ -28,7 +28,7 @@ export default function RootLayout({
       className="h-full antialiased font-ig data-[theme=dark]:dark"
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col font-ig bg-background text-foreground">
+      <body className="min-h-full flex flex-col font-ig bg-background text-foreground transition-colors duration-500">
         {children}
       </body>
     </html>

@@ -43,6 +43,7 @@ export default function HomePage() {
 
   const commentInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const modalInputRef = useRef<HTMLInputElement | null>(null);
+  const imageClickTimeout = useRef<NodeJS.Timeout | null>(null);
 
   // Dropdown state & Ref
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -405,6 +406,26 @@ export default function HomePage() {
     }
   };
 
+  // ================= IMAGE CLICK HANDLERS =================
+  const handleImageClick = (post: any) => {
+    if (imageClickTimeout.current) {
+      clearTimeout(imageClickTimeout.current);
+    }
+    imageClickTimeout.current = setTimeout(() => {
+      openPostModal(post);
+      imageClickTimeout.current = null;
+    }, 250);
+  };
+
+  const handleImageDoubleClick = (e: React.MouseEvent, post: any) => {
+    e.stopPropagation();
+    if (imageClickTimeout.current) {
+      clearTimeout(imageClickTimeout.current);
+      imageClickTimeout.current = null;
+    }
+    handleLike(post.id, true);
+  };
+
   // ================= DELETE POST =================
   const handleDeletePost = async (postId: string) => {
     if (!confirm("Xóa bài viết này?")) return;
@@ -470,7 +491,7 @@ export default function HomePage() {
       <Navbar user={user} />
       <main className="pt-16 max-w-[470px] mx-auto px-2 mb-10">
         {/* CREATE POST */}
-        <div className="bg-background shadow-ig rounded-[12px] p-4 mb-2 border ring-1 ring-border">
+        <div className="bg-background shadow-ig rounded-[12px] p-4 mb-2 border ring-1 ring-border transition-colors duration-500">
           <div className="flex items-start gap-4">
             <img
               src={
@@ -571,7 +592,7 @@ export default function HomePage() {
           {posts.map((post) => (
             <div
               key={post.id}
-              className="bg-background shadow-ig rounded-lg overflow-hidden border ring-1 ring-border mb-2 relative"
+              className="bg-background shadow-ig rounded-lg overflow-hidden border ring-1 ring-border mb-2 relative transition-colors duration-500"
               onDoubleClick={() => handleLike(post.id, true)}
             >
               {/* BIG HEART POP ANIMATION */}
@@ -624,7 +645,7 @@ export default function HomePage() {
                   {openMenuId === String(post.id) && (
                     <div
                       ref={menuRef}
-                      className="absolute right-0 mt-2 w-44 bg-background border ring-1 ring-border rounded-xl shadow-xl py-1 z-[100]"
+                      className="absolute right-0 mt-2 w-44 bg-background border ring-1 ring-border rounded-xl shadow-xl py-1 z-[100] transition-colors duration-500"
                     >
                       <button
                         onClick={() => handleSavePost(post.id)}
@@ -676,7 +697,8 @@ export default function HomePage() {
                   {/* Overlay ẩn để catch event tốt hơn */}
                   <div
                     className="absolute inset-0 z-10 cursor-pointer"
-                    onClick={() => openPostModal(post)}
+                    onClick={() => handleImageClick(post)}
+                    onDoubleClick={(e) => handleImageDoubleClick(e, post)}
                   />
                 </div>
               )}
@@ -786,7 +808,7 @@ export default function HomePage() {
                                 }}
                               />
                               {openCommentMenuId === c.id && (
-                                <div className="absolute right-0 mt-1 w-24 bg-background border border-border shadow-lg rounded-lg py-1 z-50">
+                                <div className="absolute right-0 mt-1 w-24 bg-background border border-border shadow-lg rounded-lg py-1 z-50 transition-colors duration-500">
                                   <button
                                     onMouseDown={(e) => {
                                       e.preventDefault();
@@ -873,7 +895,7 @@ export default function HomePage() {
           </button>
 
           <div
-            className="bg-background text-foreground flex flex-col md:flex-row w-full max-w-5xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 cursor-default"
+            className="bg-background text-foreground flex flex-col md:flex-row w-full max-w-5xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 cursor-default transition-colors duration-500"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Phần Ảnh */}
@@ -892,7 +914,7 @@ export default function HomePage() {
             </div>
 
             {/* Phần Thông tin / Bình luận */}
-            <div className="w-full md:w-[400px] flex flex-col border-l border-border bg-background h-[50vh] md:h-auto">
+            <div className="w-full md:w-[400px] flex flex-col border-l border-border bg-background h-[50vh] md:h-auto transition-colors duration-500">
               {/* Header */}
               <div className="flex items-center gap-3 p-4 border-b border-border">
                 <img
@@ -1023,7 +1045,7 @@ export default function HomePage() {
                             }}
                           />
                           {openCommentMenuId === c.id && (
-                            <div className="absolute right-0 mt-1 w-24 bg-background border border-border shadow-lg rounded-lg py-1 z-50">
+                            <div className="absolute right-0 mt-1 w-24 bg-background border border-border shadow-lg rounded-lg py-1 z-50 transition-colors duration-500">
                               <button
                                 onMouseDown={(e) => {
                                   e.preventDefault();
@@ -1100,7 +1122,7 @@ export default function HomePage() {
       <div className="fixed bottom-6 right-6 z-[999] flex flex-col items-end gap-4">
         {/* Khung ChatBox hiện lên khi nhấn nút */}
         {isChatOpen && user && (
-          <div className="w-[380px] h-[550px] bg-background text-foreground rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300">
+          <div className="w-[380px] h-[550px] bg-background text-foreground rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 transition-colors duration-500">
             <ChatBox userId={user.id} onClose={() => setIsChatOpen(false)} />
           </div>
         )}
