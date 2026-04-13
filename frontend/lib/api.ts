@@ -1,21 +1,27 @@
 import { supabase } from "./supabaseClient";
 
-const API_URL = "http://localhost:5000";
-
 /* =========================
    GET FEED
 ========================= */
 export const getFeed = async () => {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
+  const { data, error } = await supabase
+    .from("posts")
+    .select(
+      `
+      *,
+      users (
+        id,
+        name,
+        avatar_url
+      )
+    `,
+    )
+    .order("created_at", { ascending: false });
 
-  const res = await fetch(`${API_URL}/posts/feed`, {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
-  });
-
-  const data = await res.json();
+  if (error) {
+    console.error("getFeed error:", error);
+    throw error;
+  }
 
   return data;
 };
@@ -27,65 +33,139 @@ export const createPost = async (payload: {
   content: string;
   image_url?: string | null;
 }) => {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
+  const { data: userData } = await supabase.auth.getUser();
 
-  const res = await fetch(`${API_URL}/posts`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify(payload),
-  });
+  const user = userData.user;
+  if (!user) throw new Error("Not authenticated");
 
-  return await res.json();
+  const { data, error } = await supabase
+    .from("posts")
+    .insert({
+      content: payload.content,
+      image_url: payload.image_url ?? null,
+      user_id: user.id,
+    })
+    .select(
+      `
+      *,
+      users (
+        id,
+        name,
+        avatar_url
+      )
+    `,
+    )
+    .single();
+
+  if (error) {
+    console.error("createPost error:", error);
+    throw error;
+  }
+
+  return data;
 };
 
 /* =========================
    TOGGLE LIKE
 ========================= */
 export const toggleLike = async (postId: string) => {
-  const { data: sessionData } = await supabase.auth.getSession();
-  const token = sessionData.session?.access_token;
+  const { data: userData } = await supabase.auth.getUser();
+  const userId = userData.user?.id;
 
-  const res = await fetch(`${API_URL}/posts/${postId}/like`, {
-    method: "PUT",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-  });
+  if (!userId) throw new Error("Not authenticated");
 
-  return await res.json();
+  // check đã like chưa
+  const { data: existing } = await supabase
+    .from("likes")
+    .select("*")
+    .eq("post_id", postId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (existing) {
+    await supabase
+      .from("likes")
+      .delete()
+      .eq("post_id", postId)
+      .eq("user_id", userId);
+  } else {
+    await supabase.from("likes").insert({
+      post_id: postId,
+      user_id: userId,
+    });
+  }
+
+  // update count
+  const { count } = await supabase
+    .from("likes")
+    .select("*", { count: "exact", head: true })
+    .eq("post_id", postId);
+
+  return {
+    is_liked: !existing,
+    likes_count: count || 0,
+  };
 };
 
 /* =========================
-   COMMENTS
+   GET COMMENTS
 ========================= */
 export const getComments = async (postId: string) => {
-  const res = await fetch(`${API_URL}/comments/${postId}`);
-  return await res.json();
+  const { data, error } = await supabase
+    .from("comments")
+    .select(
+      `
+      *,
+      users (
+        id,
+        name,
+        avatar_url
+      )
+    `,
+    )
+    .eq("post_id", postId)
+    .order("created_at", { ascending: true });
+
+  if (error) {
+    console.error("getComments error:", error);
+    throw error;
+  }
+
+  return data;
 };
 
+/* =========================
+   CREATE COMMENT
+========================= */
 export const createComment = async (postId: string, content: string) => {
-  const { data: sessionData } = await supabase.auth.getUser();
-  const userId = sessionData.user?.id;
+  const { data: userData } = await supabase.auth.getUser();
 
-  const { data: session } = await supabase.auth.getSession();
-  const token = session.session?.access_token;
+  const user = userData.user;
+  if (!user) throw new Error("Not authenticated");
 
-  const res = await fetch(`${API_URL}/comments/${postId}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`,
-    },
-    body: JSON.stringify({
+  const { data, error } = await supabase
+    .from("comments")
+    .insert({
+      post_id: postId,
       content,
-      user_id: userId,
-    }),
-  });
+      user_id: user.id,
+    })
+    .select(
+      `
+      *,
+      users (
+        id,
+        name,
+        avatar_url
+      )
+    `,
+    )
+    .single();
 
-  return await res.json();
+  if (error) {
+    console.error("createComment error:", error);
+    throw error;
+  }
+
+  return data;
 };

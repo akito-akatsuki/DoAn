@@ -115,19 +115,15 @@ export default function Navbar({ user }: any) {
 
         {/* ICONS */}
         <div className="flex items-center gap-2">
-          <button className="p-2">
+          <button className="p-2" onClick={() => router.push("/")}>
             <Home />
           </button>
-          <button className="p-2">
+          <button className="p-2" onClick={() => router.push("/messages")}>
             <MessageCircle />
           </button>
-          <button className="p-2">
+          <button className="p-2" onClick={() => router.push("/notifications")}>
             <Heart />
           </button>
-          <button className="p-2">
-            <PlusCircle />
-          </button>
-
           <button onClick={toggleDark} className="p-2">
             {isDark ? <Sun /> : <Moon />}
           </button>
