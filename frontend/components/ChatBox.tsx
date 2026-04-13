@@ -110,7 +110,9 @@ export default function ChatBox({ userId }: ChatBoxProps) {
           table: "conversations",
         },
         (payload) => {
-          const { user1_id, user2_id } = payload.new || payload.old || {};
+          const { user1_id, user2_id } = (payload.new ||
+            payload.old ||
+            {}) as any;
           // Nếu cuộc hội thoại được cập nhật thuộc về user này thì reload danh sách
           if (user1_id === userId || user2_id === userId) {
             loadConversations();
