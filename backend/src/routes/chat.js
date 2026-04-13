@@ -1,128 +1,92 @@
 import express from "express";
 import { supabaseAdmin } from "../lib/supabaseAdmin.js";
-import { isMutualFollow } from "../lib/followCheck.js";
 
 const router = express.Router();
 
 /* =========================
-   GET OR CREATE CONVERSATION
+   CREATE OR GET CONVERSATION
 ========================= */
-
 router.post("/conversation", async (req, res) => {
   try {
-    console.log("BODY RECEIVED:", req.body); // 👈 ADD THIS
-
     const { user1, user2 } = req.body;
 
     if (!user1 || !user2) {
-      return res.status(400).json({
-        error: "Missing users",
-        debug: { user1, user2 },
-      });
+      return res.status(400).json({ error: "Missing users" });
     }
 
-    // find existing
-    const { data: existing } = await supabaseAdmin
+    // tìm conversation đã tồn tại
+    const { data: members } = await supabaseAdmin
       .from("conversation_members")
       .select("conversation_id")
       .in("user_id", [user1, user2]);
 
-    if (existing && existing.length >= 2) {
-      return res.json({
-        conversationId: existing[0].conversation_id,
-      });
+    const countMap = {};
+    members?.forEach((m) => {
+      countMap[m.conversation_id] = (countMap[m.conversation_id] || 0) + 1;
+    });
+
+    const existingId = Object.keys(countMap).find((id) => countMap[id] >= 2);
+
+    if (existingId) {
+      return res.json({ conversationId: existingId });
     }
 
-    // create conversation
-    const { data: conv, error: convError } = await supabaseAdmin
+    // create conversation (TABLE chỉ cần id + created_at)
+    const { data: conv, error } = await supabaseAdmin
       .from("conversations")
-      .insert({
-        user1_id: user1,
-        user2_id: user2,
-      })
+      .insert({})
       .select()
       .single();
 
-    if (convError) {
-      console.error("CONV ERROR:", convError);
-      return res.status(500).json(convError);
-    }
+    if (error) return res.status(500).json(error);
 
-    // add members
-    const { error: memberError } = await supabaseAdmin
-      .from("conversation_members")
-      .insert([
-        { conversation_id: conv.id, user_id: user1 },
-        { conversation_id: conv.id, user_id: user2 },
-      ]);
-
-    if (memberError) {
-      console.error(memberError);
-      return res.status(500).json(memberError);
-    }
+    // insert members
+    await supabaseAdmin.from("conversation_members").insert([
+      { conversation_id: conv.id, user_id: user1 },
+      { conversation_id: conv.id, user_id: user2 },
+    ]);
 
     return res.json({ conversationId: conv.id });
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: err.message });
   }
 });
+
 /* =========================
    GET MESSAGES
 ========================= */
-router.get("/messages/:conversationId", async (req, res) => {
+router.get("/messages/:id", async (req, res) => {
   try {
-    const { conversationId } = req.params;
+    const { id } = req.params;
 
-    if (!conversationId || conversationId === "undefined") {
+    if (!id || id === "undefined") {
       return res.status(400).json({ error: "Invalid conversationId" });
     }
 
     const { data, error } = await supabaseAdmin
       .from("messages")
       .select("*")
-      .eq("conversation_id", conversationId)
+      .eq("conversation_id", id)
       .order("created_at", { ascending: true });
 
     if (error) return res.status(400).json(error);
 
     return res.json(data || []);
   } catch (err) {
-    return res.status(500).json(err);
+    return res.status(500).json({ error: err.message });
   }
 });
 
 /* =========================
-   SEND MESSAGE
-========================= */
-router.post("/messages", async (req, res) => {
-  const { conversationId, senderId, content } = req.body;
-
-  if (!conversationId || !senderId || !content) {
-    return res.status(400).json({ error: "Missing fields" });
-  }
-
-  const { data, error } = await supabaseAdmin
-    .from("messages")
-    .insert({
-      conversation_id: conversationId,
-      sender_id: senderId,
-      content,
-    })
-    .select()
-    .single();
-
-  if (error) return res.status(400).json(error);
-
-  res.json(data);
-});
-
-/* =========================
-   SEND MESSAGE
+   SEND MESSAGE (ONLY 1 ROUTE - FIXED)
 ========================= */
 router.post("/messages", async (req, res) => {
   try {
     const { conversationId, senderId, content } = req.body;
+
+    if (!conversationId || !senderId || !content) {
+      return res.status(400).json({ error: "Missing fields" });
+    }
 
     const { data, error } = await supabaseAdmin
       .from("messages")
@@ -136,9 +100,9 @@ router.post("/messages", async (req, res) => {
 
     if (error) return res.status(400).json(error);
 
-    res.json(data);
+    return res.json(data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    return res.status(500).json({ error: err.message });
   }
 });
 
