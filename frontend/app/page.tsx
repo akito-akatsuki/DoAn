@@ -38,6 +38,7 @@ export default function HomePage() {
   const [content, setContent] = useState("");
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(true);
+  const [placeholder, setPlaceholder] = useState("Bạn đang nghĩ gì?");
 
   const [commentsMap, setCommentsMap] = useState<Record<string, any[]>>({});
   const [commentInput, setCommentInput] = useState<Record<string, string>>({});
@@ -54,9 +55,6 @@ export default function HomePage() {
   // State cho hiệu ứng tim bay khi double click
   const [showHeartId, setShowHeartId] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
-
-  // Track Dark mode cho trang chủ
-  const [isDark, setIsDark] = useState(false);
 
   // ================= MODAL POST =================
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
@@ -79,16 +77,17 @@ export default function HomePage() {
     // Kích hoạt scroll mượt toàn trang
     document.documentElement.style.scrollBehavior = "smooth";
 
-    // Theo dõi thay đổi class "dark" trên thẻ html để tự động cập nhật màu nền
-    const updateTheme = () => {
-      setIsDark(document.documentElement.classList.contains("dark"));
-    };
-    updateTheme(); // Gọi lần đầu khi load
-    const observer = new MutationObserver(updateTheme);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
+    // Random placeholder
+    const placeholders = [
+      "Bạn đang nghĩ gì thế?",
+      "Hôm nay của bạn thế nào?",
+      "Điều gì làm bạn vui hôm nay?",
+      "Chia sẻ một chút về ngày hôm nay nhé!",
+      "Có câu chuyện nào thú vị không?",
+    ];
+    setPlaceholder(
+      placeholders[Math.floor(Math.random() * placeholders.length)],
+    );
 
     loadUser();
     loadFeed();
@@ -104,7 +103,6 @@ export default function HomePage() {
 
     return () => {
       supabase.removeChannel(channel);
-      observer.disconnect();
     };
   }, []);
 
@@ -134,8 +132,17 @@ export default function HomePage() {
   }, [openMenuId, isChatOpen]);
 
   const loadUser = async () => {
-    const { data } = await supabase.auth.getUser();
-    setUser(data.user);
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
+    if (authUser) {
+      const { data: dbUser } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", authUser.id)
+        .single();
+      setUser({ ...authUser, ...dbUser });
+    }
   };
 
   const loadFeed = async () => {
@@ -500,32 +507,29 @@ export default function HomePage() {
   };
 
   return (
-    <div
-      className={`min-h-screen select-none transition-colors duration-500 ${isDark ? "bg-neutral-900" : "bg-gray-100"}`}
-    >
+    <div className="min-h-screen select-none transition-colors duration-500 bg-gray-50 dark:bg-neutral-900 text-gray-900 dark:text-gray-100">
       {" "}
       {/* select-none ở root để mượt hơn khi double click */}
-      <Navbar user={user} />
       <main className="pt-24 max-w-[470px] mx-auto px-2 pb-24 md:pb-10">
         {/* CREATE POST */}
-        <div
-          className={`shadow-md rounded-[12px] p-4 mb-4 border border-border transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
-        >
+        <div className="shadow-md hover:shadow-lg dark:shadow-black/40 rounded-[12px] p-4 mb-4 border border-gray-200 dark:border-neutral-800 transition-all duration-500 bg-white dark:bg-[#262626]">
           <div className="flex items-start gap-4">
             <img
               src={
+                user?.avatar_url ||
                 user?.user_metadata?.avatar_url ||
                 `https://api.dicebear.com/7.x/identicon/svg?seed=${user?.id}`
               }
-              className="w-10 h-10 rounded-full ring-1 ring-border flex-shrink-0 mt-1"
+              className="w-10 h-10 rounded-full ring-1 ring-border flex-shrink-0 mt-1 cursor-pointer hover:opacity-80 transition-opacity"
+              onClick={() => router.push(`/profile/${user?.id}`)}
               alt="Your avatar"
             />
             <div className="flex-1 min-w-0">
               <textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
-                placeholder="Bạn đang nghĩ gì?"
-                className={`w-full text-base resize-none outline-none min-h-[80px] text-foreground font-semibold bg-transparent pt-1 select-text ${isDark ? "placeholder:text-gray-300" : "placeholder:text-gray-500"}`}
+                placeholder={placeholder}
+                className="w-full text-base resize-none outline-none min-h-[80px] text-gray-900 dark:text-gray-100 font-semibold bg-transparent pt-1 select-text placeholder:text-gray-500 dark:placeholder:text-gray-400"
                 rows={2}
               />
 
@@ -539,7 +543,7 @@ export default function HomePage() {
                   />
                   <button
                     onClick={() => setFile(null)}
-                    className="absolute -top-2 -right-2 bg-background border border-border text-foreground rounded-full p-1 shadow-md hover:bg-secondary transition-colors z-10"
+                    className="absolute -top-2 -right-2 bg-white dark:bg-[#262626] border border-gray-200 dark:border-neutral-700 text-gray-900 dark:text-gray-100 rounded-full p-1 shadow-md hover:bg-secondary transition-colors z-10"
                   >
                     <X className="w-4 h-4" />
                   </button>
@@ -628,7 +632,7 @@ export default function HomePage() {
           {posts.map((post) => (
             <div
               key={post.id}
-              className={`shadow-md rounded-xl overflow-hidden border border-border relative transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
+              className="shadow-md hover:shadow-lg dark:shadow-black/40 rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 relative transition-all duration-500 bg-white dark:bg-[#262626]"
               onDoubleClick={() => handleLike(post.id, true)}
             >
               {/* BIG HEART POP ANIMATION */}
@@ -686,7 +690,7 @@ export default function HomePage() {
                   {openMenuId === String(post.id) && (
                     <div
                       ref={menuRef}
-                      className={`absolute right-0 mt-2 w-44 border ring-1 ring-border rounded-xl shadow-xl py-1 z-[100] transition-colors duration-500 ${isDark ? "bg-[#333333]" : "bg-white"}`}
+                      className="absolute right-0 mt-2 w-44 border border-gray-200 dark:border-neutral-700 rounded-xl shadow-xl dark:shadow-black/50 py-1 z-[100] transition-colors duration-500 bg-white dark:bg-[#333333]"
                     >
                       <button
                         onMouseDown={(e) => {
@@ -758,7 +762,7 @@ export default function HomePage() {
                   <div className="flex justify-end gap-3 mt-2">
                     <button
                       onClick={() => setEditingPostId(null)}
-                      className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+                      className="text-xs font-semibold text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
                     >
                       Hủy
                     </button>
@@ -807,7 +811,7 @@ export default function HomePage() {
                     className={`cursor-pointer transition-all active:scale-150 hover:scale-110 w-7 h-7 ${
                       (post.is_liked ?? false)
                         ? "text-red-500 fill-red-500" // Đổi từ destructive sang red-500 cho chắc chắn
-                        : "stroke-[2px] text-foreground"
+                        : "stroke-[2px] text-gray-900 dark:text-gray-100"
                     }`}
                   />
                   <MessageCircle
@@ -826,7 +830,7 @@ export default function HomePage() {
                   {/* Nút Xem tất cả bình luận nếu có nhiều hơn 1 */}
                   {commentsMap[post.id]?.length > 1 && (
                     <p
-                      className="text-sm text-muted-foreground cursor-pointer hover:text-foreground transition-colors mb-1"
+                      className="text-sm text-muted-foreground cursor-pointer hover:text-gray-900 dark:hover:text-gray-100 transition-colors mb-1"
                       onClick={() => openPostModal(post)}
                     >
                       Xem tất cả {commentsMap[post.id].length} bình luận
@@ -895,7 +899,7 @@ export default function HomePage() {
                           {user?.id === c.user_id && !editingCommentId && (
                             <div className="relative opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity ml-2">
                               <MoreHorizontal
-                                className="w-4 h-4 cursor-pointer text-muted-foreground hover:text-foreground"
+                                className="w-4 h-4 cursor-pointer text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setOpenCommentMenuId(
@@ -904,9 +908,7 @@ export default function HomePage() {
                                 }}
                               />
                               {openCommentMenuId === c.id && (
-                                <div
-                                  className={`absolute right-0 mt-1 w-24 border border-border shadow-lg rounded-lg py-1 z-50 transition-colors duration-500 ${isDark ? "bg-[#333333]" : "bg-white"}`}
-                                >
+                                <div className="absolute right-0 mt-1 w-24 border border-gray-200 dark:border-neutral-700 shadow-lg dark:shadow-black/50 rounded-lg py-1 z-50 transition-colors duration-500 bg-white dark:bg-[#333333]">
                                   <button
                                     onMouseDown={(e) => {
                                       e.preventDefault();
@@ -962,7 +964,7 @@ export default function HomePage() {
                       }));
                     }}
                     onDoubleClick={(e) => e.stopPropagation()}
-                    className="flex-1 text-sm outline-none bg-transparent select-text"
+                    className="flex-1 text-sm outline-none bg-transparent select-text placeholder:text-gray-500 dark:placeholder:text-gray-400"
                     placeholder="Thêm bình luận..."
                   />
                   {commentInput[post.id] && (
@@ -993,7 +995,7 @@ export default function HomePage() {
           </button>
 
           <div
-            className={`text-foreground flex flex-col md:flex-row w-full max-w-5xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 cursor-default transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
+            className="text-gray-900 dark:text-gray-100 flex flex-col md:flex-row w-full max-w-5xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl dark:shadow-black/60 relative animate-in fade-in zoom-in-95 duration-200 cursor-default transition-colors duration-500 bg-white dark:bg-[#262626]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Phần Ảnh */}
@@ -1012,11 +1014,9 @@ export default function HomePage() {
             </div>
 
             {/* Phần Thông tin / Bình luận */}
-            <div
-              className={`w-full md:w-[400px] flex flex-col border-l border-border h-[50vh] md:h-auto transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
-            >
+            <div className="w-full md:w-[400px] flex flex-col border-l border-gray-200 dark:border-neutral-800 h-[50vh] md:h-auto transition-colors duration-500 bg-white dark:bg-[#262626]">
               {/* Header */}
-              <div className="flex items-center gap-3 p-4 border-b border-border">
+              <div className="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-neutral-800">
                 <img
                   src={
                     selectedPost.users?.avatar_url ||
@@ -1086,7 +1086,7 @@ export default function HomePage() {
                         {editingCommentId === c.id ? (
                           <div className="flex flex-col gap-1 mt-1">
                             <input
-                              className="border px-2 py-1 rounded w-full outline-none text-sm bg-transparent"
+                              className="border border-gray-200 dark:border-neutral-700 px-2 py-1 rounded-lg w-full outline-none text-sm bg-transparent"
                               value={editCommentText}
                               onChange={(e) =>
                                 setEditCommentText(e.target.value)
@@ -1136,7 +1136,7 @@ export default function HomePage() {
                       {user?.id === c.user_id && !editingCommentId && (
                         <div className="relative opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity ml-2 mt-1">
                           <MoreHorizontal
-                            className="w-4 h-4 cursor-pointer text-muted-foreground hover:text-foreground"
+                            className="w-4 h-4 cursor-pointer text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
                             onClick={(e) => {
                               e.stopPropagation();
                               setOpenCommentMenuId(
@@ -1145,9 +1145,7 @@ export default function HomePage() {
                             }}
                           />
                           {openCommentMenuId === c.id && (
-                            <div
-                              className={`absolute right-0 mt-1 w-24 border border-border shadow-lg rounded-lg py-1 z-50 transition-colors duration-500 ${isDark ? "bg-[#333333]" : "bg-white"}`}
-                            >
+                            <div className="absolute right-0 mt-1 w-24 border border-gray-200 dark:border-neutral-700 shadow-lg dark:shadow-black/50 rounded-lg py-1 z-50 transition-colors duration-500 bg-white dark:bg-[#333333]">
                               <button
                                 onMouseDown={(e) => {
                                   e.preventDefault();
@@ -1184,7 +1182,7 @@ export default function HomePage() {
               </div>
 
               {/* Action / Input */}
-              <div className="p-4 border-t border-border">
+              <div className="p-4 border-t border-gray-200 dark:border-neutral-800">
                 <div className="flex items-center gap-3">
                   <Heart
                     onClick={(e) => {
@@ -1194,7 +1192,7 @@ export default function HomePage() {
                     className={`cursor-pointer transition-all active:scale-150 hover:scale-110 w-7 h-7 ${
                       (selectedPost.is_liked ?? false)
                         ? "text-red-500 fill-red-500"
-                        : "stroke-[2px] text-foreground"
+                        : "stroke-[2px] text-gray-900 dark:text-gray-100"
                     }`}
                   />
                   <span className="font-semibold text-sm">
@@ -1204,7 +1202,7 @@ export default function HomePage() {
                 <div className="flex gap-2 mt-3">
                   <input
                     ref={modalInputRef}
-                    className={`border border-border flex-1 px-3 py-2 rounded-full text-sm outline-none transition-colors ${isDark ? "bg-[#333333] focus:bg-[#262626]" : "bg-gray-50 focus:bg-white"}`}
+                    className="border border-gray-200 dark:border-neutral-700 shadow-inner flex-1 px-3 py-2 rounded-full text-sm outline-none transition-colors bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] placeholder:text-gray-500 dark:placeholder:text-gray-400"
                     value={modalCommentText}
                     onChange={(e) => setModalCommentText(e.target.value)}
                     placeholder="Thêm bình luận..."
@@ -1227,7 +1225,7 @@ export default function HomePage() {
       <div className="fixed bottom-6 right-6 z-[999] flex flex-col items-end gap-4">
         {/* Khung ChatBox hiện lên khi nhấn nút */}
         {isChatOpen && user && (
-          <div className="w-[380px] h-[550px] bg-background text-foreground rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 transition-colors duration-500">
+          <div className="w-[380px] h-[550px] bg-white dark:bg-[#262626] text-gray-900 dark:text-gray-100 rounded-2xl shadow-2xl dark:shadow-black/50 border border-gray-200 dark:border-neutral-800 overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 transition-colors duration-500">
             <ChatBox userId={user.id} onClose={() => setIsChatOpen(false)} />
           </div>
         )}
@@ -1237,7 +1235,7 @@ export default function HomePage() {
           onClick={() => setIsChatOpen(!isChatOpen)}
           className={`shadow-2xl transition-all active:scale-90 p-4 rounded-full flex items-center justify-center ${
             isChatOpen
-              ? "bg-background text-foreground border border-border"
+              ? "bg-white dark:bg-[#262626] text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-neutral-800"
               : "bg-[#0095F6] text-white hover:bg-blue-600"
           }`}
         >

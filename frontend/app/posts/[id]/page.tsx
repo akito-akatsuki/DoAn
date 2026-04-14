@@ -269,14 +269,13 @@ export default function PostDetailPage() {
   if (!post) return <p className="p-4">Post not found</p>;
 
   return (
-    <div className="min-h-screen bg-background transition-colors duration-500">
+    <div className="min-h-screen bg-gray-50 dark:bg-neutral-900 text-gray-900 dark:text-gray-100 transition-colors duration-500">
       {/* NAVBAR */}
-      <Navbar user={user} />
 
       {/* FIX NAVBAR OVERLAP */}
       <div className="max-w-xl mx-auto p-4 pt-20 pb-24 md:pb-10">
         {/* POST */}
-        <div className="border border-border rounded-xl p-4">
+        <div className="border border-gray-200 dark:border-neutral-800 shadow-md hover:shadow-lg dark:shadow-black/40 rounded-xl p-4 bg-white dark:bg-[#262626] transition-all">
           <div className="flex items-center gap-3 mb-3">
             <img
               src={
@@ -330,7 +329,9 @@ export default function PostDetailPage() {
             <Heart
               onClick={toggleLike}
               className={`cursor-pointer transition ${
-                isLiked ? "text-red-500 fill-red-500" : "text-foreground"
+                isLiked
+                  ? "text-red-500 fill-red-500"
+                  : "text-gray-900 dark:text-gray-100"
               }`}
             />
 
@@ -353,7 +354,7 @@ export default function PostDetailPage() {
             value={comment}
             onChange={(e) => setComment(e.target.value)}
             placeholder="Viết bình luận..."
-            className="flex-1 border p-2 rounded"
+            className="flex-1 border border-gray-200 dark:border-neutral-700 shadow-inner p-2 rounded-xl outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 transition-colors"
           />
           <button
             onClick={handleComment}
@@ -394,7 +395,7 @@ export default function PostDetailPage() {
                   {editingCommentId === c.id ? (
                     <div className="flex flex-col gap-2 mt-1">
                       <input
-                        className="border px-3 py-1.5 rounded-lg w-full outline-none text-sm bg-transparent"
+                        className="border border-gray-200 dark:border-neutral-700 shadow-inner px-3 py-1.5 rounded-lg w-full outline-none text-sm bg-transparent"
                         value={editCommentText}
                         onChange={(e) => setEditCommentText(e.target.value)}
                         onKeyDown={(e) => {
@@ -434,7 +435,7 @@ export default function PostDetailPage() {
                 {user?.id === c.user_id && !editingCommentId && (
                   <div className="relative opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity ml-2">
                     <MoreHorizontal
-                      className="w-5 h-5 cursor-pointer text-gray-500 hover:text-black"
+                      className="w-5 h-5 cursor-pointer text-gray-500 hover:text-gray-900 dark:hover:text-gray-100"
                       onClick={(e) => {
                         e.stopPropagation();
                         setOpenCommentMenuId(
@@ -443,7 +444,7 @@ export default function PostDetailPage() {
                       }}
                     />
                     {openCommentMenuId === c.id && (
-                      <div className="absolute right-0 mt-1 w-28 bg-background/85 backdrop-blur-md border border-border shadow-lg rounded-xl py-1 z-50 transition-colors duration-500">
+                      <div className="absolute right-0 mt-1 w-28 bg-white dark:bg-[#333333] border border-gray-200 dark:border-neutral-700 shadow-lg dark:shadow-black/50 rounded-xl py-1 z-50 transition-colors duration-500">
                         <button
                           onMouseDown={(e) => {
                             e.preventDefault();

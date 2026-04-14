@@ -34,7 +34,6 @@ export default function ProfilePage({
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [isDark, setIsDark] = useState(false);
 
   // ================= MODAL STATES =================
   const modalInputRef = useRef<HTMLInputElement | null>(null);
@@ -57,16 +56,6 @@ export default function ProfilePage({
 
   // ================= CLICK OUTSIDE =================
   useEffect(() => {
-    const updateTheme = () => {
-      setIsDark(document.documentElement.classList.contains("dark"));
-    };
-    updateTheme();
-    const observer = new MutationObserver(updateTheme);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-
     const handleClickOutside = () => {
       setOpenCommentMenuId(null);
       setOpenPostMenu(false);
@@ -74,7 +63,6 @@ export default function ProfilePage({
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
       document.removeEventListener("mousedown", handleClickOutside);
-      observer.disconnect();
     };
   }, []);
 
@@ -366,9 +354,7 @@ export default function ProfilePage({
   // ================= UI =================
   if (loading) {
     return (
-      <div
-        className={`min-h-screen text-foreground pt-20 text-center transition-colors duration-500 ${isDark ? "bg-neutral-900" : "bg-gray-100"}`}
-      >
+      <div className="min-h-screen text-gray-900 dark:text-gray-100 pt-20 text-center transition-colors duration-500 bg-gray-50 dark:bg-neutral-900">
         Đang tải...
       </div>
     );
@@ -376,24 +362,19 @@ export default function ProfilePage({
 
   if (!profile) {
     return (
-      <div
-        className={`min-h-screen text-foreground pt-20 text-center transition-colors duration-500 ${isDark ? "bg-neutral-900" : "bg-gray-100"}`}
-      >
+      <div className="min-h-screen text-gray-900 dark:text-gray-100 pt-20 text-center transition-colors duration-500 bg-gray-50 dark:bg-neutral-900">
         Không tìm thấy người dùng
       </div>
     );
   }
 
   return (
-    <div
-      className={`min-h-screen text-foreground transition-colors duration-500 ${isDark ? "bg-neutral-900" : "bg-gray-100"}`}
-    >
+    <div className="min-h-screen text-gray-900 dark:text-gray-100 transition-colors duration-500 bg-gray-50 dark:bg-neutral-900">
       {/* 🔥 NAVBAR ADDED */}
-      <Navbar user={currentUser} />
 
       <div className="max-w-[935px] mx-auto pt-24 px-4 pb-24 md:pb-10">
         {/* ================= HEADER ================= */}
-        <div className="flex items-center gap-8 border-b border-border pb-8">
+        <div className="flex items-center gap-8 border-b border-gray-200 dark:border-neutral-800 pb-8">
           <img
             src={
               profile.avatar_url ||
@@ -411,7 +392,7 @@ export default function ProfilePage({
                   onClick={toggleFollow}
                   className={`px-4 py-1.5 rounded-lg font-semibold text-sm transition-colors ${
                     isFollowing
-                      ? "bg-secondary text-foreground hover:bg-secondary/80"
+                      ? "bg-secondary text-gray-900 dark:text-gray-100 hover:bg-secondary/80"
                       : "bg-blue-500 text-white hover:bg-blue-600"
                   }`}
                 >
@@ -420,7 +401,7 @@ export default function ProfilePage({
               ) : (
                 <button
                   onClick={openEditProfile}
-                  className="px-4 py-1.5 rounded-lg font-semibold text-sm transition-colors bg-secondary text-foreground border border-border hover:bg-secondary/80"
+                  className="px-4 py-1.5 rounded-lg font-semibold text-sm transition-colors bg-secondary text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-neutral-700 hover:bg-secondary/80 shadow-sm"
                 >
                   Sửa thông tin
                 </button>
@@ -451,7 +432,7 @@ export default function ProfilePage({
             <div
               key={post.id}
               onClick={() => openPostModal(post)}
-              className={`aspect-square border border-border/50 rounded-sm overflow-hidden relative group cursor-pointer transition-colors ${isDark ? "bg-[#262626]" : "bg-white"}`}
+              className="aspect-square border border-gray-200 dark:border-neutral-800 shadow-sm hover:shadow-md dark:shadow-black/40 rounded-sm overflow-hidden relative group cursor-pointer transition-all bg-white dark:bg-[#262626]"
             >
               {post.image_url ? (
                 <img
@@ -485,7 +466,7 @@ export default function ProfilePage({
           </button>
 
           <div
-            className={`text-foreground flex flex-col md:flex-row w-full max-w-5xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 cursor-default transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
+            className="text-gray-900 dark:text-gray-100 flex flex-col md:flex-row w-full max-w-5xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl dark:shadow-black/60 relative animate-in fade-in zoom-in-95 duration-200 cursor-default transition-colors duration-500 bg-white dark:bg-[#262626]"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Phần Ảnh */}
@@ -504,11 +485,9 @@ export default function ProfilePage({
             </div>
 
             {/* Phần Thông tin / Bình luận */}
-            <div
-              className={`w-full md:w-[400px] flex flex-col border-l border-border h-[50vh] md:h-auto transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
-            >
+            <div className="w-full md:w-[400px] flex flex-col border-l border-gray-200 dark:border-neutral-800 h-[50vh] md:h-auto transition-colors duration-500 bg-white dark:bg-[#262626]">
               {/* Header */}
-              <div className="flex items-center justify-between p-4 border-b border-border relative">
+              <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-neutral-800 relative">
                 <div className="flex items-center gap-3">
                   <img
                     src={
@@ -526,16 +505,14 @@ export default function ProfilePage({
                 {currentUser?.id === selectedPost.user_id && (
                   <div className="relative">
                     <MoreHorizontal
-                      className="w-5 h-5 cursor-pointer text-foreground hover:text-muted-foreground transition-colors"
+                      className="w-5 h-5 cursor-pointer text-gray-900 dark:text-gray-100 hover:text-gray-500 transition-colors"
                       onClick={(e) => {
                         e.stopPropagation();
                         setOpenPostMenu(!openPostMenu);
                       }}
                     />
                     {openPostMenu && (
-                      <div
-                        className={`absolute right-0 mt-2 w-44 border border-border rounded-xl shadow-xl py-1 z-[100] transition-colors duration-500 ${isDark ? "bg-[#333333]" : "bg-white"}`}
-                      >
+                      <div className="absolute right-0 mt-2 w-44 border border-gray-200 dark:border-neutral-700 rounded-xl shadow-xl dark:shadow-black/50 py-1 z-[100] transition-colors duration-500 bg-white dark:bg-[#333333]">
                         <button
                           onMouseDown={(e) => {
                             e.preventDefault();
@@ -609,7 +586,7 @@ export default function ProfilePage({
                         {editingCommentId === c.id ? (
                           <div className="flex flex-col gap-1 mt-1">
                             <input
-                              className={`border border-border px-2 py-1 rounded w-full outline-none text-sm transition-colors ${isDark ? "bg-[#333333] text-white" : "bg-gray-50 text-black"}`}
+                              className="border border-gray-200 dark:border-neutral-700 shadow-inner px-2 py-1 rounded-lg w-full outline-none text-sm transition-colors bg-gray-50 dark:bg-[#333333] text-gray-900 dark:text-gray-100"
                               value={editCommentText}
                               onChange={(e) =>
                                 setEditCommentText(e.target.value)
@@ -652,7 +629,7 @@ export default function ProfilePage({
                       {currentUser?.id === c.user_id && !editingCommentId && (
                         <div className="relative opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity ml-2 mt-1">
                           <MoreHorizontal
-                            className="w-4 h-4 cursor-pointer text-muted-foreground hover:text-foreground"
+                            className="w-4 h-4 cursor-pointer text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
                             onClick={(e) => {
                               e.stopPropagation();
                               setOpenCommentMenuId(
@@ -661,9 +638,7 @@ export default function ProfilePage({
                             }}
                           />
                           {openCommentMenuId === c.id && (
-                            <div
-                              className={`absolute right-0 mt-1 w-24 border border-border shadow-lg rounded-lg py-1 z-50 transition-colors duration-500 ${isDark ? "bg-[#333333]" : "bg-white"}`}
-                            >
+                            <div className="absolute right-0 mt-1 w-24 border border-gray-200 dark:border-neutral-700 shadow-lg dark:shadow-black/50 rounded-lg py-1 z-50 transition-colors duration-500 bg-white dark:bg-[#333333]">
                               <button
                                 onMouseDown={(e) => {
                                   e.preventDefault();
@@ -696,14 +671,14 @@ export default function ProfilePage({
               </div>
 
               {/* Action / Input */}
-              <div className="p-4 border-t border-border">
+              <div className="p-4 border-t border-gray-200 dark:border-neutral-800">
                 <div className="flex items-center gap-3">
                   <Heart
                     onClick={() => handleLike(selectedPost.id)}
                     className={`cursor-pointer transition-all active:scale-150 hover:scale-110 w-7 h-7 ${
                       (selectedPost.is_liked ?? false)
                         ? "text-red-500 fill-red-500"
-                        : "stroke-[2px] text-foreground"
+                        : "stroke-[2px] text-gray-900 dark:text-gray-100"
                     }`}
                   />
                   <span className="font-semibold text-sm">
@@ -713,7 +688,7 @@ export default function ProfilePage({
                 <div className="flex gap-2 mt-3">
                   <input
                     ref={modalInputRef}
-                    className={`border border-border flex-1 px-3 py-2 rounded-full text-sm outline-none transition-colors ${isDark ? "bg-[#333333] focus:bg-[#262626]" : "bg-gray-50 focus:bg-white"}`}
+                    className="border border-gray-200 dark:border-neutral-700 shadow-inner flex-1 px-3 py-2 rounded-full text-sm outline-none transition-colors bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] placeholder:text-gray-500 dark:placeholder:text-gray-400"
                     value={modalCommentText}
                     onChange={(e) => setModalCommentText(e.target.value)}
                     placeholder="Thêm bình luận..."
@@ -740,10 +715,10 @@ export default function ProfilePage({
           onClick={() => setIsEditProfileOpen(false)}
         >
           <div
-            className={`text-foreground w-full max-w-md rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-border transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
+            className="text-gray-900 dark:text-gray-100 w-full max-w-md rounded-xl shadow-2xl dark:shadow-black/60 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-gray-200 dark:border-neutral-800 transition-colors duration-500 bg-white dark:bg-[#262626]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between p-4 border-b border-border">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-neutral-800">
               <h2 className="font-bold text-lg">Sửa thông tin</h2>
               <button
                 onClick={() => setIsEditProfileOpen(false)}
@@ -762,7 +737,7 @@ export default function ProfilePage({
                       : profile?.avatar_url ||
                         `https://api.dicebear.com/7.x/identicon/svg?seed=${profile?.id}`
                   }
-                  className="w-20 h-20 rounded-full object-cover border border-border"
+                  className="w-20 h-20 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shadow-sm"
                   alt="Preview Avatar"
                 />
                 <label className="text-blue-500 font-semibold text-sm cursor-pointer hover:text-blue-600 transition-colors">
@@ -783,7 +758,7 @@ export default function ProfilePage({
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className={`w-full border border-border rounded-lg px-3 py-2 outline-none transition-colors ${isDark ? "bg-[#333333] focus:bg-[#262626]" : "bg-gray-50 focus:bg-white"}`}
+                  className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none transition-colors bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626]"
                 />
               </div>
 
@@ -794,14 +769,14 @@ export default function ProfilePage({
                 <textarea
                   value={editBio}
                   onChange={(e) => setEditBio(e.target.value)}
-                  className={`w-full border border-border rounded-lg px-3 py-2 outline-none transition-colors resize-none ${isDark ? "bg-[#333333] focus:bg-[#262626]" : "bg-gray-50 focus:bg-white"}`}
+                  className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none transition-colors resize-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626]"
                   rows={3}
                   placeholder="Giới thiệu đôi nét về bản thân..."
                 />
               </div>
             </div>
 
-            <div className="p-4 border-t border-border flex justify-end gap-2">
+            <div className="p-4 border-t border-gray-200 dark:border-neutral-800 flex justify-end gap-2">
               <button
                 onClick={() => setIsEditProfileOpen(false)}
                 className="px-4 py-2 rounded-lg font-semibold text-sm hover:bg-secondary transition-colors"

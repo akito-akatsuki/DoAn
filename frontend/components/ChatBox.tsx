@@ -225,9 +225,9 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
   };
 
   return (
-    <div className="w-full h-full flex flex-col bg-background text-foreground overflow-hidden relative transition-colors duration-500">
+    <div className="w-full h-full flex flex-col bg-white dark:bg-[#262626] text-gray-900 dark:text-gray-100 overflow-hidden relative transition-colors duration-500">
       {/* HEADER */}
-      <div className="p-4 border-b flex items-center justify-between">
+      <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-black/20">
         {targetUser ? (
           <div className="flex items-center gap-2">
             <button
@@ -253,7 +253,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
         {onClose && (
           <X
             size={20}
-            className="cursor-pointer text-muted-foreground hover:text-foreground transition-colors"
+            className="cursor-pointer text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
             onClick={onClose}
           />
         )}
@@ -263,12 +263,12 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2">
         {!targetUser ? (
           <>
-            <div className="flex items-center gap-2 border border-border bg-secondary/50 focus-within:bg-background focus-within:ring-1 focus-within:ring-border transition-all p-2 rounded-xl">
+            <div className="flex items-center gap-2 border border-gray-200 dark:border-neutral-700 shadow-inner bg-gray-50 dark:bg-[#333333] focus-within:bg-white dark:focus-within:bg-[#262626] focus-within:ring-1 focus-within:ring-blue-500 transition-all p-2 rounded-xl">
               <Search size={16} />
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 outline-none text-sm bg-transparent"
+                className="flex-1 outline-none text-sm bg-transparent placeholder:text-gray-500 dark:placeholder:text-gray-400"
                 placeholder="Tìm người dùng..."
               />
             </div>
@@ -313,7 +313,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
             >
               <div
                 className={`px-3 py-2 rounded-2xl text-sm max-w-[75%]
-                ${m.sender_id === userId ? "bg-blue-500 text-white" : "bg-secondary text-foreground"}
+                ${m.sender_id === userId ? "bg-blue-500 text-white shadow-sm" : "bg-gray-100 dark:bg-[#333333] border border-transparent dark:border-neutral-700 text-gray-900 dark:text-gray-100 shadow-sm"}
               `}
               >
                 {m.content}
@@ -325,12 +325,12 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
 
       {/* INPUT */}
       {targetUser && (
-        <div className="p-3 border-t border-border bg-background flex gap-2 transition-colors duration-500">
+        <div className="p-3 border-t border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#262626] flex gap-2 transition-colors duration-500 shadow-[0_-2px_10px_rgba(0,0,0,0.02)] dark:shadow-black/20">
           <input
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
-            className="flex-1 border border-border bg-secondary/30 focus:bg-background transition-colors outline-none rounded-xl px-3 py-2 text-sm"
+            className="flex-1 border border-gray-200 dark:border-neutral-700 shadow-inner bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] text-gray-900 dark:text-gray-100 transition-colors outline-none rounded-xl px-3 py-2 text-sm placeholder:text-gray-500 dark:placeholder:text-gray-400"
             placeholder="Nhập tin nhắn..."
           />
           <button

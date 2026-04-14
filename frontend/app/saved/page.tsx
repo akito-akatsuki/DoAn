@@ -10,20 +10,6 @@ export default function SavedPage() {
   const [user, setUser] = useState<any>(null);
   const [savedPosts, setSavedPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isDark, setIsDark] = useState(false);
-
-  useEffect(() => {
-    const updateTheme = () => {
-      setIsDark(document.documentElement.classList.contains("dark"));
-    };
-    updateTheme();
-    const observer = new MutationObserver(updateTheme);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -70,13 +56,9 @@ export default function SavedPage() {
   }, []);
 
   return (
-    <div
-      className={`min-h-screen text-foreground transition-colors duration-500 ${isDark ? "bg-neutral-900" : "bg-gray-100"}`}
-    >
-      <Navbar user={user} />
-
+    <div className="min-h-screen text-gray-900 dark:text-gray-100 transition-colors duration-500 bg-gray-50 dark:bg-neutral-900">
       <main className="max-w-[935px] mx-auto pt-24 px-4 pb-28 md:pb-20">
-        <div className="flex items-center gap-3 border-b border-border pb-4 mb-6">
+        <div className="flex items-center gap-3 border-b border-gray-200 dark:border-neutral-800 pb-4 mb-6">
           <Bookmark className="w-6 h-6" />
           <h1 className="text-2xl font-bold">Đã lưu</h1>
         </div>
@@ -98,7 +80,7 @@ export default function SavedPage() {
               <Link
                 key={item.id}
                 href={`/posts/${post.id}`}
-                className={`aspect-square overflow-hidden relative group cursor-pointer border border-border/50 rounded-sm transition-colors ${isDark ? "bg-[#262626]" : "bg-white"}`}
+                className="aspect-square overflow-hidden relative group cursor-pointer border border-gray-200 dark:border-neutral-800 shadow-sm hover:shadow-md dark:shadow-black/40 rounded-sm transition-all bg-white dark:bg-[#262626]"
               >
                 {/* IMAGE / CONTENT */}
                 {post.image_url ? (
@@ -114,9 +96,7 @@ export default function SavedPage() {
                 )}
 
                 {/* ================= NEW: USER INFO OVERLAY ================= */}
-                <div
-                  className={`absolute top-2 left-2 flex items-center gap-2 px-2 py-1 rounded-full text-xs opacity-0 group-hover:opacity-100 transition ${isDark ? "bg-[#262626]/90 text-white" : "bg-white/90 text-black shadow-sm"}`}
-                >
+                <div className="absolute top-2 left-2 flex items-center gap-2 px-2 py-1 rounded-full text-xs opacity-0 group-hover:opacity-100 transition bg-white/90 dark:bg-[#262626]/90 text-gray-900 dark:text-gray-100 shadow-md">
                   <img
                     src={
                       post.users?.avatar_url ||

@@ -11,7 +11,6 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [isDark, setIsDark] = useState(false);
 
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -30,18 +29,7 @@ export default function NotificationsPage() {
   }, [isChatOpen]);
 
   useEffect(() => {
-    const updateTheme = () => {
-      setIsDark(document.documentElement.classList.contains("dark"));
-    };
-    updateTheme();
-    const observer = new MutationObserver(updateTheme);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-
     init();
-    return () => observer.disconnect();
   }, []);
 
   const init = async () => {
@@ -118,11 +106,7 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div
-      className={`min-h-screen text-foreground transition-colors duration-500 ${isDark ? "bg-neutral-900" : "bg-gray-100"}`}
-    >
-      <Navbar user={user} />
-
+    <div className="min-h-screen text-gray-900 dark:text-gray-100 transition-colors duration-500 bg-gray-50 dark:bg-neutral-900">
       <main className="max-w-[600px] mx-auto pt-24 px-4 pb-28 md:pb-20">
         <h1 className="text-2xl font-bold mb-6">Thông báo</h1>
 
@@ -142,7 +126,7 @@ export default function NotificationsPage() {
           {notifications.map((n) => (
             <div
               key={n.id}
-              className={`flex items-center gap-4 p-3 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-border ${!n.is_read ? (isDark ? "bg-[#333333]" : "bg-blue-50") : ""} ${isDark ? "hover:bg-[#262626]" : "hover:bg-white"}`}
+              className={`flex items-center gap-4 p-3 rounded-xl transition-all cursor-pointer border border-transparent hover:border-gray-200 dark:hover:border-neutral-800 hover:shadow-sm dark:hover:shadow-black/40 hover:bg-white dark:hover:bg-[#262626] ${!n.is_read ? "bg-blue-50 dark:bg-[#333333]" : ""}`}
             >
               <div className="relative">
                 <img
@@ -150,11 +134,9 @@ export default function NotificationsPage() {
                     n.users?.avatar_url ||
                     `https://api.dicebear.com/7.x/identicon/svg?seed=${n.user_id}`
                   }
-                  className="w-11 h-11 rounded-full object-cover ring-1 ring-border"
+                  className="w-11 h-11 rounded-full object-cover ring-1 ring-gray-200 dark:ring-neutral-700 shadow-sm"
                 />
-                <div
-                  className={`absolute -bottom-1 -right-1 rounded-full p-1 border border-border shadow-sm ${isDark ? "bg-[#262626]" : "bg-white"}`}
-                >
+                <div className="absolute -bottom-1 -right-1 rounded-full p-1 border border-gray-200 dark:border-neutral-700 shadow-sm bg-white dark:bg-[#262626]">
                   {iconMap[n.type] || (
                     <Heart className="w-4 h-4 text-muted-foreground" />
                   )}
@@ -163,7 +145,7 @@ export default function NotificationsPage() {
 
               <div className="flex-1 min-w-0">
                 <p className="text-sm leading-tight text-foreground">
-                  <span className="font-semibold">
+                  <span className="font-semibold text-gray-900 dark:text-gray-100">
                     {n.users?.name || "Người dùng"}
                   </span>{" "}
                   {n.type === "like" && "đã thích bài viết của bạn."}
@@ -195,9 +177,7 @@ export default function NotificationsPage() {
         ref={chatContainerRef}
       >
         {isChatOpen && user && (
-          <div
-            className={`w-[380px] h-[550px] text-foreground rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
-          >
+          <div className="w-[380px] h-[550px] text-gray-900 dark:text-gray-100 rounded-2xl shadow-2xl dark:shadow-black/50 border border-gray-200 dark:border-neutral-800 overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 transition-colors duration-500 bg-white dark:bg-[#262626]">
             <ChatBox userId={user.id} onClose={() => setIsChatOpen(false)} />
           </div>
         )}
@@ -205,9 +185,7 @@ export default function NotificationsPage() {
           onClick={() => setIsChatOpen(!isChatOpen)}
           className={`shadow-2xl transition-all active:scale-90 p-4 rounded-full flex items-center justify-center ${
             isChatOpen
-              ? isDark
-                ? "bg-[#262626] text-white border border-border"
-                : "bg-white text-black border border-border"
+              ? "bg-white dark:bg-[#262626] text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-neutral-800"
               : "bg-[#0095F6] text-white hover:bg-blue-600"
           }`}
         >

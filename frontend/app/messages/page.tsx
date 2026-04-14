@@ -17,27 +17,12 @@ export default function MessagesPage() {
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
-  const [isDark, setIsDark] = useState(false);
 
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [conversations, setConversations] = useState<any[]>([]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  // ================= THEME TRACKING =================
-  useEffect(() => {
-    const updateTheme = () => {
-      setIsDark(document.documentElement.classList.contains("dark"));
-    };
-    updateTheme();
-    const observer = new MutationObserver(updateTheme);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-    return () => observer.disconnect();
-  }, []);
 
   // ================= LOAD USER =================
   useEffect(() => {
@@ -235,24 +220,18 @@ export default function MessagesPage() {
   };
 
   return (
-    <div
-      className={`h-screen flex flex-col text-foreground transition-colors duration-500 overflow-hidden ${isDark ? "bg-neutral-900" : "bg-gray-100"}`}
-    >
-      <Navbar user={user} />
-
+    <div className="h-screen flex flex-col text-gray-900 dark:text-gray-100 transition-colors duration-500 overflow-hidden bg-gray-50 dark:bg-neutral-900">
       <main className="max-w-[935px] w-full mx-auto flex-1 pt-[76px] px-4 pb-24 md:pb-6 flex gap-4 overflow-hidden">
         {/* CỘT TRÁI: DANH SÁCH CHAT */}
         <div
-          className={`w-full md:w-[350px] border border-border rounded-xl flex flex-col h-full transition-colors duration-500 ${targetUser ? "hidden md:flex" : "flex"} ${isDark ? "bg-[#262626]" : "bg-white"}`}
+          className={`w-full md:w-[350px] border border-gray-200 dark:border-neutral-800 shadow-sm dark:shadow-black/30 rounded-xl flex flex-col h-full transition-all duration-500 bg-white dark:bg-[#262626] ${targetUser ? "hidden md:flex" : "flex"}`}
         >
-          <div className="p-4 border-b border-border font-bold text-lg flex items-center">
+          <div className="p-4 border-b border-gray-200 dark:border-neutral-800 font-bold text-lg flex items-center">
             {user?.user_metadata?.name || "Tin nhắn"}
           </div>
 
           <div className="p-3">
-            <div
-              className={`flex items-center gap-2 border border-border focus-within:ring-1 focus-within:ring-border transition-all p-2 rounded-xl ${isDark ? "bg-[#333333] focus-within:bg-[#262626]" : "bg-gray-50 focus-within:bg-white"}`}
-            >
+            <div className="flex items-center gap-2 border border-gray-200 dark:border-neutral-700 shadow-inner focus-within:ring-1 focus-within:ring-blue-500 transition-all p-2 rounded-xl bg-gray-50 dark:bg-[#333333] focus-within:bg-white dark:focus-within:bg-[#262626]">
               <Search size={16} className="text-muted-foreground" />
               <input
                 value={search}
@@ -269,14 +248,14 @@ export default function MessagesPage() {
               <div
                 key={u.id}
                 onClick={() => handleOpenChat(u)}
-                className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors ${isDark ? "hover:bg-[#333333]" : "hover:bg-gray-100"}`}
+                className="flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-[#333333]"
               >
                 <img
                   src={
                     u.avatar_url ||
                     `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
                   }
-                  className="w-12 h-12 rounded-full border border-border object-cover"
+                  className="w-12 h-12 rounded-full border border-gray-200 dark:border-neutral-700 shadow-sm object-cover"
                 />
                 <span className="font-medium text-[15px]">{u.name}</span>
               </div>
@@ -295,14 +274,10 @@ export default function MessagesPage() {
                 <div
                   key={c.id}
                   onClick={() => handleOpenExisting(c)}
-                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors ${
+                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-[#333333] ${
                     conversationId === c.id
-                      ? isDark
-                        ? "bg-[#3f3f3f]"
-                        : "bg-gray-200"
-                      : isDark
-                        ? "hover:bg-[#333333]"
-                        : "hover:bg-gray-100"
+                      ? "bg-gray-200 dark:bg-[#3f3f3f]"
+                      : ""
                   }`}
                 >
                   <img
@@ -310,7 +285,7 @@ export default function MessagesPage() {
                       c.otherUser?.avatar_url ||
                       `https://api.dicebear.com/7.x/identicon/svg?seed=${c.otherUser?.id}`
                     }
-                    className="w-14 h-14 rounded-full object-cover border border-border flex-shrink-0"
+                    className="w-14 h-14 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shadow-sm flex-shrink-0"
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-[15px] font-semibold truncate">
@@ -331,14 +306,14 @@ export default function MessagesPage() {
 
         {/* CỘT PHẢI: KHUNG CHAT CHI TIẾT */}
         <div
-          className={`flex-1 border border-border rounded-xl flex flex-col h-full relative transition-colors duration-500 ${!targetUser ? "hidden md:flex" : "flex"} ${isDark ? "bg-[#262626]" : "bg-white"}`}
+          className={`flex-1 border border-gray-200 dark:border-neutral-800 shadow-sm dark:shadow-black/30 rounded-xl flex flex-col h-full relative transition-all duration-500 bg-white dark:bg-[#262626] ${!targetUser ? "hidden md:flex" : "flex"}`}
         >
           {!targetUser ? (
             <div className="flex-1 flex items-center justify-center text-muted-foreground flex-col gap-3">
               <div className="w-24 h-24 border-2 border-muted-foreground rounded-full flex items-center justify-center">
                 <Send size={48} className="text-muted-foreground ml-2" />
               </div>
-              <h2 className="text-xl font-bold text-foreground">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
                 Tin nhắn của bạn
               </h2>
               <p>Chọn một đoạn chat để bắt đầu nhắn tin.</p>
@@ -346,7 +321,7 @@ export default function MessagesPage() {
           ) : (
             <>
               {/* HEADER CHAT */}
-              <div className="p-4 border-b border-border flex items-center gap-3 rounded-t-xl shrink-0">
+              <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex items-center gap-3 rounded-t-xl shrink-0 shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-black/20">
                 <button
                   className="md:hidden p-1 -ml-2"
                   onClick={() => {
@@ -362,7 +337,7 @@ export default function MessagesPage() {
                     targetUser?.avatar_url ||
                     `https://api.dicebear.com/7.x/identicon/svg?seed=${targetUser.id}`
                   }
-                  className="w-11 h-11 rounded-full border border-border object-cover"
+                  className="w-11 h-11 rounded-full border border-gray-200 dark:border-neutral-700 shadow-sm object-cover"
                 />
                 <span className="font-bold text-[16px]">
                   {targetUser?.name}
@@ -382,8 +357,8 @@ export default function MessagesPage() {
                     <div
                       className={`px-4 py-2 text-[15px] max-w-[70%] break-words ${
                         m.sender_id === user?.id
-                          ? "bg-[#0095F6] text-white rounded-2xl rounded-br-sm"
-                          : `rounded-2xl rounded-bl-sm border ${isDark ? "bg-[#333333] text-white border-border" : "bg-gray-100 text-foreground border-transparent"}`
+                          ? "bg-[#0095F6] text-white rounded-2xl rounded-br-sm shadow-sm"
+                          : "rounded-2xl rounded-bl-sm border bg-gray-100 dark:bg-[#333333] text-gray-900 dark:text-gray-100 border-transparent dark:border-neutral-700 shadow-sm"
                       }`}
                     >
                       {m.content}
@@ -393,14 +368,12 @@ export default function MessagesPage() {
               </div>
 
               {/* INPUT CHAT */}
-              <div
-                className={`p-4 border-t border-border rounded-b-xl flex gap-3 shrink-0 transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
-              >
+              <div className="p-4 border-t border-gray-200 dark:border-neutral-800 rounded-b-xl flex gap-3 shrink-0 transition-colors duration-500 bg-white dark:bg-[#262626] shadow-[0_-2px_10px_rgba(0,0,0,0.02)] dark:shadow-black/20">
                 <input
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                  className={`flex-1 border border-border transition-colors outline-none rounded-full px-4 py-2.5 text-[15px] ${isDark ? "bg-[#333333] focus:bg-[#262626] text-white placeholder:text-gray-400" : "bg-gray-50 focus:bg-white text-black placeholder:text-gray-500"}`}
+                  className="flex-1 border border-gray-200 dark:border-neutral-700 shadow-inner transition-colors outline-none rounded-full px-4 py-2.5 text-[15px] bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400"
                   placeholder="Nhắn tin..."
                 />
                 <button
@@ -414,9 +387,7 @@ export default function MessagesPage() {
 
               {/* LOADING OVERLAY */}
               {loading && (
-                <div
-                  className={`absolute inset-0 backdrop-blur-sm flex items-center justify-center z-50 rounded-xl ${isDark ? "bg-[#262626]/60" : "bg-white/60"}`}
-                >
+                <div className="absolute inset-0 backdrop-blur-sm flex items-center justify-center z-50 rounded-xl bg-white/60 dark:bg-[#262626]/60">
                   <Loader2 className="animate-spin text-blue-500 w-8 h-8" />
                 </div>
               )}

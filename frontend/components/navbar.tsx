@@ -14,7 +14,8 @@ import {
   Search,
 } from "lucide-react";
 
-export default function Navbar({ user }: any) {
+export default function Navbar({ user: propUser }: any) {
+  const [user, setUser] = useState<any>(propUser);
   const router = useRouter();
   const pathname = usePathname();
   const isActive = (path: string) => pathname === path;
@@ -31,21 +32,27 @@ export default function Navbar({ user }: any) {
 
   // ================= THEME =================
   useEffect(() => {
-    const root = document.documentElement;
-    const theme = localStorage.getItem("theme");
+    setIsDark(document.documentElement.classList.contains("dark"));
 
-    if (
-      theme === "dark" ||
-      (!theme && window.matchMedia("(prefers-color-scheme: dark)").matches)
-    ) {
-      setIsDark(true);
-      root.dataset.theme = "dark";
-      root.classList.add("dark");
-    } else {
-      root.dataset.theme = "";
-      root.classList.remove("dark");
-    }
-  }, []);
+    const fetchUser = async () => {
+      if (propUser) {
+        setUser(propUser);
+      } else {
+        const {
+          data: { user: authUser },
+        } = await supabase.auth.getUser();
+        if (authUser) {
+          const { data: dbUser } = await supabase
+            .from("users")
+            .select("*")
+            .eq("id", authUser.id)
+            .single();
+          setUser({ ...authUser, ...dbUser });
+        }
+      }
+    };
+    fetchUser();
+  }, [propUser]);
 
   // ================= LẮNG NGHE THÔNG BÁO CHƯA ĐỌC =================
   useEffect(() => {
@@ -97,11 +104,40 @@ export default function Navbar({ user }: any) {
     };
   }, [user?.id]);
 
+  // ================= LẮNG NGHE THAY ĐỔI THÔNG TIN USER (AVATAR/NAME) =================
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const userChannel = supabase
+      .channel(`navbar_user_${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "users",
+          filter: `id=eq.${user.id}`,
+        },
+        (payload) => {
+          // Cập nhật lại state user với dữ liệu mới (avatar_url, name,...)
+          setUser((prev: any) => ({ ...prev, ...payload.new }));
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(userChannel);
+    };
+  }, [user?.id]);
+
   const toggleDark = () => {
     const root = document.documentElement;
     const newDark = !isDark;
 
     setIsDark(newDark);
+
+    // LƯU VÀO COOKIE ĐỂ SERVER NEXT.JS ĐỌC ĐƯỢC
+    document.cookie = `theme=${newDark ? "dark" : "light"}; path=/; max-age=31536000`;
     localStorage.setItem("theme", newDark ? "dark" : "light");
 
     if (newDark) {
@@ -158,10 +194,37 @@ export default function Navbar({ user }: any) {
     window.location.reload();
   };
 
+  // ================= CẤU HÌNH TABS CHO ANIMATION TRƯỢT =================
+  const desktopTabs = [
+    { path: "/", icon: Home },
+    { path: "/messages", icon: MessageCircle },
+    { path: "/notifications", icon: Heart },
+    { path: "/saved", icon: Bookmark },
+  ];
+  const desktopActiveIndex = desktopTabs.findIndex((t) =>
+    t.path === "/" ? pathname === "/" : pathname?.startsWith(t.path),
+  );
+
+  const mobileTabs = [
+    { path: "/", icon: Home, isAction: false },
+    {
+      path: "/search",
+      icon: Search,
+      isAction: true,
+      action: () => window.scrollTo({ top: 0, behavior: "smooth" }),
+    },
+    { path: "/messages", icon: MessageCircle, isAction: false },
+    { path: "/saved", icon: Bookmark, isAction: false },
+    { path: "/notifications", icon: Heart, isAction: false },
+  ];
+  const mobileActiveIndex = mobileTabs.findIndex((t) =>
+    t.path === "/"
+      ? pathname === "/"
+      : !t.isAction && pathname?.startsWith(t.path),
+  );
+
   return (
-    <nav
-      className={`fixed top-0 w-full z-[9999] shadow-ig transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-gray-50"}`}
-    >
+    <nav className="fixed top-0 w-full z-[9999] shadow-sm dark:shadow-black/30 border-b border-gray-200 dark:border-neutral-800 transition-colors duration-500 bg-white dark:bg-[#262626] text-gray-900 dark:text-gray-100">
       <div className="max-w-[935px] mx-auto flex items-center justify-between h-[60px] px-4">
         {/* SEARCH */}
         <div className="hidden md:block relative" ref={searchRef}>
@@ -169,11 +232,11 @@ export default function Navbar({ user }: any) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search user..."
-            className="w-[215px] bg-secondary border border-border px-4 py-[10px] rounded-full text-sm outline-none focus:bg-background transition-colors placeholder:text-muted-foreground text-foreground font-medium"
+            className="w-[215px] bg-secondary border border-gray-200 dark:border-neutral-700 shadow-inner px-4 py-[10px] rounded-full text-sm outline-none focus:bg-white dark:focus:bg-[#262626] transition-colors placeholder:text-muted-foreground text-gray-900 dark:text-gray-100 font-medium"
           />
 
           {results.length > 0 && (
-            <div className="absolute top-full mt-2 w-full bg-background/85 backdrop-blur-md border border-border rounded-xl shadow-lg z-50 transition-colors duration-500">
+            <div className="absolute top-full mt-2 w-full bg-white/85 dark:bg-[#262626]/85 backdrop-blur-md border border-gray-200 dark:border-neutral-700 rounded-xl shadow-lg dark:shadow-black/50 z-50 transition-colors duration-500">
               {results.map((u) => (
                 <div
                   key={u.id}
@@ -209,44 +272,43 @@ export default function Navbar({ user }: any) {
         {/* ICONS */}
         <div className="flex items-center gap-1 md:gap-2">
           {/* Ẩn bớt icon trên mobile, đưa xuống bottom nav */}
-          <div className="hidden md:flex items-center gap-2">
-            <button
-              className="p-2 transition-all"
-              onClick={() => router.push("/")}
-            >
-              <Home
-                className={`transition-all duration-300 ${isActive("/") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground hover:opacity-70 hover:scale-105"}`}
+          <div className="hidden md:flex items-center relative h-10">
+            {/* Sliding indicator cho Desktop */}
+            {desktopActiveIndex >= 0 && (
+              <div
+                className="absolute top-0 left-0 h-10 w-10 bg-cyan-100 dark:bg-cyan-900/40 rounded-xl transition-transform duration-300 ease-out pointer-events-none"
+                style={{
+                  transform: `translateX(${desktopActiveIndex * 48}px)`,
+                }} // 40px width + 8px gap
               />
-            </button>
-            <button
-              className="p-2 transition-all"
-              onClick={() => router.push("/messages")}
-            >
-              <MessageCircle
-                className={`transition-all duration-300 ${isActive("/messages") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground hover:opacity-70 hover:scale-105"}`}
-              />
-            </button>
-            <button
-              className="p-2 transition-all relative"
-              onClick={() => router.push("/notifications")}
-            >
-              <Heart
-                className={`transition-all duration-300 ${isActive("/notifications") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground hover:opacity-70 hover:scale-105"}`}
-              />
-              {unreadCount > 0 && (
-                <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full pointer-events-none">
-                  {unreadCount > 99 ? "99+" : unreadCount}
-                </span>
-              )}
-            </button>
-            <button
-              className="p-2 transition-all"
-              onClick={() => router.push("/saved")}
-            >
-              <Bookmark
-                className={`transition-all duration-300 ${isActive("/saved") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground hover:opacity-70 hover:scale-105"}`}
-              />
-            </button>
+            )}
+
+            <div className="flex items-center gap-2">
+              {desktopTabs.map((tab, idx) => {
+                const Icon = tab.icon;
+                const active = desktopActiveIndex === idx;
+                return (
+                  <button
+                    key={tab.path}
+                    className="relative w-10 h-10 flex items-center justify-center z-10 transition-transform hover:scale-105 active:scale-95"
+                    onClick={() => router.push(tab.path)}
+                  >
+                    <Icon
+                      className={`transition-all duration-300 ${
+                        active
+                          ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110"
+                          : "text-gray-900 dark:text-gray-100 hover:opacity-70"
+                      }`}
+                    />
+                    {tab.path === "/notifications" && unreadCount > 0 && (
+                      <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full pointer-events-none shadow-sm">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <button onClick={toggleDark} className="p-2">
             {isDark ? <Sun /> : <Moon />}
@@ -259,6 +321,7 @@ export default function Navbar({ user }: any) {
                 <img
                   onClick={() => setOpen(!open)}
                   src={
+                    user?.avatar_url ||
                     user?.user_metadata?.avatar_url ||
                     `https://api.dicebear.com/7.x/identicon/svg?seed=${user.id}`
                   }
@@ -266,9 +329,9 @@ export default function Navbar({ user }: any) {
                 />
 
                 {open && (
-                  <div className="absolute right-0 mt-2 w-48 bg-background/85 backdrop-blur-md border rounded-xl shadow-ig py-2 transition-colors duration-500">
+                  <div className="absolute right-0 mt-2 w-48 bg-white/85 dark:bg-[#262626]/85 backdrop-blur-md border border-gray-200 dark:border-neutral-700 rounded-xl shadow-lg dark:shadow-black/50 py-2 transition-colors duration-500">
                     <div className="px-3 py-2 text-sm border-b">
-                      {user.email}
+                      {user.name || user.user_metadata?.name || user.email}
                     </div>
 
                     <button
@@ -304,57 +367,51 @@ export default function Navbar({ user }: any) {
       </div>
 
       {/* BOTTOM NAVIGATION CHO MOBILE */}
-      <div
-        className={`md:hidden fixed bottom-0 left-0 w-full border-t border-border flex items-center justify-around h-[60px] z-[9998] transition-colors duration-500 pb-safe ${isDark ? "bg-[#262626]" : "bg-gray-50"}`}
-      >
-        <button
-          className="p-2 hover:bg-secondary rounded-xl transition-colors"
-          onClick={() => router.push("/")}
-        >
-          <Home
-            size={26}
-            className={`transition-all duration-300 ${isActive("/") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground"}`}
-          />
-        </button>
-        {/* Nút Search trên điện thoại tạm thời đưa người dùng cuộn lên đỉnh trang */}
-        <button
-          className="p-2 hover:bg-secondary rounded-xl transition-colors"
-          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
-        >
-          <Search size={26} className="text-foreground" />
-        </button>
-        <button
-          className="p-2 hover:bg-secondary rounded-xl transition-colors"
-          onClick={() => router.push("/messages")}
-        >
-          <MessageCircle
-            size={26}
-            className={`transition-all duration-300 ${isActive("/messages") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground"}`}
-          />
-        </button>
-        <button
-          className="p-2 hover:bg-secondary rounded-xl transition-colors"
-          onClick={() => router.push("/saved")}
-        >
-          <Bookmark
-            size={26}
-            className={`transition-all duration-300 ${isActive("/saved") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground"}`}
-          />
-        </button>
-        <button
-          className="p-2 hover:bg-secondary rounded-xl transition-colors relative"
-          onClick={() => router.push("/notifications")}
-        >
-          <Heart
-            size={26}
-            className={`transition-all duration-300 ${isActive("/notifications") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground"}`}
-          />
-          {unreadCount > 0 && (
-            <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-background pointer-events-none">
-              {unreadCount > 99 ? "99+" : unreadCount}
-            </span>
+      <div className="md:hidden fixed bottom-0 left-0 w-full border-t border-gray-200 dark:border-neutral-800 shadow-[0_-4px_10px_rgba(0,0,0,0.05)] dark:shadow-black/30 flex items-center justify-around h-[60px] z-[9998] transition-colors duration-500 pb-safe bg-white dark:bg-[#262626]">
+        <div className="relative flex w-full h-full">
+          {/* Sliding indicator cho Mobile */}
+          {mobileActiveIndex >= 0 && (
+            <div
+              className="absolute top-0 bottom-0 flex items-center justify-center transition-transform duration-300 ease-out pointer-events-none"
+              style={{
+                width: "20%",
+                transform: `translateX(${mobileActiveIndex * 100}%)`,
+              }}
+            >
+              <div className="w-12 h-12 bg-cyan-100 dark:bg-cyan-900/40 rounded-xl" />
+            </div>
           )}
-        </button>
+
+          {mobileTabs.map((tab, idx) => {
+            const Icon = tab.icon;
+            const active = mobileActiveIndex === idx;
+            return (
+              <button
+                key={tab.path}
+                className="flex-1 flex items-center justify-center relative z-10 transition-transform active:scale-95"
+                onClick={() =>
+                  tab.isAction ? tab.action?.() : router.push(tab.path)
+                }
+              >
+                <div className="relative">
+                  <Icon
+                    size={26}
+                    className={`transition-all duration-300 ${
+                      active
+                        ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110"
+                        : "text-gray-900 dark:text-gray-100"
+                    }`}
+                  />
+                  {tab.path === "/notifications" && unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-white dark:border-[#262626] pointer-events-none shadow-sm">
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </span>
+                  )}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </nav>
   );
