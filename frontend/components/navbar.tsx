@@ -21,6 +21,7 @@ export default function Navbar({ user }: any) {
 
   const [open, setOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
@@ -45,6 +46,56 @@ export default function Navbar({ user }: any) {
       root.classList.remove("dark");
     }
   }, []);
+
+  // ================= LẮNG NGHE THÔNG BÁO CHƯA ĐỌC =================
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchUnread = async () => {
+      const { count } = await supabase
+        .from("notifications")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .neq("sender_id", user.id) // Bỏ qua đếm thông báo do chính mình tạo
+        .not("sender_id", "is", null) // Bỏ qua thông báo bị lỗi null
+        .eq("is_read", false);
+      setUnreadCount(count || 0);
+    };
+
+    fetchUnread();
+
+    const channel = supabase
+      .channel("nav_notifications")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          if (payload.new.sender_id && payload.new.sender_id !== user.id) {
+            setUnreadCount((prev) => prev + 1);
+          }
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        () => fetchUnread(), // Cập nhật lại khi thông báo được đánh dấu đã đọc
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   const toggleDark = () => {
     const root = document.documentElement;
@@ -176,12 +227,17 @@ export default function Navbar({ user }: any) {
               />
             </button>
             <button
-              className="p-2 transition-all"
+              className="p-2 transition-all relative"
               onClick={() => router.push("/notifications")}
             >
               <Heart
                 className={`transition-all duration-300 ${isActive("/notifications") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground hover:opacity-70 hover:scale-105"}`}
               />
+              {unreadCount > 0 && (
+                <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full pointer-events-none">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              )}
             </button>
             <button
               className="p-2 transition-all"
@@ -286,13 +342,18 @@ export default function Navbar({ user }: any) {
           />
         </button>
         <button
-          className="p-2 hover:bg-secondary rounded-xl transition-colors"
+          className="p-2 hover:bg-secondary rounded-xl transition-colors relative"
           onClick={() => router.push("/notifications")}
         >
           <Heart
             size={26}
             className={`transition-all duration-300 ${isActive("/notifications") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground"}`}
           />
+          {unreadCount > 0 && (
+            <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-background pointer-events-none">
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          )}
         </button>
       </div>
     </nav>

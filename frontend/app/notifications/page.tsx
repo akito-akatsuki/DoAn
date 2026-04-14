@@ -58,23 +58,13 @@ export default function NotificationsPage() {
   const loadNotifications = async (userId: string) => {
     setLoading(true);
 
+    // Nhờ Supabase Database lọc sẵn: Chỉ lấy thông báo KHÁC userId và KHÔNG BỊ NULL
     const { data, error } = await supabase
       .from("notifications")
-      .select(
-        `
-        id,
-        type,
-        created_at,
-        reference_id,
-        user_id,
-        users:user_id (
-          id,
-          name,
-          avatar_url
-        )
-      `,
-      )
+      .select("*")
       .eq("user_id", userId)
+      .neq("sender_id", userId)
+      .not("sender_id", "is", null)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -83,8 +73,42 @@ export default function NotificationsPage() {
       return;
     }
 
-    setNotifications(data || []);
+    if (!data || data.length === 0) {
+      setNotifications([]);
+      setLoading(false);
+      return;
+    }
+
+    // Tải riêng thông tin của những "người gửi"
+    const senderIds = Array.from(new Set(data.map((n) => n.sender_id)));
+
+    let usersData: any[] = [];
+    if (senderIds.length > 0) {
+      const { data: users } = await supabase
+        .from("users")
+        .select("id, name, avatar_url")
+        .in("id", senderIds);
+      if (users) usersData = users;
+    }
+
+    // Ghép thông tin Avatar, Name vào từng thông báo
+    const enrichedNotifications = data.map((n) => {
+      const senderInfo = usersData.find((u) => u.id === n.sender_id);
+      return {
+        ...n,
+        users: senderInfo || null,
+      };
+    });
+
+    setNotifications(enrichedNotifications);
     setLoading(false);
+
+    // TỰ ĐỘNG ĐÁNH DẤU ĐÃ ĐỌC KHI MỞ TRANG
+    await supabase
+      .from("notifications")
+      .update({ is_read: true })
+      .eq("user_id", userId)
+      .eq("is_read", false);
   };
 
   const iconMap: any = {
@@ -118,7 +142,7 @@ export default function NotificationsPage() {
           {notifications.map((n) => (
             <div
               key={n.id}
-              className={`flex items-center gap-4 p-3 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-border ${isDark ? "hover:bg-[#262626]" : "hover:bg-white"}`}
+              className={`flex items-center gap-4 p-3 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-border ${!n.is_read ? (isDark ? "bg-[#333333]" : "bg-blue-50") : ""} ${isDark ? "hover:bg-[#262626]" : "hover:bg-white"}`}
             >
               <div className="relative">
                 <img
