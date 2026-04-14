@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Navbar from "@/components/navbar";
 import ChatBox from "@/components/ChatBox";
@@ -11,6 +11,22 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
+
+  const chatContainerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        isChatOpen &&
+        chatContainerRef.current &&
+        !chatContainerRef.current.contains(e.target as Node)
+      ) {
+        setIsChatOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [isChatOpen]);
 
   useEffect(() => {
     init();
@@ -69,7 +85,7 @@ export default function NotificationsPage() {
     <div className="min-h-screen bg-background transition-colors duration-500">
       <Navbar user={user} />
 
-      <main className="max-w-[600px] mx-auto pt-24 px-4 pb-20">
+      <main className="max-w-[600px] mx-auto pt-24 px-4 pb-28 md:pb-20">
         <h1 className="text-2xl font-bold mb-6">Thông báo</h1>
 
         {loading && (
@@ -116,7 +132,11 @@ export default function NotificationsPage() {
                 </p>
 
                 <p className="text-[12px] text-muted-foreground mt-1">
-                  {new Date(n.created_at).toLocaleDateString("vi-VN", {
+                  {new Date(
+                    n.created_at.includes("Z") || n.created_at.includes("+")
+                      ? n.created_at
+                      : `${n.created_at}Z`,
+                  ).toLocaleString("vi-VN", {
                     hour: "2-digit",
                     minute: "2-digit",
                     day: "numeric",
@@ -130,7 +150,10 @@ export default function NotificationsPage() {
       </main>
 
       {/* FIXED CHAT UI */}
-      <div className="fixed bottom-6 right-6 z-[999] flex flex-col items-end gap-4">
+      <div
+        className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-[999] flex flex-col items-end gap-4"
+        ref={chatContainerRef}
+      >
         {isChatOpen && user && (
           <div className="w-[380px] h-[550px] bg-background text-foreground rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 transition-colors duration-500">
             <ChatBox userId={user.id} onClose={() => setIsChatOpen(false)} />

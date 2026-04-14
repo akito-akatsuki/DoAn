@@ -59,7 +59,7 @@ export default function SavedPage() {
     <div className="min-h-screen bg-background transition-colors duration-500">
       <Navbar user={user} />
 
-      <main className="max-w-[935px] mx-auto pt-24 px-4 pb-20">
+      <main className="max-w-[935px] mx-auto pt-24 px-4 pb-28 md:pb-20">
         <div className="flex items-center gap-3 border-b border-border pb-4 mb-6">
           <Bookmark className="w-6 h-6" />
           <h1 className="text-2xl font-bold">Đã lưu</h1>

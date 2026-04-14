@@ -371,7 +371,7 @@ export default function ProfilePage({
       {/* 🔥 NAVBAR ADDED */}
       <Navbar user={currentUser} />
 
-      <div className="max-w-[935px] mx-auto pt-24 px-4 pb-10">
+      <div className="max-w-[935px] mx-auto pt-24 px-4 pb-24 md:pb-10">
         {/* ================= HEADER ================= */}
         <div className="flex items-center gap-8 border-b border-border pb-8">
           <img
@@ -511,7 +511,7 @@ export default function ProfilePage({
                       }}
                     />
                     {openPostMenu && (
-                      <div className="absolute right-0 mt-2 w-44 bg-background border border-border rounded-xl shadow-xl py-1 z-[100] transition-colors duration-500">
+                      <div className="absolute right-0 mt-2 w-44 bg-background/85 backdrop-blur-md border border-border rounded-xl shadow-xl py-1 z-[100] transition-colors duration-500">
                         <button
                           onMouseDown={(e) => {
                             e.preventDefault();
@@ -637,7 +637,7 @@ export default function ProfilePage({
                             }}
                           />
                           {openCommentMenuId === c.id && (
-                            <div className="absolute right-0 mt-1 w-24 bg-background border border-border shadow-lg rounded-lg py-1 z-50 transition-colors duration-500">
+                            <div className="absolute right-0 mt-1 w-24 bg-background/85 backdrop-blur-md border border-border shadow-lg rounded-lg py-1 z-50 transition-colors duration-500">
                               <button
                                 onMouseDown={(e) => {
                                   e.preventDefault();
@@ -709,8 +709,14 @@ export default function ProfilePage({
 
       {/* ================= MODAL EDIT PROFILE ================= */}
       {isEditProfileOpen && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-md p-4 transition-all">
-          <div className="bg-background text-foreground w-full max-w-md rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-border">
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-md p-4 transition-all"
+          onClick={() => setIsEditProfileOpen(false)}
+        >
+          <div
+            className="bg-background text-foreground w-full max-w-md rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-border"
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="flex items-center justify-between p-4 border-b border-border">
               <h2 className="font-bold text-lg">Sửa thông tin</h2>
               <button

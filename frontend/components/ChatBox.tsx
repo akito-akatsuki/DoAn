@@ -90,7 +90,24 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
           .eq("id", otherId)
           .maybeSingle();
 
-        return { ...c, otherUser: user };
+        // Lấy trực tiếp tin nhắn mới nhất
+        const { data: lastMsg } = await supabase
+          .from("messages")
+          .select("content, sender_id")
+          .eq("conversation_id", c.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        let displayTxt = c.last_message;
+        if (lastMsg) {
+          displayTxt =
+            lastMsg.sender_id === userId
+              ? `Bạn: ${lastMsg.content}`
+              : lastMsg.content;
+        }
+
+        return { ...c, otherUser: user, display_last_message: displayTxt };
       }),
     );
 
@@ -277,10 +294,12 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                   src={c.otherUser?.avatar_url}
                   className="w-10 h-10 rounded-full"
                 />
-                <div>
-                  <p className="text-sm font-semibold">{c.otherUser?.name}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {c.last_message || "Bắt đầu chat"}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold truncate">
+                    {c.otherUser?.name}
+                  </p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {c.display_last_message || "Bắt đầu chat"}
                   </p>
                 </div>
               </div>

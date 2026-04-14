@@ -274,7 +274,7 @@ export default function PostDetailPage() {
       <Navbar user={user} />
 
       {/* FIX NAVBAR OVERLAP */}
-      <div className="max-w-xl mx-auto p-4 pt-20">
+      <div className="max-w-xl mx-auto p-4 pt-20 pb-24 md:pb-10">
         {/* POST */}
         <div className="border border-border rounded-xl p-4">
           <div className="flex items-center gap-3 mb-3">
@@ -288,7 +288,11 @@ export default function PostDetailPage() {
             <div>
               <b className="block text-sm">{post.users?.name}</b>
               <span className="text-xs text-muted-foreground block">
-                {new Date(post.created_at).toLocaleDateString("vi-VN", {
+                {new Date(
+                  post.created_at.includes("Z") || post.created_at.includes("+")
+                    ? post.created_at
+                    : `${post.created_at}Z`,
+                ).toLocaleString("vi-VN", {
                   hour: "2-digit",
                   minute: "2-digit",
                   day: "numeric",
@@ -439,7 +443,7 @@ export default function PostDetailPage() {
                       }}
                     />
                     {openCommentMenuId === c.id && (
-                      <div className="absolute right-0 mt-1 w-28 bg-background border border-border shadow-lg rounded-xl py-1 z-50 transition-colors duration-500">
+                      <div className="absolute right-0 mt-1 w-28 bg-background/85 backdrop-blur-md border border-border shadow-lg rounded-xl py-1 z-50 transition-colors duration-500">
                         <button
                           onMouseDown={(e) => {
                             e.preventDefault();
@@ -482,6 +486,7 @@ export default function PostDetailPage() {
             src={post.image_url}
             className="max-w-full max-h-full object-contain"
             alt="Preview"
+            onClick={(e) => e.stopPropagation()}
           />
         </div>
       )}

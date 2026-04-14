@@ -16,6 +16,7 @@ import {
   X, // Thêm cái này
   Bookmark, // Icon lưu
   Flag, // Icon báo cáo
+  Pencil, // Icon sửa
 } from "lucide-react";
 import {
   getFeed,
@@ -48,6 +49,7 @@ export default function HomePage() {
   // Dropdown state & Ref
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const chatContainerRef = useRef<HTMLDivElement | null>(null);
 
   // State cho hiệu ứng tim bay khi double click
   const [showHeartId, setShowHeartId] = useState<string | null>(null);
@@ -64,6 +66,10 @@ export default function HomePage() {
   );
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState("");
+
+  // ================= EDIT POST =================
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editPostContent, setEditPostContent] = useState("");
 
   // ================= INIT =================
   useEffect(() => {
@@ -98,11 +104,19 @@ export default function HomePage() {
         setOpenMenuId(null);
       }
       setOpenCommentMenuId(null); // Đóng menu bình luận khi bấm ra ngoài
+
+      if (
+        isChatOpen &&
+        chatContainerRef.current &&
+        !chatContainerRef.current.contains(e.target as Node)
+      ) {
+        setIsChatOpen(false);
+      }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [openMenuId]);
+  }, [openMenuId, isChatOpen]);
 
   const loadUser = async () => {
     const { data } = await supabase.auth.getUser();
@@ -475,7 +489,7 @@ export default function HomePage() {
       {" "}
       {/* select-none ở root để mượt hơn khi double click */}
       <Navbar user={user} />
-      <main className="pt-16 max-w-[470px] mx-auto px-2 mb-10">
+      <main className="pt-16 max-w-[470px] mx-auto px-2 pb-24 md:pb-10">
         {/* CREATE POST */}
         <div className="bg-background shadow-ig rounded-[12px] p-4 mb-2 border ring-1 ring-border transition-colors duration-500">
           <div className="flex items-start gap-4">
@@ -492,9 +506,26 @@ export default function HomePage() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="Bạn đang nghĩ gì?"
-                className="w-full text-base resize-none outline-none min-h-[80px] placeholder:text-muted-foreground text-foreground bg-transparent pt-1 select-text" // Cho phép chọn text ở đây
+                className="w-full text-base resize-none outline-none min-h-[80px] placeholder:text-gray-500 dark:placeholder:text-gray-300 text-foreground font-semibold bg-transparent pt-1 select-text"
                 rows={2}
               />
+
+              {/* IMAGE PREVIEW */}
+              {file && (
+                <div className="relative mb-3 inline-block mt-2">
+                  <img
+                    src={URL.createObjectURL(file)}
+                    alt="Preview"
+                    className="max-h-48 rounded-lg object-contain border border-border shadow-sm"
+                  />
+                  <button
+                    onClick={() => setFile(null)}
+                    className="absolute -top-2 -right-2 bg-background border border-border text-foreground rounded-full p-1 shadow-md hover:bg-secondary transition-colors z-10"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
               <div className="flex items-center justify-between pt-1">
                 <label className="flex items-center gap-1 text-primary text-sm cursor-pointer hover:underline">
                   📷 Ảnh
@@ -603,7 +634,12 @@ export default function HomePage() {
                       {post?.users?.name || "unknown"}
                     </span>
                     <span className="text-xs text-muted leading-tight mt-0.5 block">
-                      {new Date(post.created_at).toLocaleDateString("vi-VN", {
+                      {new Date(
+                        post.created_at.includes("Z") ||
+                          post.created_at.includes("+")
+                          ? post.created_at
+                          : `${post.created_at}Z`,
+                      ).toLocaleString("vi-VN", {
                         hour: "2-digit",
                         minute: "2-digit",
                         day: "numeric",
@@ -631,7 +667,7 @@ export default function HomePage() {
                   {openMenuId === String(post.id) && (
                     <div
                       ref={menuRef}
-                      className="absolute right-0 mt-2 w-44 bg-background border ring-1 ring-border rounded-xl shadow-xl py-1 z-[100] transition-colors duration-500"
+                      className="absolute right-0 mt-2 w-44 bg-background/85 backdrop-blur-md border ring-1 ring-border rounded-xl shadow-xl py-1 z-[100] transition-colors duration-500"
                     >
                       <button
                         onMouseDown={(e) => {
@@ -659,17 +695,32 @@ export default function HomePage() {
 
                       {/* Chỉ hiện nút Xóa nếu là bài viết của chính người dùng */}
                       {user?.id === post.user_id && (
-                        <button
-                          onMouseDown={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            handleDeletePost(post.id);
-                          }}
-                          className="flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-500/10 w-full text-sm font-semibold transition-all"
-                        >
-                          <Trash2 size={18} />
-                          Xóa bài viết
-                        </button>
+                        <>
+                          <button
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setEditingPostId(post.id);
+                              setEditPostContent(post.content || "");
+                              setOpenMenuId(null);
+                            }}
+                            className="flex items-center gap-3 px-4 py-2 hover:bg-secondary w-full text-sm font-semibold transition-all"
+                          >
+                            <Pencil size={18} />
+                            Sửa bài viết
+                          </button>
+                          <button
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDeletePost(post.id);
+                            }}
+                            className="flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-500/10 w-full text-sm font-semibold transition-all"
+                          >
+                            <Trash2 size={18} />
+                            Xóa bài viết
+                          </button>
+                        </>
                       )}
                     </div>
                   )}
@@ -677,10 +728,35 @@ export default function HomePage() {
               </div>
 
               {/* NỘI DUNG (CONTENT) */}
-              {post.content && (
-                <div className="px-4 pb-3 text-sm select-text whitespace-pre-wrap">
-                  {post.content}
+              {editingPostId === post.id ? (
+                <div className="px-4 pb-3 text-sm">
+                  <textarea
+                    className="w-full border border-border bg-secondary/30 rounded-lg p-2 outline-none focus:bg-background transition-colors resize-none"
+                    value={editPostContent}
+                    onChange={(e) => setEditPostContent(e.target.value)}
+                    rows={3}
+                  />
+                  <div className="flex justify-end gap-3 mt-2">
+                    <button
+                      onClick={() => setEditingPostId(null)}
+                      className="text-xs font-semibold text-muted-foreground hover:text-foreground"
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      onClick={() => handleSavePost(post.id)}
+                      className="text-xs font-semibold text-blue-500 hover:text-blue-600"
+                    >
+                      Lưu
+                    </button>
+                  </div>
                 </div>
+              ) : (
+                post.content && (
+                  <div className="px-4 pb-3 text-sm select-text whitespace-pre-wrap">
+                    {post.content}
+                  </div>
+                )
               )}
 
               {/* IMAGE WITH DOUBLE CLICK LIKE */}
@@ -806,7 +882,7 @@ export default function HomePage() {
                                 }}
                               />
                               {openCommentMenuId === c.id && (
-                                <div className="absolute right-0 mt-1 w-24 bg-background border border-border shadow-lg rounded-lg py-1 z-50 transition-colors duration-500">
+                                <div className="absolute right-0 mt-1 w-24 bg-background/85 backdrop-blur-md border border-border shadow-lg rounded-lg py-1 z-50 transition-colors duration-500">
                                   <button
                                     onMouseDown={(e) => {
                                       e.preventDefault();
@@ -1043,7 +1119,7 @@ export default function HomePage() {
                             }}
                           />
                           {openCommentMenuId === c.id && (
-                            <div className="absolute right-0 mt-1 w-24 bg-background border border-border shadow-lg rounded-lg py-1 z-50 transition-colors duration-500">
+                            <div className="absolute right-0 mt-1 w-24 bg-background/85 backdrop-blur-md border border-border shadow-lg rounded-lg py-1 z-50 transition-colors duration-500">
                               <button
                                 onMouseDown={(e) => {
                                   e.preventDefault();
