@@ -686,7 +686,7 @@ export default function HomePage() {
                   {openMenuId === String(post.id) && (
                     <div
                       ref={menuRef}
-                      className="absolute right-0 mt-2 w-44 bg-background/85 backdrop-blur-md border ring-1 ring-border rounded-xl shadow-xl py-1 z-[100] transition-colors duration-500"
+                      className={`absolute right-0 mt-2 w-44 border ring-1 ring-border rounded-xl shadow-xl py-1 z-[100] transition-colors duration-500 ${isDark ? "bg-[#333333]" : "bg-white"}`}
                     >
                       <button
                         onMouseDown={(e) => {
@@ -800,7 +800,10 @@ export default function HomePage() {
               <div className="p-3">
                 <div className="flex gap-3 pt-2 pb-1">
                   <Heart
-                    onClick={() => handleLike(post.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleLike(post.id);
+                    }}
                     className={`cursor-pointer transition-all active:scale-150 hover:scale-110 w-7 h-7 ${
                       (post.is_liked ?? false)
                         ? "text-red-500 fill-red-500" // Đổi từ destructive sang red-500 cho chắc chắn
@@ -901,7 +904,9 @@ export default function HomePage() {
                                 }}
                               />
                               {openCommentMenuId === c.id && (
-                                <div className="absolute right-0 mt-1 w-24 bg-background/85 backdrop-blur-md border border-border shadow-lg rounded-lg py-1 z-50 transition-colors duration-500">
+                                <div
+                                  className={`absolute right-0 mt-1 w-24 border border-border shadow-lg rounded-lg py-1 z-50 transition-colors duration-500 ${isDark ? "bg-[#333333]" : "bg-white"}`}
+                                >
                                   <button
                                     onMouseDown={(e) => {
                                       e.preventDefault();
@@ -988,7 +993,7 @@ export default function HomePage() {
           </button>
 
           <div
-            className="bg-background text-foreground flex flex-col md:flex-row w-full max-w-5xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 cursor-default transition-colors duration-500"
+            className={`text-foreground flex flex-col md:flex-row w-full max-w-5xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 cursor-default transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Phần Ảnh */}
@@ -1007,7 +1012,9 @@ export default function HomePage() {
             </div>
 
             {/* Phần Thông tin / Bình luận */}
-            <div className="w-full md:w-[400px] flex flex-col border-l border-border bg-background h-[50vh] md:h-auto transition-colors duration-500">
+            <div
+              className={`w-full md:w-[400px] flex flex-col border-l border-border h-[50vh] md:h-auto transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
+            >
               {/* Header */}
               <div className="flex items-center gap-3 p-4 border-b border-border">
                 <img
@@ -1138,7 +1145,9 @@ export default function HomePage() {
                             }}
                           />
                           {openCommentMenuId === c.id && (
-                            <div className="absolute right-0 mt-1 w-24 bg-background/85 backdrop-blur-md border border-border shadow-lg rounded-lg py-1 z-50 transition-colors duration-500">
+                            <div
+                              className={`absolute right-0 mt-1 w-24 border border-border shadow-lg rounded-lg py-1 z-50 transition-colors duration-500 ${isDark ? "bg-[#333333]" : "bg-white"}`}
+                            >
                               <button
                                 onMouseDown={(e) => {
                                   e.preventDefault();
@@ -1178,7 +1187,10 @@ export default function HomePage() {
               <div className="p-4 border-t border-border">
                 <div className="flex items-center gap-3">
                   <Heart
-                    onClick={() => handleLike(selectedPost.id)}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleLike(selectedPost.id);
+                    }}
                     className={`cursor-pointer transition-all active:scale-150 hover:scale-110 w-7 h-7 ${
                       (selectedPost.is_liked ?? false)
                         ? "text-red-500 fill-red-500"
@@ -1192,7 +1204,7 @@ export default function HomePage() {
                 <div className="flex gap-2 mt-3">
                   <input
                     ref={modalInputRef}
-                    className="border border-border flex-1 px-3 py-2 rounded-full text-sm outline-none bg-secondary/50 focus:bg-background transition-colors"
+                    className={`border border-border flex-1 px-3 py-2 rounded-full text-sm outline-none transition-colors ${isDark ? "bg-[#333333] focus:bg-[#262626]" : "bg-gray-50 focus:bg-white"}`}
                     value={modalCommentText}
                     onChange={(e) => setModalCommentText(e.target.value)}
                     placeholder="Thêm bình luận..."
