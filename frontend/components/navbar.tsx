@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import {
   Sun,
@@ -16,6 +16,8 @@ import {
 
 export default function Navbar({ user }: any) {
   const router = useRouter();
+  const pathname = usePathname();
+  const isActive = (path: string) => pathname === path;
 
   const [open, setOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
@@ -107,7 +109,7 @@ export default function Navbar({ user }: any) {
 
   return (
     <nav
-      className={`fixed top-0 w-full z-[9999] shadow-ig transition-colors duration-500 ${isDark ? "bg-black" : "bg-gray-50"}`}
+      className={`fixed top-0 w-full z-[9999] shadow-ig transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-gray-50"}`}
     >
       <div className="max-w-[935px] mx-auto flex items-center justify-between h-[60px] px-4">
         {/* SEARCH */}
@@ -158,28 +160,36 @@ export default function Navbar({ user }: any) {
           {/* Ẩn bớt icon trên mobile, đưa xuống bottom nav */}
           <div className="hidden md:flex items-center gap-2">
             <button
-              className="p-2 hover:opacity-70 transition-opacity"
+              className="p-2 transition-all"
               onClick={() => router.push("/")}
             >
-              <Home />
+              <Home
+                className={`transition-all duration-300 ${isActive("/") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground hover:opacity-70 hover:scale-105"}`}
+              />
             </button>
             <button
-              className="p-2 hover:opacity-70 transition-opacity"
+              className="p-2 transition-all"
               onClick={() => router.push("/messages")}
             >
-              <MessageCircle />
+              <MessageCircle
+                className={`transition-all duration-300 ${isActive("/messages") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground hover:opacity-70 hover:scale-105"}`}
+              />
             </button>
             <button
-              className="p-2 hover:opacity-70 transition-opacity"
+              className="p-2 transition-all"
               onClick={() => router.push("/notifications")}
             >
-              <Heart />
+              <Heart
+                className={`transition-all duration-300 ${isActive("/notifications") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground hover:opacity-70 hover:scale-105"}`}
+              />
             </button>
             <button
-              className="p-2 hover:opacity-70 transition-opacity"
+              className="p-2 transition-all"
               onClick={() => router.push("/saved")}
             >
-              <Bookmark />
+              <Bookmark
+                className={`transition-all duration-300 ${isActive("/saved") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground hover:opacity-70 hover:scale-105"}`}
+              />
             </button>
           </div>
           <button onClick={toggleDark} className="p-2">
@@ -196,7 +206,7 @@ export default function Navbar({ user }: any) {
                     user?.user_metadata?.avatar_url ||
                     `https://api.dicebear.com/7.x/identicon/svg?seed=${user.id}`
                   }
-                  className="w-8 h-8 rounded-full cursor-pointer"
+                  className={`w-8 h-8 rounded-full cursor-pointer border-[2px] transition-all duration-300 ${pathname?.startsWith("/profile") ? "border-cyan-500 scale-110 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)]" : "border-transparent hover:scale-105"}`}
                 />
 
                 {open && (
@@ -239,38 +249,50 @@ export default function Navbar({ user }: any) {
 
       {/* BOTTOM NAVIGATION CHO MOBILE */}
       <div
-        className={`md:hidden fixed bottom-0 left-0 w-full border-t border-border flex items-center justify-around h-[60px] z-[9998] transition-colors duration-500 pb-safe ${isDark ? "bg-black" : "bg-gray-50"}`}
+        className={`md:hidden fixed bottom-0 left-0 w-full border-t border-border flex items-center justify-around h-[60px] z-[9998] transition-colors duration-500 pb-safe ${isDark ? "bg-[#262626]" : "bg-gray-50"}`}
       >
         <button
           className="p-2 hover:bg-secondary rounded-xl transition-colors"
           onClick={() => router.push("/")}
         >
-          <Home size={26} />
+          <Home
+            size={26}
+            className={`transition-all duration-300 ${isActive("/") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground"}`}
+          />
         </button>
         {/* Nút Search trên điện thoại tạm thời đưa người dùng cuộn lên đỉnh trang */}
         <button
           className="p-2 hover:bg-secondary rounded-xl transition-colors"
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
         >
-          <Search size={26} />
+          <Search size={26} className="text-foreground" />
         </button>
         <button
           className="p-2 hover:bg-secondary rounded-xl transition-colors"
           onClick={() => router.push("/messages")}
         >
-          <MessageCircle size={26} />
+          <MessageCircle
+            size={26}
+            className={`transition-all duration-300 ${isActive("/messages") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground"}`}
+          />
         </button>
         <button
           className="p-2 hover:bg-secondary rounded-xl transition-colors"
           onClick={() => router.push("/saved")}
         >
-          <Bookmark size={26} />
+          <Bookmark
+            size={26}
+            className={`transition-all duration-300 ${isActive("/saved") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground"}`}
+          />
         </button>
         <button
           className="p-2 hover:bg-secondary rounded-xl transition-colors"
           onClick={() => router.push("/notifications")}
         >
-          <Heart size={26} />
+          <Heart
+            size={26}
+            className={`transition-all duration-300 ${isActive("/notifications") ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110" : "text-foreground"}`}
+          />
         </button>
       </div>
     </nav>

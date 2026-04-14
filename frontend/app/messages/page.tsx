@@ -17,12 +17,27 @@ export default function MessagesPage() {
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [isDark, setIsDark] = useState(false);
 
   const [search, setSearch] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [conversations, setConversations] = useState<any[]>([]);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // ================= THEME TRACKING =================
+  useEffect(() => {
+    const updateTheme = () => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    };
+    updateTheme();
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   // ================= LOAD USER =================
   useEffect(() => {
@@ -220,20 +235,24 @@ export default function MessagesPage() {
   };
 
   return (
-    <div className="h-screen flex flex-col bg-background text-foreground transition-colors duration-500 overflow-hidden">
+    <div
+      className={`h-screen flex flex-col text-foreground transition-colors duration-500 overflow-hidden ${isDark ? "bg-neutral-900" : "bg-gray-100"}`}
+    >
       <Navbar user={user} />
 
       <main className="max-w-[935px] w-full mx-auto flex-1 pt-[76px] px-4 pb-24 md:pb-6 flex gap-4 overflow-hidden">
         {/* CỘT TRÁI: DANH SÁCH CHAT */}
         <div
-          className={`w-full md:w-[350px] bg-secondary/10 border border-border rounded-xl flex flex-col h-full ${targetUser ? "hidden md:flex" : "flex"}`}
+          className={`w-full md:w-[350px] border border-border rounded-xl flex flex-col h-full transition-colors duration-500 ${targetUser ? "hidden md:flex" : "flex"} ${isDark ? "bg-[#262626]" : "bg-white"}`}
         >
           <div className="p-4 border-b border-border font-bold text-lg flex items-center">
             {user?.user_metadata?.name || "Tin nhắn"}
           </div>
 
           <div className="p-3">
-            <div className="flex items-center gap-2 border border-border bg-secondary/50 focus-within:bg-background focus-within:ring-1 focus-within:ring-border transition-all p-2 rounded-xl">
+            <div
+              className={`flex items-center gap-2 border border-border focus-within:ring-1 focus-within:ring-border transition-all p-2 rounded-xl ${isDark ? "bg-[#333333] focus-within:bg-[#262626]" : "bg-gray-50 focus-within:bg-white"}`}
+            >
               <Search size={16} className="text-muted-foreground" />
               <input
                 value={search}
@@ -250,7 +269,7 @@ export default function MessagesPage() {
               <div
                 key={u.id}
                 onClick={() => handleOpenChat(u)}
-                className="flex items-center gap-3 p-3 hover:bg-secondary rounded-xl cursor-pointer transition-colors"
+                className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors ${isDark ? "hover:bg-[#333333]" : "hover:bg-gray-100"}`}
               >
                 <img
                   src={
@@ -276,7 +295,15 @@ export default function MessagesPage() {
                 <div
                   key={c.id}
                   onClick={() => handleOpenExisting(c)}
-                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors ${conversationId === c.id ? "bg-secondary/80" : "hover:bg-secondary/40"}`}
+                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors ${
+                    conversationId === c.id
+                      ? isDark
+                        ? "bg-[#3f3f3f]"
+                        : "bg-gray-200"
+                      : isDark
+                        ? "hover:bg-[#333333]"
+                        : "hover:bg-gray-100"
+                  }`}
                 >
                   <img
                     src={
@@ -304,7 +331,7 @@ export default function MessagesPage() {
 
         {/* CỘT PHẢI: KHUNG CHAT CHI TIẾT */}
         <div
-          className={`flex-1 bg-background border border-border rounded-xl flex flex-col h-full relative ${!targetUser ? "hidden md:flex" : "flex"}`}
+          className={`flex-1 border border-border rounded-xl flex flex-col h-full relative transition-colors duration-500 ${!targetUser ? "hidden md:flex" : "flex"} ${isDark ? "bg-[#262626]" : "bg-white"}`}
         >
           {!targetUser ? (
             <div className="flex-1 flex items-center justify-center text-muted-foreground flex-col gap-3">
@@ -319,7 +346,7 @@ export default function MessagesPage() {
           ) : (
             <>
               {/* HEADER CHAT */}
-              <div className="p-4 border-b border-border flex items-center gap-3 bg-secondary/10 rounded-t-xl shrink-0">
+              <div className="p-4 border-b border-border flex items-center gap-3 rounded-t-xl shrink-0">
                 <button
                   className="md:hidden p-1 -ml-2"
                   onClick={() => {
@@ -353,9 +380,11 @@ export default function MessagesPage() {
                     className={`flex ${m.sender_id === user?.id ? "justify-end" : "justify-start"}`}
                   >
                     <div
-                      className={`px-4 py-2 text-[15px] max-w-[70%] break-words
-                      ${m.sender_id === user?.id ? "bg-[#0095F6] text-white rounded-2xl rounded-br-sm" : "bg-secondary text-foreground border border-border rounded-2xl rounded-bl-sm"}
-                    `}
+                      className={`px-4 py-2 text-[15px] max-w-[70%] break-words ${
+                        m.sender_id === user?.id
+                          ? "bg-[#0095F6] text-white rounded-2xl rounded-br-sm"
+                          : `rounded-2xl rounded-bl-sm border ${isDark ? "bg-[#333333] text-white border-border" : "bg-gray-100 text-foreground border-transparent"}`
+                      }`}
                     >
                       {m.content}
                     </div>
@@ -364,12 +393,14 @@ export default function MessagesPage() {
               </div>
 
               {/* INPUT CHAT */}
-              <div className="p-4 border-t border-border bg-background rounded-b-xl flex gap-3 shrink-0">
+              <div
+                className={`p-4 border-t border-border rounded-b-xl flex gap-3 shrink-0 transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
+              >
                 <input
                   value={text}
                   onChange={(e) => setText(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                  className="flex-1 border border-border bg-secondary/30 focus:bg-background transition-colors outline-none rounded-full px-4 py-2.5 text-[15px]"
+                  className={`flex-1 border border-border transition-colors outline-none rounded-full px-4 py-2.5 text-[15px] ${isDark ? "bg-[#333333] focus:bg-[#262626] text-white placeholder:text-gray-400" : "bg-gray-50 focus:bg-white text-black placeholder:text-gray-500"}`}
                   placeholder="Nhắn tin..."
                 />
                 <button
@@ -383,7 +414,9 @@ export default function MessagesPage() {
 
               {/* LOADING OVERLAY */}
               {loading && (
-                <div className="absolute inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center z-50 rounded-xl">
+                <div
+                  className={`absolute inset-0 backdrop-blur-sm flex items-center justify-center z-50 rounded-xl ${isDark ? "bg-[#262626]/60" : "bg-white/60"}`}
+                >
                   <Loader2 className="animate-spin text-blue-500 w-8 h-8" />
                 </div>
               )}

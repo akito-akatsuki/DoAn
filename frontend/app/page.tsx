@@ -509,7 +509,7 @@ export default function HomePage() {
       <main className="pt-24 max-w-[470px] mx-auto px-2 pb-24 md:pb-10">
         {/* CREATE POST */}
         <div
-          className={`shadow-md rounded-[12px] p-4 mb-4 border border-border transition-colors duration-500 ${isDark ? "bg-black" : "bg-white"}`}
+          className={`shadow-md rounded-[12px] p-4 mb-4 border border-border transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
         >
           <div className="flex items-start gap-4">
             <img
@@ -628,7 +628,7 @@ export default function HomePage() {
           {posts.map((post) => (
             <div
               key={post.id}
-              className={`shadow-md rounded-xl overflow-hidden border border-border relative transition-colors duration-500 ${isDark ? "bg-black" : "bg-white"}`}
+              className={`shadow-md rounded-xl overflow-hidden border border-border relative transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
               onDoubleClick={() => handleLike(post.id, true)}
             >
               {/* BIG HEART POP ANIMATION */}
@@ -977,7 +977,7 @@ export default function HomePage() {
       {/* ================= MODAL POST ================= */}
       {selectedPost && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-md p-4 md:p-10 cursor-pointer transition-all"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#262626]/95 p-4 md:p-10 cursor-pointer transition-all"
           onClick={closeModal}
         >
           <button
@@ -992,7 +992,7 @@ export default function HomePage() {
             onClick={(e) => e.stopPropagation()}
           >
             {/* Phần Ảnh */}
-            <div className="flex-1 bg-black flex items-center justify-center min-h-[300px] md:min-h-[500px]">
+            <div className="flex-1 bg-[#1a1a1a] flex items-center justify-center min-h-[300px] md:min-h-[500px]">
               {selectedPost.image_url ? (
                 <img
                   src={selectedPost.image_url}

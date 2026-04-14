@@ -10,6 +10,20 @@ export default function SavedPage() {
   const [user, setUser] = useState<any>(null);
   const [savedPosts, setSavedPosts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    const updateTheme = () => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    };
+    updateTheme();
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     const loadData = async () => {
@@ -56,7 +70,9 @@ export default function SavedPage() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-background transition-colors duration-500">
+    <div
+      className={`min-h-screen text-foreground transition-colors duration-500 ${isDark ? "bg-neutral-900" : "bg-gray-100"}`}
+    >
       <Navbar user={user} />
 
       <main className="max-w-[935px] mx-auto pt-24 px-4 pb-28 md:pb-20">
@@ -82,7 +98,7 @@ export default function SavedPage() {
               <Link
                 key={item.id}
                 href={`/posts/${post.id}`}
-                className="aspect-square bg-secondary/50 overflow-hidden relative group cursor-pointer border border-border/50 rounded-sm"
+                className={`aspect-square overflow-hidden relative group cursor-pointer border border-border/50 rounded-sm transition-colors ${isDark ? "bg-[#262626]" : "bg-white"}`}
               >
                 {/* IMAGE / CONTENT */}
                 {post.image_url ? (
@@ -98,7 +114,9 @@ export default function SavedPage() {
                 )}
 
                 {/* ================= NEW: USER INFO OVERLAY ================= */}
-                <div className="absolute top-2 left-2 flex items-center gap-2 bg-black/50 text-white px-2 py-1 rounded-full text-xs opacity-0 group-hover:opacity-100 transition">
+                <div
+                  className={`absolute top-2 left-2 flex items-center gap-2 px-2 py-1 rounded-full text-xs opacity-0 group-hover:opacity-100 transition ${isDark ? "bg-[#262626]/90 text-white" : "bg-white/90 text-black shadow-sm"}`}
+                >
                   <img
                     src={
                       post.users?.avatar_url ||
@@ -112,7 +130,7 @@ export default function SavedPage() {
                 </div>
 
                 {/* hover dark layer */}
-                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors duration-300" />
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 pointer-events-none" />
               </Link>
             );
           })}

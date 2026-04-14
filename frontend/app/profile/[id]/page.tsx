@@ -34,6 +34,7 @@ export default function ProfilePage({
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isDark, setIsDark] = useState(false);
 
   // ================= MODAL STATES =================
   const modalInputRef = useRef<HTMLInputElement | null>(null);
@@ -56,12 +57,25 @@ export default function ProfilePage({
 
   // ================= CLICK OUTSIDE =================
   useEffect(() => {
+    const updateTheme = () => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    };
+    updateTheme();
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
     const handleClickOutside = () => {
       setOpenCommentMenuId(null);
       setOpenPostMenu(false);
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      observer.disconnect();
+    };
   }, []);
 
   // ================= LOAD CURRENT USER =================
@@ -352,7 +366,9 @@ export default function ProfilePage({
   // ================= UI =================
   if (loading) {
     return (
-      <div className="min-h-screen bg-background text-foreground pt-20 text-center transition-colors duration-500">
+      <div
+        className={`min-h-screen text-foreground pt-20 text-center transition-colors duration-500 ${isDark ? "bg-neutral-900" : "bg-gray-100"}`}
+      >
         Đang tải...
       </div>
     );
@@ -360,14 +376,18 @@ export default function ProfilePage({
 
   if (!profile) {
     return (
-      <div className="min-h-screen bg-background text-foreground pt-20 text-center transition-colors duration-500">
+      <div
+        className={`min-h-screen text-foreground pt-20 text-center transition-colors duration-500 ${isDark ? "bg-neutral-900" : "bg-gray-100"}`}
+      >
         Không tìm thấy người dùng
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground transition-colors duration-500">
+    <div
+      className={`min-h-screen text-foreground transition-colors duration-500 ${isDark ? "bg-neutral-900" : "bg-gray-100"}`}
+    >
       {/* 🔥 NAVBAR ADDED */}
       <Navbar user={currentUser} />
 
@@ -431,7 +451,7 @@ export default function ProfilePage({
             <div
               key={post.id}
               onClick={() => openPostModal(post)}
-              className="aspect-square bg-secondary/30 border border-border/50 rounded-sm overflow-hidden relative group cursor-pointer"
+              className={`aspect-square border border-border/50 rounded-sm overflow-hidden relative group cursor-pointer transition-colors ${isDark ? "bg-[#262626]" : "bg-white"}`}
             >
               {post.image_url ? (
                 <img
@@ -454,7 +474,7 @@ export default function ProfilePage({
       {/* ================= MODAL POST ================= */}
       {selectedPost && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-md p-4 md:p-10 cursor-pointer transition-all"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#262626]/95 p-4 md:p-10 cursor-pointer transition-all"
           onClick={closeModal}
         >
           <button
@@ -465,11 +485,11 @@ export default function ProfilePage({
           </button>
 
           <div
-            className="bg-background text-foreground flex flex-col md:flex-row w-full max-w-5xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 cursor-default transition-colors duration-500"
+            className={`text-foreground flex flex-col md:flex-row w-full max-w-5xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl relative animate-in fade-in zoom-in-95 duration-200 cursor-default transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Phần Ảnh */}
-            <div className="flex-1 bg-black flex items-center justify-center min-h-[300px] md:min-h-[500px]">
+            <div className="flex-1 bg-[#1a1a1a] flex items-center justify-center min-h-[300px] md:min-h-[500px]">
               {selectedPost.image_url ? (
                 <img
                   src={selectedPost.image_url}
@@ -484,7 +504,9 @@ export default function ProfilePage({
             </div>
 
             {/* Phần Thông tin / Bình luận */}
-            <div className="w-full md:w-[400px] flex flex-col border-l border-border bg-background h-[50vh] md:h-auto transition-colors duration-500">
+            <div
+              className={`w-full md:w-[400px] flex flex-col border-l border-border h-[50vh] md:h-auto transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
+            >
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b border-border relative">
                 <div className="flex items-center gap-3">
@@ -511,7 +533,9 @@ export default function ProfilePage({
                       }}
                     />
                     {openPostMenu && (
-                      <div className="absolute right-0 mt-2 w-44 bg-background/85 backdrop-blur-md border border-border rounded-xl shadow-xl py-1 z-[100] transition-colors duration-500">
+                      <div
+                        className={`absolute right-0 mt-2 w-44 border border-border rounded-xl shadow-xl py-1 z-[100] transition-colors duration-500 ${isDark ? "bg-[#333333]" : "bg-white"}`}
+                      >
                         <button
                           onMouseDown={(e) => {
                             e.preventDefault();
@@ -585,7 +609,7 @@ export default function ProfilePage({
                         {editingCommentId === c.id ? (
                           <div className="flex flex-col gap-1 mt-1">
                             <input
-                              className="border px-2 py-1 rounded w-full outline-none text-sm bg-transparent"
+                              className={`border border-border px-2 py-1 rounded w-full outline-none text-sm transition-colors ${isDark ? "bg-[#333333] text-white" : "bg-gray-50 text-black"}`}
                               value={editCommentText}
                               onChange={(e) =>
                                 setEditCommentText(e.target.value)
@@ -637,7 +661,9 @@ export default function ProfilePage({
                             }}
                           />
                           {openCommentMenuId === c.id && (
-                            <div className="absolute right-0 mt-1 w-24 bg-background/85 backdrop-blur-md border border-border shadow-lg rounded-lg py-1 z-50 transition-colors duration-500">
+                            <div
+                              className={`absolute right-0 mt-1 w-24 border border-border shadow-lg rounded-lg py-1 z-50 transition-colors duration-500 ${isDark ? "bg-[#333333]" : "bg-white"}`}
+                            >
                               <button
                                 onMouseDown={(e) => {
                                   e.preventDefault();
@@ -687,7 +713,7 @@ export default function ProfilePage({
                 <div className="flex gap-2 mt-3">
                   <input
                     ref={modalInputRef}
-                    className="border border-border flex-1 px-3 py-2 rounded-full text-sm outline-none bg-secondary/50 focus:bg-background transition-colors"
+                    className={`border border-border flex-1 px-3 py-2 rounded-full text-sm outline-none transition-colors ${isDark ? "bg-[#333333] focus:bg-[#262626]" : "bg-gray-50 focus:bg-white"}`}
                     value={modalCommentText}
                     onChange={(e) => setModalCommentText(e.target.value)}
                     placeholder="Thêm bình luận..."
@@ -710,11 +736,11 @@ export default function ProfilePage({
       {/* ================= MODAL EDIT PROFILE ================= */}
       {isEditProfileOpen && (
         <div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-md p-4 transition-all"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#262626]/95 p-4 transition-all"
           onClick={() => setIsEditProfileOpen(false)}
         >
           <div
-            className="bg-background text-foreground w-full max-w-md rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-border"
+            className={`text-foreground w-full max-w-md rounded-xl shadow-2xl flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-border transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between p-4 border-b border-border">
@@ -757,7 +783,7 @@ export default function ProfilePage({
                 <input
                   value={editName}
                   onChange={(e) => setEditName(e.target.value)}
-                  className="w-full border border-border bg-secondary/50 rounded-lg px-3 py-2 outline-none focus:bg-background transition-colors"
+                  className={`w-full border border-border rounded-lg px-3 py-2 outline-none transition-colors ${isDark ? "bg-[#333333] focus:bg-[#262626]" : "bg-gray-50 focus:bg-white"}`}
                 />
               </div>
 
@@ -768,7 +794,7 @@ export default function ProfilePage({
                 <textarea
                   value={editBio}
                   onChange={(e) => setEditBio(e.target.value)}
-                  className="w-full border border-border bg-secondary/50 rounded-lg px-3 py-2 outline-none focus:bg-background transition-colors resize-none"
+                  className={`w-full border border-border rounded-lg px-3 py-2 outline-none transition-colors resize-none ${isDark ? "bg-[#333333] focus:bg-[#262626]" : "bg-gray-50 focus:bg-white"}`}
                   rows={3}
                   placeholder="Giới thiệu đôi nét về bản thân..."
                 />

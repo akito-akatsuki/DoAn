@@ -479,7 +479,7 @@ export default function PostDetailPage() {
       {/* IMAGE PREVIEW MODAL */}
       {isImageModalOpen && post?.image_url && (
         <div
-          className="fixed inset-0 z-[9999] bg-black/50 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200"
+          className="fixed inset-0 z-[9999] bg-[#262626]/95 flex items-center justify-center p-4 cursor-pointer animate-in fade-in duration-200"
           onClick={() => setIsImageModalOpen(false)}
         >
           <img

@@ -11,6 +11,7 @@ export default function NotificationsPage() {
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [isDark, setIsDark] = useState(false);
 
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -29,7 +30,18 @@ export default function NotificationsPage() {
   }, [isChatOpen]);
 
   useEffect(() => {
+    const updateTheme = () => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    };
+    updateTheme();
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
     init();
+    return () => observer.disconnect();
   }, []);
 
   const init = async () => {
@@ -82,7 +94,9 @@ export default function NotificationsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-background transition-colors duration-500">
+    <div
+      className={`min-h-screen text-foreground transition-colors duration-500 ${isDark ? "bg-neutral-900" : "bg-gray-100"}`}
+    >
       <Navbar user={user} />
 
       <main className="max-w-[600px] mx-auto pt-24 px-4 pb-28 md:pb-20">
@@ -104,7 +118,7 @@ export default function NotificationsPage() {
           {notifications.map((n) => (
             <div
               key={n.id}
-              className="flex items-center gap-4 p-3 rounded-xl hover:bg-secondary/50 transition-colors cursor-pointer border border-transparent hover:border-border"
+              className={`flex items-center gap-4 p-3 rounded-xl transition-colors cursor-pointer border border-transparent hover:border-border ${isDark ? "hover:bg-[#262626]" : "hover:bg-white"}`}
             >
               <div className="relative">
                 <img
@@ -114,7 +128,9 @@ export default function NotificationsPage() {
                   }
                   className="w-11 h-11 rounded-full object-cover ring-1 ring-border"
                 />
-                <div className="absolute -bottom-1 -right-1 bg-background rounded-full p-1 border border-border shadow-sm">
+                <div
+                  className={`absolute -bottom-1 -right-1 rounded-full p-1 border border-border shadow-sm ${isDark ? "bg-[#262626]" : "bg-white"}`}
+                >
                   {iconMap[n.type] || (
                     <Heart className="w-4 h-4 text-muted-foreground" />
                   )}
@@ -155,7 +171,9 @@ export default function NotificationsPage() {
         ref={chatContainerRef}
       >
         {isChatOpen && user && (
-          <div className="w-[380px] h-[550px] bg-background text-foreground rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 transition-colors duration-500">
+          <div
+            className={`w-[380px] h-[550px] text-foreground rounded-2xl shadow-2xl border border-border overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 transition-colors duration-500 ${isDark ? "bg-[#262626]" : "bg-white"}`}
+          >
             <ChatBox userId={user.id} onClose={() => setIsChatOpen(false)} />
           </div>
         )}
@@ -163,7 +181,9 @@ export default function NotificationsPage() {
           onClick={() => setIsChatOpen(!isChatOpen)}
           className={`shadow-2xl transition-all active:scale-90 p-4 rounded-full flex items-center justify-center ${
             isChatOpen
-              ? "bg-background text-foreground border border-border"
+              ? isDark
+                ? "bg-[#262626] text-white border border-border"
+                : "bg-white text-black border border-border"
               : "bg-[#0095F6] text-white hover:bg-blue-600"
           }`}
         >
