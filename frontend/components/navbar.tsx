@@ -107,7 +107,7 @@ export default function Navbar({ user }: any) {
 
   return (
     <nav
-      className={`fixed top-0 w-full z-[9999] shadow-ig transition-colors duration-500 ${isDark ? "bg-neutral-900" : "bg-gray-50"}`}
+      className={`fixed top-0 w-full z-[9999] shadow-ig transition-colors duration-500 ${isDark ? "bg-black" : "bg-gray-50"}`}
     >
       <div className="max-w-[935px] mx-auto flex items-center justify-between h-[60px] px-4">
         {/* SEARCH */}
@@ -239,7 +239,7 @@ export default function Navbar({ user }: any) {
 
       {/* BOTTOM NAVIGATION CHO MOBILE */}
       <div
-        className={`md:hidden fixed bottom-0 left-0 w-full border-t border-border flex items-center justify-around h-[60px] z-[9998] transition-colors duration-500 pb-safe ${isDark ? "bg-neutral-900" : "bg-gray-50"}`}
+        className={`md:hidden fixed bottom-0 left-0 w-full border-t border-border flex items-center justify-around h-[60px] z-[9998] transition-colors duration-500 pb-safe ${isDark ? "bg-black" : "bg-gray-50"}`}
       >
         <button
           className="p-2 hover:bg-secondary rounded-xl transition-colors"

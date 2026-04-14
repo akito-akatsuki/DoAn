@@ -55,6 +55,9 @@ export default function HomePage() {
   const [showHeartId, setShowHeartId] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
 
+  // Track Dark mode cho trang chủ
+  const [isDark, setIsDark] = useState(false);
+
   // ================= MODAL POST =================
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
   const [modalComments, setModalComments] = useState<any[]>([]);
@@ -76,6 +79,17 @@ export default function HomePage() {
     // Kích hoạt scroll mượt toàn trang
     document.documentElement.style.scrollBehavior = "smooth";
 
+    // Theo dõi thay đổi class "dark" trên thẻ html để tự động cập nhật màu nền
+    const updateTheme = () => {
+      setIsDark(document.documentElement.classList.contains("dark"));
+    };
+    updateTheme(); // Gọi lần đầu khi load
+    const observer = new MutationObserver(updateTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
+
     loadUser();
     loadFeed();
 
@@ -90,6 +104,7 @@ export default function HomePage() {
 
     return () => {
       supabase.removeChannel(channel);
+      observer.disconnect();
     };
   }, []);
 
@@ -485,13 +500,17 @@ export default function HomePage() {
   };
 
   return (
-    <div className="min-h-screen select-none">
+    <div
+      className={`min-h-screen select-none transition-colors duration-500 ${isDark ? "bg-neutral-900" : "bg-gray-100"}`}
+    >
       {" "}
       {/* select-none ở root để mượt hơn khi double click */}
       <Navbar user={user} />
-      <main className="pt-16 max-w-[470px] mx-auto px-2 pb-24 md:pb-10">
+      <main className="pt-24 max-w-[470px] mx-auto px-2 pb-24 md:pb-10">
         {/* CREATE POST */}
-        <div className="bg-background shadow-ig rounded-[12px] p-4 mb-2 border ring-1 ring-border transition-colors duration-500">
+        <div
+          className={`shadow-md rounded-[12px] p-4 mb-4 border border-border transition-colors duration-500 ${isDark ? "bg-black" : "bg-white"}`}
+        >
           <div className="flex items-start gap-4">
             <img
               src={
@@ -506,7 +525,7 @@ export default function HomePage() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="Bạn đang nghĩ gì?"
-                className="w-full text-base resize-none outline-none min-h-[80px] placeholder:text-gray-500 dark:placeholder:text-gray-300 text-foreground font-semibold bg-transparent pt-1 select-text"
+                className={`w-full text-base resize-none outline-none min-h-[80px] text-foreground font-semibold bg-transparent pt-1 select-text ${isDark ? "placeholder:text-gray-300" : "placeholder:text-gray-500"}`}
                 rows={2}
               />
 
@@ -599,7 +618,7 @@ export default function HomePage() {
         </div>
 
         {/* FEED */}
-        <div className="space-y-4">
+        <div className="space-y-3">
           {loading && (
             <div className="flex justify-center py-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-muted"></div>
@@ -609,7 +628,7 @@ export default function HomePage() {
           {posts.map((post) => (
             <div
               key={post.id}
-              className="bg-background shadow-ig rounded-lg overflow-hidden border ring-1 ring-border mb-2 relative transition-colors duration-500"
+              className={`shadow-md rounded-xl overflow-hidden border border-border relative transition-colors duration-500 ${isDark ? "bg-black" : "bg-white"}`}
               onDoubleClick={() => handleLike(post.id, true)}
             >
               {/* BIG HEART POP ANIMATION */}
