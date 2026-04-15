@@ -210,8 +210,7 @@ export default function Navbar({ user: propUser }: any) {
     {
       path: "/search",
       icon: Search,
-      isAction: true,
-      action: () => window.scrollTo({ top: 0, behavior: "smooth" }),
+      isAction: false,
     },
     { path: "/messages", icon: MessageCircle, isAction: false },
     { path: "/saved", icon: Bookmark, isAction: false },
