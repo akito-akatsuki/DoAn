@@ -2,17 +2,40 @@
 
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import Navbar from "@/components/navbar";
 import ChatBox from "@/components/ChatBox";
-import { Heart, MessageCircle, MessageSquare, X, UserPlus } from "lucide-react";
+import {
+  Heart,
+  MessageCircle,
+  MessageSquare,
+  X,
+  UserPlus,
+  MoreHorizontal,
+} from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  getComments,
+  createComment,
+  deleteComment,
+  updateComment,
+  toggleLike,
+} from "@/lib/api";
 
 export default function NotificationsPage() {
   const [user, setUser] = useState<any>(null);
   const [notifications, setNotifications] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
-
+  const [selectedPost, setSelectedPost] = useState<any | null>(null);
+  const [modalComments, setModalComments] = useState<any[]>([]);
+  const [modalCommentText, setModalCommentText] = useState("");
+  const [openCommentMenuId, setOpenCommentMenuId] = useState<string | null>(
+    null,
+  );
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editCommentText, setEditCommentText] = useState("");
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
+  const router = useRouter();
+  const modalInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -23,10 +46,11 @@ export default function NotificationsPage() {
       ) {
         setIsChatOpen(false);
       }
+      setOpenCommentMenuId(null);
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [isChatOpen]);
+  }, [isChatOpen, openCommentMenuId]);
 
   useEffect(() => {
     init();
@@ -69,6 +93,9 @@ export default function NotificationsPage() {
 
     // Tải riêng thông tin của những "người gửi"
     const senderIds = Array.from(new Set(data.map((n) => n.sender_id)));
+    const postIds = Array.from(
+      new Set(data.map((n) => n.post_id).filter(Boolean)),
+    );
 
     let usersData: any[] = [];
     if (senderIds.length > 0) {
@@ -79,12 +106,23 @@ export default function NotificationsPage() {
       if (users) usersData = users;
     }
 
+    let postsData: any[] = [];
+    if (postIds.length > 0) {
+      const { data: posts } = await supabase
+        .from("posts")
+        .select("id, image_url, content")
+        .in("id", postIds);
+      if (posts) postsData = posts;
+    }
+
     // Ghép thông tin Avatar, Name vào từng thông báo
     const enrichedNotifications = data.map((n) => {
       const senderInfo = usersData.find((u) => u.id === n.sender_id);
+      const postInfo = postsData.find((p) => p.id === n.post_id);
       return {
         ...n,
         users: senderInfo || null,
+        posts: postInfo || null,
       };
     });
 
@@ -97,6 +135,155 @@ export default function NotificationsPage() {
       .update({ is_read: true })
       .eq("user_id", userId)
       .eq("is_read", false);
+  };
+
+  const openPostModal = async (postId: string) => {
+    if (!postId) return;
+
+    try {
+      const { data: postData, error } = await supabase
+        .from("posts")
+        .select("*, users:user_id(id, name, avatar_url)")
+        .eq("id", postId)
+        .single();
+
+      if (error || !postData) {
+        alert("Bài viết này không tồn tại hoặc đã bị xóa!");
+        return;
+      }
+
+      const { count: likeCount } = await supabase
+        .from("likes")
+        .select("*", { count: "exact", head: true })
+        .eq("post_id", postId);
+
+      let isLiked = false;
+      if (user) {
+        const { data: likeData } = await supabase
+          .from("likes")
+          .select("id")
+          .eq("post_id", postId)
+          .eq("user_id", user.id)
+          .maybeSingle();
+        isLiked = !!likeData;
+      }
+
+      let commentsData = [];
+      try {
+        commentsData = (await getComments(postId)) || [];
+      } catch (err) {
+        console.error("Lỗi lấy bình luận:", err);
+      }
+
+      setSelectedPost({
+        ...postData,
+        likes_count: likeCount || 0,
+        is_liked: isLiked,
+      });
+      setModalComments(commentsData);
+    } catch (err) {
+      console.error("Lỗi mở modal:", err);
+      alert("Đã xảy ra lỗi khi tải bài viết.");
+    }
+  };
+
+  const closeModal = () => {
+    setSelectedPost(null);
+    setModalComments([]);
+    setModalCommentText("");
+    setOpenCommentMenuId(null);
+    setEditingCommentId(null);
+  };
+
+  const handleLike = async (postId: string) => {
+    if (!user || !selectedPost) return;
+
+    const currentlyLiked = selectedPost.is_liked;
+    setSelectedPost((prev: any) => ({
+      ...prev,
+      is_liked: !currentlyLiked,
+      likes_count: !currentlyLiked
+        ? (prev.likes_count || 0) + 1
+        : Math.max(0, (prev.likes_count || 0) - 1),
+    }));
+
+    try {
+      const res = await toggleLike(postId);
+      setSelectedPost((prev: any) => ({
+        ...prev,
+        is_liked: res.is_liked,
+        likes_count:
+          (res as any).likes !== undefined
+            ? (res as any).likes
+            : res.likes_count,
+      }));
+    } catch (error) {
+      console.error(error);
+    }
+  };
+
+  const handleModalComment = async () => {
+    if (!user || !modalCommentText.trim() || !selectedPost) return;
+    const text = modalCommentText;
+    setModalCommentText("");
+    const tempId = `temp-${Date.now()}`;
+    const tempComment = {
+      id: tempId,
+      content: text,
+      user_id: user.id,
+      users: {
+        id: user.id,
+        name:
+          user.user_metadata?.name || user.user_metadata?.full_name || "Bạn",
+        avatar_url: user.user_metadata?.avatar_url,
+      },
+    };
+    setModalComments((prev) => [...prev, tempComment]);
+    try {
+      const newCmt = await createComment(selectedPost.id, text);
+      setModalComments((prev) =>
+        prev.map((c) => (c.id === tempId ? newCmt : c)),
+      );
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleModalReplyClick = (username: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!username) return;
+    const newText = modalCommentText.startsWith(`@${username} `)
+      ? modalCommentText
+      : `@${username} ${modalCommentText}`;
+    setModalCommentText(newText);
+    setTimeout(() => modalInputRef.current?.focus(), 50);
+  };
+
+  const handleDeleteComment = async (commentId: string) => {
+    if (!confirm("Bạn có chắc chắn muốn xóa bình luận này?")) return;
+    try {
+      await deleteComment(commentId);
+      setModalComments((prev) => prev.filter((c) => c.id !== commentId));
+      setOpenCommentMenuId(null);
+    } catch (err) {
+      console.error(err);
+      alert("Xóa bình luận thất bại.");
+    }
+  };
+
+  const submitEditComment = async (commentId: string) => {
+    if (!editCommentText.trim()) return;
+    try {
+      const updated = await updateComment(commentId, editCommentText);
+      setModalComments((prev) =>
+        prev.map((c) => (c.id === commentId ? updated : c)),
+      );
+      setEditingCommentId(null);
+      setOpenCommentMenuId(null);
+    } catch (err) {
+      console.error(err);
+      alert("Sửa bình luận thất bại.");
+    }
   };
 
   const iconMap: any = {
@@ -126,6 +313,24 @@ export default function NotificationsPage() {
           {notifications.map((n) => (
             <div
               key={n.id}
+              onClick={() => {
+                const type = n.type?.toLowerCase().trim();
+                if (type === "like" || type === "comment") {
+                  if (n.post_id) {
+                    openPostModal(n.post_id);
+                  } else if (n.sender_id) {
+                    router.push(`/profile/${n.sender_id}`);
+                  }
+                } else if (type === "follow") {
+                  if (n.sender_id) {
+                    router.push(`/profile/${n.sender_id}`);
+                  }
+                } else {
+                  // Dự phòng cho các loại thông báo khác
+                  if (n.post_id) openPostModal(n.post_id);
+                  else if (n.sender_id) router.push(`/profile/${n.sender_id}`);
+                }
+              }}
               className={`flex items-center gap-4 p-3 rounded-xl transition-all cursor-pointer border border-transparent hover:border-gray-200 dark:hover:border-neutral-800 hover:shadow-sm dark:hover:shadow-black/40 hover:bg-white dark:hover:bg-[#262626] ${!n.is_read ? "bg-blue-50 dark:bg-[#333333]" : ""}`}
             >
               <div className="relative">
@@ -166,10 +371,256 @@ export default function NotificationsPage() {
                   })}
                 </p>
               </div>
+
+              {/* HIỂN THỊ THUMBNAIL CỦA BÀI VIẾT Ở BÊN PHẢI */}
+              {n.posts && (
+                <div className="flex-shrink-0 ml-2">
+                  {n.posts.image_url ? (
+                    <img
+                      src={n.posts.image_url}
+                      className="w-12 h-12 object-cover rounded-md border border-gray-200 dark:border-neutral-700 shadow-sm"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 overflow-hidden bg-gray-100 dark:bg-[#333333] text-[9px] p-1 text-muted-foreground rounded-md flex items-center justify-center text-center border border-gray-200 dark:border-neutral-700 shadow-sm break-words line-clamp-3">
+                      {n.posts.content}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))}
         </div>
       </main>
+
+      {/* ================= MODAL POST ================= */}
+      {selectedPost && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-[#262626]/95 p-4 md:p-10 cursor-pointer transition-all"
+          onClick={closeModal}
+        >
+          <button
+            onClick={closeModal}
+            className="absolute top-4 right-4 text-white hover:text-gray-300 z-[10000] p-2"
+          >
+            <X className="w-8 h-8" />
+          </button>
+
+          <div
+            className="text-gray-900 dark:text-gray-100 flex flex-col md:flex-row w-full max-w-5xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl dark:shadow-black/60 relative animate-in fade-in zoom-in-95 duration-200 cursor-default transition-colors duration-500 bg-white dark:bg-[#262626]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Phần Ảnh */}
+            <div className="flex-1 bg-[#1a1a1a] flex items-center justify-center min-h-[300px] md:min-h-[500px]">
+              {selectedPost.image_url ? (
+                <img
+                  src={selectedPost.image_url}
+                  className="max-w-full max-h-full object-contain"
+                  alt="Post"
+                />
+              ) : (
+                <div className="p-8 text-center text-white text-xl font-medium">
+                  {selectedPost.content}
+                </div>
+              )}
+            </div>
+
+            {/* Phần Thông tin / Bình luận */}
+            <div className="w-full md:w-[400px] flex flex-col border-l border-gray-200 dark:border-neutral-800 h-[50vh] md:h-auto transition-colors duration-500 bg-white dark:bg-[#262626]">
+              {/* Header */}
+              <div className="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-neutral-800">
+                <img
+                  src={
+                    selectedPost.users?.avatar_url ||
+                    `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPost.users?.id}`
+                  }
+                  className="w-10 h-10 rounded-full border object-cover"
+                  alt="avatar"
+                />
+                <span className="font-semibold text-sm">
+                  {selectedPost.users?.name || "Người dùng"}
+                </span>
+              </div>
+
+              {/* Content / Caption & Comments */}
+              <div className="flex-1 p-4 overflow-y-auto space-y-4">
+                {/* Caption */}
+                <div className="flex items-start gap-3">
+                  <img
+                    src={
+                      selectedPost.users?.avatar_url ||
+                      `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPost.users?.id}`
+                    }
+                    className="w-10 h-10 rounded-full border object-cover flex-shrink-0"
+                    alt="avatar"
+                  />
+                  <div className="mt-1">
+                    <span className="font-semibold text-sm mr-2">
+                      {selectedPost.users?.name || "Người dùng"}
+                    </span>
+                    <span className="text-sm whitespace-pre-wrap">
+                      {selectedPost.content}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Comments */}
+                {modalComments.map((c: any) => {
+                  const isReply = c.content?.trim().startsWith("@");
+                  return (
+                    <div
+                      key={c.id}
+                      className={`flex items-start gap-3 group relative cursor-pointer ${
+                        isReply ? "ml-10 mt-1" : "mt-4"
+                      }`}
+                      onDoubleClick={(e) =>
+                        handleModalReplyClick(c.users?.name, e)
+                      }
+                    >
+                      <img
+                        src={
+                          c.users?.avatar_url ||
+                          `https://api.dicebear.com/7.x/identicon/svg?seed=${c.user_id}`
+                        }
+                        className={`${
+                          isReply ? "w-7 h-7" : "w-10 h-10"
+                        } rounded-full border object-cover flex-shrink-0`}
+                        alt="avatar"
+                      />
+                      <div className={`${isReply ? "mt-0" : "mt-1"} flex-1`}>
+                        <span
+                          className={`font-semibold mr-2 ${
+                            isReply ? "text-xs" : "text-sm"
+                          }`}
+                        >
+                          {c.users?.name || "Người dùng"}
+                        </span>
+                        {editingCommentId === c.id ? (
+                          <div className="flex flex-col gap-1 mt-1">
+                            <input
+                              className="border border-gray-200 dark:border-neutral-700 px-2 py-1 rounded-lg w-full outline-none text-sm bg-transparent"
+                              value={editCommentText}
+                              onChange={(e) =>
+                                setEditCommentText(e.target.value)
+                              }
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") submitEditComment(c.id);
+                                if (e.key === "Escape")
+                                  setEditingCommentId(null);
+                              }}
+                              autoFocus
+                            />
+                            <div className="flex gap-2 text-xs">
+                              <button
+                                onClick={() => submitEditComment(c.id)}
+                                className="text-blue-500 font-semibold"
+                              >
+                                Lưu
+                              </button>
+                              <button
+                                onClick={() => setEditingCommentId(null)}
+                                className="text-muted-foreground"
+                              >
+                                Hủy
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <span
+                            className={`whitespace-pre-wrap ${
+                              isReply
+                                ? "text-[13px] text-muted-foreground"
+                                : "text-sm"
+                            }`}
+                          >
+                            {c.content}
+                          </span>
+                        )}
+                      </div>
+
+                      {user?.id === c.user_id && !editingCommentId && (
+                        <div className="relative opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity ml-2 mt-1">
+                          <MoreHorizontal
+                            className="w-4 h-4 cursor-pointer text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenCommentMenuId(
+                                openCommentMenuId === c.id ? null : c.id,
+                              );
+                            }}
+                          />
+                          {openCommentMenuId === c.id && (
+                            <div className="absolute right-0 mt-1 w-24 border border-gray-200 dark:border-neutral-700 shadow-lg dark:shadow-black/50 rounded-lg py-1 z-50 transition-colors duration-500 bg-white dark:bg-[#333333]">
+                              <button
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setEditingCommentId(c.id);
+                                  setEditCommentText(c.content);
+                                  setOpenCommentMenuId(null);
+                                }}
+                                className="w-full text-left px-3 py-1 text-sm hover:bg-secondary"
+                              >
+                                Sửa
+                              </button>
+                              <button
+                                onMouseDown={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  handleDeleteComment(c.id);
+                                }}
+                                className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-secondary"
+                              >
+                                Xóa
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Action / Input */}
+              <div className="p-4 border-t border-gray-200 dark:border-neutral-800">
+                <div className="flex items-center gap-3">
+                  <Heart
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleLike(selectedPost.id);
+                    }}
+                    className={`cursor-pointer transition-all active:scale-150 hover:scale-110 w-7 h-7 ${
+                      (selectedPost.is_liked ?? false)
+                        ? "text-red-500 fill-red-500"
+                        : "stroke-[2px] text-gray-900 dark:text-gray-100"
+                    }`}
+                  />
+                  <span className="font-semibold text-sm">
+                    {selectedPost.likes_count || 0} lượt thích
+                  </span>
+                </div>
+                <div className="flex gap-2 mt-3">
+                  <input
+                    ref={modalInputRef}
+                    className="border border-gray-200 dark:border-neutral-700 shadow-inner flex-1 px-3 py-2 rounded-full text-sm outline-none transition-colors bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] placeholder:text-gray-500 dark:placeholder:text-gray-400"
+                    value={modalCommentText}
+                    onChange={(e) => setModalCommentText(e.target.value)}
+                    placeholder="Thêm bình luận..."
+                    onKeyDown={(e) => e.key === "Enter" && handleModalComment()}
+                  />
+                  <button
+                    onClick={handleModalComment}
+                    disabled={!modalCommentText.trim()}
+                    className="text-blue-500 font-semibold text-sm disabled:opacity-50 px-2"
+                  >
+                    Đăng
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* FIXED CHAT UI */}
       <div

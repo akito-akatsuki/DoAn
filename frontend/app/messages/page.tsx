@@ -27,8 +27,12 @@ export default function MessagesPage() {
   // ================= LOAD USER =================
   useEffect(() => {
     const loadUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      setUser(data.user);
+      try {
+        const { data } = await supabase.auth.getUser();
+        setUser(data?.user || null);
+      } catch (err) {
+        console.error("Lỗi lấy thông tin user ở Messages:", err);
+      }
     };
     loadUser();
   }, []);

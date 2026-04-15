@@ -38,16 +38,22 @@ export default function Navbar({ user: propUser }: any) {
       if (propUser) {
         setUser(propUser);
       } else {
-        const {
-          data: { user: authUser },
-        } = await supabase.auth.getUser();
-        if (authUser) {
-          const { data: dbUser } = await supabase
-            .from("users")
-            .select("*")
-            .eq("id", authUser.id)
-            .single();
-          setUser({ ...authUser, ...dbUser });
+        try {
+          const { data, error } = await supabase.auth.getUser();
+          if (error) {
+            console.warn("Lỗi xác thực Supabase:", error.message);
+            return;
+          }
+          if (data?.user) {
+            const { data: dbUser } = await supabase
+              .from("users")
+              .select("*")
+              .eq("id", data.user.id)
+              .single();
+            setUser({ ...data.user, ...dbUser });
+          }
+        } catch (err) {
+          console.error("Lỗi mạng khi tải user trên Navbar:", err);
         }
       }
     };
@@ -103,6 +109,13 @@ export default function Navbar({ user: propUser }: any) {
       supabase.removeChannel(channel);
     };
   }, [user?.id]);
+
+  // ================= XÓA SỐ THÔNG BÁO KHI VÀO TRANG THÔNG BÁO =================
+  useEffect(() => {
+    if (pathname === "/notifications") {
+      setUnreadCount(0);
+    }
+  }, [pathname]);
 
   // ================= LẮNG NGHE THAY ĐỔI THÔNG TIN USER (AVATAR/NAME) =================
   useEffect(() => {
@@ -206,20 +219,14 @@ export default function Navbar({ user: propUser }: any) {
   );
 
   const mobileTabs = [
-    { path: "/", icon: Home, isAction: false },
-    {
-      path: "/search",
-      icon: Search,
-      isAction: false,
-    },
-    { path: "/messages", icon: MessageCircle, isAction: false },
-    { path: "/saved", icon: Bookmark, isAction: false },
-    { path: "/notifications", icon: Heart, isAction: false },
+    { path: "/", icon: Home },
+    { path: "/search", icon: Search },
+    { path: "/messages", icon: MessageCircle },
+    { path: "/saved", icon: Bookmark },
+    { path: "/notifications", icon: Heart },
   ];
   const mobileActiveIndex = mobileTabs.findIndex((t) =>
-    t.path === "/"
-      ? pathname === "/"
-      : !t.isAction && pathname?.startsWith(t.path),
+    t.path === "/" ? pathname === "/" : pathname?.startsWith(t.path),
   );
 
   return (
@@ -299,11 +306,13 @@ export default function Navbar({ user: propUser }: any) {
                           : "text-gray-900 dark:text-gray-100 hover:opacity-70"
                       }`}
                     />
-                    {tab.path === "/notifications" && unreadCount > 0 && (
-                      <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full pointer-events-none shadow-sm">
-                        {unreadCount > 99 ? "99+" : unreadCount}
-                      </span>
-                    )}
+                    {tab.path === "/notifications" &&
+                      unreadCount > 0 &&
+                      pathname !== "/notifications" && (
+                        <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full pointer-events-none shadow-sm">
+                          {unreadCount > 99 ? "99+" : unreadCount}
+                        </span>
+                      )}
                   </button>
                 );
               })}
@@ -388,9 +397,7 @@ export default function Navbar({ user: propUser }: any) {
               <button
                 key={tab.path}
                 className="flex-1 flex items-center justify-center relative z-10 transition-transform active:scale-95"
-                onClick={() =>
-                  tab.isAction ? tab.action?.() : router.push(tab.path)
-                }
+                onClick={() => router.push(tab.path)}
               >
                 <div className="relative">
                   <Icon
@@ -401,11 +408,13 @@ export default function Navbar({ user: propUser }: any) {
                         : "text-gray-900 dark:text-gray-100"
                     }`}
                   />
-                  {tab.path === "/notifications" && unreadCount > 0 && (
-                    <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-white dark:border-[#262626] pointer-events-none shadow-sm">
-                      {unreadCount > 99 ? "99+" : unreadCount}
-                    </span>
-                  )}
+                  {tab.path === "/notifications" &&
+                    unreadCount > 0 &&
+                    pathname !== "/notifications" && (
+                      <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-white dark:border-[#262626] pointer-events-none shadow-sm">
+                        {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    )}
                 </div>
               </button>
             );

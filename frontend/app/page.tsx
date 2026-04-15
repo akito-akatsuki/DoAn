@@ -132,16 +132,22 @@ export default function HomePage() {
   }, [openMenuId, isChatOpen]);
 
   const loadUser = async () => {
-    const {
-      data: { user: authUser },
-    } = await supabase.auth.getUser();
-    if (authUser) {
-      const { data: dbUser } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", authUser.id)
-        .single();
-      setUser({ ...authUser, ...dbUser });
+    try {
+      const { data, error } = await supabase.auth.getUser();
+      if (error) {
+        console.warn("Lỗi xác thực Supabase:", error.message);
+        return;
+      }
+      if (data?.user) {
+        const { data: dbUser } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", data.user.id)
+          .single();
+        setUser({ ...data.user, ...dbUser });
+      }
+    } catch (err) {
+      console.error("Lỗi mạng khi tải user ở Home:", err);
     }
   };
 
