@@ -15,6 +15,7 @@ import {
   MessageSquare, // Thêm cái này
   X, // Thêm cái này
   Bookmark, // Icon lưu
+  Smile, // Icon mặt cười
   Flag, // Icon báo cáo
   Pencil, // Icon sửa
 } from "lucide-react";
@@ -51,6 +52,7 @@ export default function HomePage() {
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
+  const emojiPickerRef = useRef<HTMLDivElement | null>(null);
 
   // State cho hiệu ứng tim bay khi double click
   const [showHeartId, setShowHeartId] = useState<string | null>(null);
@@ -60,6 +62,7 @@ export default function HomePage() {
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
   const [modalComments, setModalComments] = useState<any[]>([]);
   const [modalCommentText, setModalCommentText] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
   // ================= COMMENT MENUS & EDIT =================
   const [openCommentMenuId, setOpenCommentMenuId] = useState<string | null>(
@@ -125,11 +128,19 @@ export default function HomePage() {
       ) {
         setIsChatOpen(false);
       }
+
+      if (
+        showEmojiPicker &&
+        emojiPickerRef.current &&
+        !emojiPickerRef.current.contains(e.target as Node)
+      ) {
+        setShowEmojiPicker(false);
+      }
     };
 
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [openMenuId, isChatOpen]);
+  }, [openMenuId, isChatOpen, showEmojiPicker]);
 
   const loadUser = async () => {
     try {
@@ -354,6 +365,7 @@ export default function HomePage() {
     setSelectedPost(null);
     setModalComments([]);
     setModalCommentText("");
+    setShowEmojiPicker(false);
   };
 
   const handleModalComment = async () => {
@@ -782,7 +794,7 @@ export default function HomePage() {
                 </div>
               ) : (
                 post.content && (
-                  <div className="px-4 pb-3 text-sm select-text whitespace-pre-wrap">
+                  <div className="px-4 pb-3 text-sm select-text whitespace-pre-wrap text-gray-700 dark:text-gray-300">
                     {post.content}
                   </div>
                 )
@@ -1021,44 +1033,33 @@ export default function HomePage() {
 
             {/* Phần Thông tin / Bình luận */}
             <div className="w-full md:w-[400px] flex flex-col border-l border-gray-200 dark:border-neutral-800 h-[50vh] md:h-auto transition-colors duration-500 bg-white dark:bg-[#262626]">
-              {/* Header */}
-              <div className="flex items-center gap-3 p-4 border-b border-gray-200 dark:border-neutral-800">
-                <img
-                  src={
-                    selectedPost.users?.avatar_url ||
-                    `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPost.users?.id}`
-                  }
-                  className="w-10 h-10 rounded-full border object-cover"
-                  alt="avatar"
-                />
-                <span className="font-semibold text-sm">
-                  {selectedPost.users?.name || "Người dùng"}
-                </span>
-              </div>
-
-              {/* Content / Caption & Comments */}
-              <div className="flex-1 p-4 overflow-y-auto space-y-4">
-                {/* Caption */}
-                <div className="flex items-start gap-3">
+              {/* Header & Content */}
+              <div className="flex flex-col border-b border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-[#333333]">
+                {/* Header */}
+                <div className="flex items-center gap-3 p-4 pb-2">
                   <img
                     src={
                       selectedPost.users?.avatar_url ||
                       `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPost.users?.id}`
                     }
-                    className="w-10 h-10 rounded-full border object-cover flex-shrink-0"
+                    className="w-10 h-10 rounded-full border object-cover"
                     alt="avatar"
                   />
-                  <div className="mt-1">
-                    <span className="font-semibold text-sm mr-2">
-                      {selectedPost.users?.name || "Người dùng"}
-                    </span>
-                    <span className="text-sm whitespace-pre-wrap">
-                      {selectedPost.content}
-                    </span>
-                  </div>
+                  <span className="font-semibold text-sm">
+                    {selectedPost.users?.name || "Người dùng"}
+                  </span>
                 </div>
 
-                {/* Comments */}
+                {/* Caption */}
+                {selectedPost.content && (
+                  <div className="px-4 pb-4 text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-300">
+                    {selectedPost.content}
+                  </div>
+                )}
+              </div>
+
+              {/* Comments */}
+              <div className="flex-1 p-4 overflow-y-auto space-y-4">
                 {modalComments.map((c: any) => {
                   const isReply = c.content?.trim().startsWith("@");
                   return (
@@ -1205,10 +1206,50 @@ export default function HomePage() {
                     {selectedPost.likes_count || 0} lượt thích
                   </span>
                 </div>
-                <div className="flex gap-2 mt-3">
+                <div
+                  ref={emojiPickerRef}
+                  className="flex items-center gap-2 mt-3 border border-gray-200 dark:border-neutral-700 shadow-inner rounded-full px-3 py-1 bg-gray-50 dark:bg-[#333333] focus-within:bg-white dark:focus-within:bg-[#262626] transition-colors relative"
+                >
+                  <Smile
+                    className="w-6 h-6 text-gray-400 cursor-pointer hover:text-gray-600 dark:hover:text-gray-300 transition-colors shrink-0"
+                    onClick={() => setShowEmojiPicker(!showEmojiPicker)}
+                  />
+                  {showEmojiPicker && (
+                    <div className="absolute bottom-12 left-0 bg-white dark:bg-[#333333] border border-gray-200 dark:border-neutral-700 shadow-xl rounded-xl p-3 w-64 z-[99999]">
+                      <div className="grid grid-cols-5 gap-3 text-xl">
+                        {[
+                          "😀",
+                          "😂",
+                          "😍",
+                          "🥰",
+                          "😊",
+                          "😎",
+                          "😢",
+                          "😭",
+                          "😡",
+                          "👍",
+                          "❤️",
+                          "🔥",
+                          "✨",
+                          "🎉",
+                          "🙌",
+                        ].map((emoji) => (
+                          <button
+                            key={emoji}
+                            className="hover:scale-125 transition-transform"
+                            onClick={() => {
+                              setModalCommentText((prev) => prev + emoji);
+                            }}
+                          >
+                            {emoji}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                   <input
                     ref={modalInputRef}
-                    className="border border-gray-200 dark:border-neutral-700 shadow-inner flex-1 px-3 py-2 rounded-full text-sm outline-none transition-colors bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] placeholder:text-gray-500 dark:placeholder:text-gray-400"
+                    className="flex-1 px-2 py-1.5 text-sm outline-none bg-transparent placeholder:text-gray-500 dark:placeholder:text-gray-400 text-gray-900 dark:text-gray-100"
                     value={modalCommentText}
                     onChange={(e) => setModalCommentText(e.target.value)}
                     placeholder="Thêm bình luận..."

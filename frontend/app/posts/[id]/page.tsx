@@ -302,7 +302,9 @@ export default function PostDetailPage() {
           </div>
 
           {post.content && (
-            <p className="mb-3 text-sm whitespace-pre-wrap">{post.content}</p>
+            <p className="mb-3 text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-300">
+              {post.content}
+            </p>
           )}
 
           {post.image_url && (
