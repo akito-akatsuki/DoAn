@@ -240,20 +240,36 @@ export const updateComment = async (commentId: string, content: string) => {
   return data;
 };
 
-// SAVE POST
-export const savePost = async (postId: string) => {
+// TOGGLE SAVE POST
+export const toggleSavePost = async (postId: string) => {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
 
-  if (!user) return;
+  if (!user) throw new Error("Not authenticated");
 
-  const { data, error } = await supabase.from("saved_posts").upsert({
-    user_id: user.id,
-    post_id: postId,
-  });
+  // Kiểm tra xem đã lưu chưa
+  const { data: existing } = await supabase
+    .from("saved_posts")
+    .select("id")
+    .eq("post_id", postId)
+    .eq("user_id", user.id)
+    .maybeSingle();
 
-  if (error) throw error;
-  return data;
+  if (existing) {
+    const { error } = await supabase
+      .from("saved_posts")
+      .delete()
+      .eq("id", existing.id);
+    if (error) throw error;
+    return { is_saved: false };
+  } else {
+    const { error } = await supabase.from("saved_posts").insert({
+      user_id: user.id,
+      post_id: postId,
+    });
+    if (error) throw error;
+    return { is_saved: true };
+  }
 };
 
 // REPORT POST

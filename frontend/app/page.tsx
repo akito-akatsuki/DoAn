@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import Navbar from "@/components/navbar";
 import ChatBox from "@/components/ChatBox";
 import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 
 import {
   Heart,
@@ -25,11 +25,12 @@ import {
   toggleLike,
   getComments,
   createComment,
-  savePost,
+  toggleSavePost,
   reportPost,
   deleteComment,
   updateComment,
 } from "@/lib/api";
+import { showConfirm } from "@/components/GlobalConfirm";
 
 export default function HomePage() {
   const router = useRouter();
@@ -63,6 +64,7 @@ export default function HomePage() {
   const [modalComments, setModalComments] = useState<any[]>([]);
   const [modalCommentText, setModalCommentText] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [openPostMenu, setOpenPostMenu] = useState(false);
 
   // ================= COMMENT MENUS & EDIT =================
   const [openCommentMenuId, setOpenCommentMenuId] = useState<string | null>(
@@ -120,6 +122,7 @@ export default function HomePage() {
         setOpenMenuId(null);
       }
       setOpenCommentMenuId(null); // Đóng menu bình luận khi bấm ra ngoài
+      setOpenPostMenu(false);
 
       if (
         isChatOpen &&
@@ -366,6 +369,7 @@ export default function HomePage() {
     setModalComments([]);
     setModalCommentText("");
     setShowEmojiPicker(false);
+    setOpenPostMenu(false);
   };
 
   const handleModalComment = async () => {
@@ -416,21 +420,22 @@ export default function HomePage() {
     postId: string,
     isModal = false,
   ) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa bình luận này?")) return;
-    try {
-      await deleteComment(commentId);
-      if (isModal) {
-        setModalComments((prev) => prev.filter((c) => c.id !== commentId));
+    showConfirm("Bạn có chắc chắn muốn xóa bình luận này?", async () => {
+      try {
+        await deleteComment(commentId);
+        if (isModal) {
+          setModalComments((prev) => prev.filter((c) => c.id !== commentId));
+        }
+        setCommentsMap((prev) => ({
+          ...prev,
+          [postId]: prev[postId]?.filter((c) => c.id !== commentId) || [],
+        }));
+        setOpenCommentMenuId(null);
+      } catch (err) {
+        console.error(err);
+        toast.error("Xóa bình luận thất bại.");
       }
-      setCommentsMap((prev) => ({
-        ...prev,
-        [postId]: prev[postId]?.filter((c) => c.id !== commentId) || [],
-      }));
-      setOpenCommentMenuId(null);
-    } catch (err) {
-      console.error(err);
-      alert("Xóa bình luận thất bại.");
-    }
+    });
   };
 
   // ================= EDIT COMMENT =================
@@ -456,7 +461,7 @@ export default function HomePage() {
       setOpenCommentMenuId(null);
     } catch (err) {
       console.error(err);
-      alert("Sửa bình luận thất bại.");
+      toast.error("Sửa bình luận thất bại.");
     }
   };
 
@@ -482,31 +487,45 @@ export default function HomePage() {
 
   // ================= DELETE POST =================
   const handleDeletePost = async (postId: string) => {
-    if (!confirm("Xóa bài viết này?")) return;
+    showConfirm("Bạn có chắc chắn muốn xóa bài viết này không?", async () => {
+      try {
+        // Gọi trực tiếp Supabase để xóa bài
+        const { error } = await supabase
+          .from("posts")
+          .delete()
+          .eq("id", postId);
+        if (error) throw error;
 
-    try {
-      // Gọi trực tiếp Supabase để xóa bài
-      const { error } = await supabase.from("posts").delete().eq("id", postId);
-      if (error) throw error;
-
-      // 🔥 update UI ngay
-      setPosts((prev) => prev.filter((p) => p.id !== postId));
-      setOpenMenuId(null);
-    } catch (err) {
-      console.error("DELETE ERROR:", err);
-      alert("Xóa bài viết thất bại.");
-    }
+        // 🔥 update UI ngay
+        setPosts((prev) => prev.filter((p) => p.id !== postId));
+        setOpenMenuId(null);
+      } catch (err) {
+        console.error("DELETE ERROR:", err);
+        toast.error("Xóa bài viết thất bại.");
+      }
+    });
   };
 
   // ================= SAVE POST =================
   const handleSavePost = async (postId: string) => {
     try {
-      await savePost(postId);
-      alert("Đã lưu bài viết thành công!");
+      const { is_saved } = await toggleSavePost(postId);
+      // Cập nhật lại UI cho bài viết ở ngoài trang chủ
+      setPosts((prev) =>
+        prev.map((p) => (p.id === postId ? { ...p, is_saved } : p)),
+      );
+      // Cập nhật lại UI nếu Modal đang bật
+      if (selectedPost && selectedPost.id === postId) {
+        setSelectedPost((prev: any) => ({ ...prev, is_saved }));
+      }
+      toast.success(
+        is_saved ? "Đã lưu bài viết thành công!" : "Đã bỏ lưu bài viết!",
+      );
       setOpenMenuId(null);
+      setOpenPostMenu(false);
     } catch (err) {
       console.error("SAVE POST ERROR:", err);
-      alert("Đã xảy ra lỗi khi lưu bài viết.");
+      toast.error("Đã xảy ra lỗi khi lưu bài viết.");
     }
   };
 
@@ -516,16 +535,16 @@ export default function HomePage() {
     if (!reason) return;
     try {
       await reportPost(postId, reason);
-      alert("Đã gửi báo cáo thành công!");
+      toast.success("Đã gửi báo cáo thành công!");
       setOpenMenuId(null);
     } catch (err) {
       console.error("REPORT POST ERROR:", err);
-      alert("Đã xảy ra lỗi khi báo cáo bài viết.");
+      toast.error("Đã xảy ra lỗi khi báo cáo bài viết.");
     }
   };
 
   return (
-    <div className="min-h-screen select-none transition-colors duration-500 bg-gray-50 dark:bg-neutral-900 text-gray-900 dark:text-gray-100">
+    <div className="min-h-screen transition-colors duration-500 bg-gray-50 dark:bg-neutral-900 text-gray-900 dark:text-gray-100">
       {" "}
       {/* select-none ở root để mượt hơn khi double click */}
       <main className="pt-24 max-w-[470px] mx-auto px-2 pb-24 md:pb-10">
@@ -547,7 +566,7 @@ export default function HomePage() {
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder={placeholder}
-                className="w-full text-base resize-none outline-none min-h-[80px] text-gray-900 dark:text-gray-100 font-semibold bg-transparent pt-1 select-text placeholder:text-gray-500 dark:placeholder:text-gray-400"
+                className="w-full text-base resize-none outline-none min-h-[80px] text-gray-900 dark:text-gray-100 font-semibold bg-transparent pt-1 placeholder:text-gray-500 dark:placeholder:text-gray-400"
                 rows={2}
               />
 
@@ -718,8 +737,11 @@ export default function HomePage() {
                         }}
                         className="flex items-center gap-3 px-4 py-2 hover:bg-secondary w-full text-sm font-semibold transition-all"
                       >
-                        <Bookmark size={18} />
-                        Lưu bài viết
+                        <Bookmark
+                          size={18}
+                          className={post.is_saved ? "fill-current" : ""}
+                        />
+                        {post.is_saved ? "Bỏ lưu bài viết" : "Lưu bài viết"}
                       </button>
 
                       <button
@@ -794,7 +816,7 @@ export default function HomePage() {
                 </div>
               ) : (
                 post.content && (
-                  <div className="px-4 pb-3 text-sm select-text whitespace-pre-wrap text-gray-700 dark:text-gray-300">
+                  <div className="px-4 pb-3 text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-300">
                     {post.content}
                   </div>
                 )
@@ -844,7 +866,7 @@ export default function HomePage() {
                 </p>
 
                 {/* COMMENTS SECTION */}
-                <div className="mt-2 space-y-1 select-text">
+                <div className="mt-2 space-y-1">
                   {/* Nút Xem tất cả bình luận nếu có nhiều hơn 1 */}
                   {commentsMap[post.id]?.length > 1 && (
                     <p
@@ -982,7 +1004,7 @@ export default function HomePage() {
                       }));
                     }}
                     onDoubleClick={(e) => e.stopPropagation()}
-                    className="flex-1 text-sm outline-none bg-transparent select-text placeholder:text-gray-500 dark:placeholder:text-gray-400"
+                    className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-500 dark:placeholder:text-gray-400"
                     placeholder="Thêm bình luận..."
                   />
                   {commentInput[post.id] && (
@@ -1036,18 +1058,80 @@ export default function HomePage() {
               {/* Header & Content */}
               <div className="flex flex-col border-b border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-[#333333]">
                 {/* Header */}
-                <div className="flex items-center gap-3 p-4 pb-2">
-                  <img
-                    src={
-                      selectedPost.users?.avatar_url ||
-                      `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPost.users?.id}`
-                    }
-                    className="w-10 h-10 rounded-full border object-cover"
-                    alt="avatar"
-                  />
-                  <span className="font-semibold text-sm">
-                    {selectedPost.users?.name || "Người dùng"}
-                  </span>
+                <div className="flex items-center justify-between p-4 pb-2 relative">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={
+                        selectedPost.users?.avatar_url ||
+                        `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPost.users?.id}`
+                      }
+                      className="w-10 h-10 rounded-full border object-cover"
+                      alt="avatar"
+                    />
+                    <span className="font-semibold text-sm">
+                      {selectedPost.users?.name || "Người dùng"}
+                    </span>
+                  </div>
+
+                  <div className="relative">
+                    <MoreHorizontal
+                      className="w-5 h-5 cursor-pointer text-gray-900 dark:text-gray-100 hover:text-gray-500 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenPostMenu(!openPostMenu);
+                      }}
+                    />
+                    {openPostMenu && (
+                      <div className="absolute right-0 mt-2 w-44 border border-gray-200 dark:border-neutral-700 rounded-xl shadow-xl dark:shadow-black/50 py-1 z-[100] transition-colors duration-500 bg-white dark:bg-[#333333]">
+                        <button
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleSavePost(selectedPost.id);
+                          }}
+                          className="flex items-center gap-3 px-4 py-2 hover:bg-secondary w-full text-sm font-semibold transition-all"
+                        >
+                          <Bookmark
+                            size={18}
+                            className={
+                              selectedPost.is_saved ? "fill-current" : ""
+                            }
+                          />
+                          {selectedPost.is_saved
+                            ? "Bỏ lưu bài viết"
+                            : "Lưu bài viết"}
+                        </button>
+
+                        <button
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleReportPost(selectedPost.id);
+                            setOpenPostMenu(false);
+                          }}
+                          className="flex items-center gap-3 px-4 py-2 hover:bg-secondary w-full text-sm font-semibold transition-all"
+                        >
+                          <Flag size={18} />
+                          Báo cáo
+                        </button>
+
+                        {user?.id === selectedPost.user_id && (
+                          <button
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              handleDeletePost(selectedPost.id);
+                              closeModal();
+                            }}
+                            className="flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-500/10 w-full text-sm font-semibold transition-all"
+                          >
+                            <Trash2 size={18} />
+                            Xóa bài viết
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Caption */}

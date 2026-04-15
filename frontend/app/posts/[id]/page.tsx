@@ -5,6 +5,7 @@ import { supabase } from "@/lib/supabaseClient";
 import { useParams } from "next/navigation";
 import { Heart, MessageCircle, MoreHorizontal } from "lucide-react";
 import Navbar from "@/components/navbar";
+import toast from "react-hot-toast";
 import { useRef } from "react";
 import {
   toggleLike as apiToggleLike,
@@ -12,6 +13,7 @@ import {
   deleteComment as apiDeleteComment,
   updateComment as apiUpdateComment,
 } from "@/lib/api";
+import { showConfirm } from "@/components/GlobalConfirm";
 
 export default function PostDetailPage() {
   const { id } = useParams();
@@ -213,19 +215,20 @@ export default function PostDetailPage() {
 
   // ================= DELETE COMMENT =================
   const handleDeleteComment = async (commentId: string) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa bình luận này?")) return;
-    try {
-      await apiDeleteComment(commentId);
+    showConfirm("Bạn có chắc chắn muốn xóa bình luận này?", async () => {
+      try {
+        await apiDeleteComment(commentId);
 
-      setComments((prev) => prev.filter((c) => c.id !== commentId));
-      setPost((prev: any) => ({
-        ...prev,
-        comments_count: Math.max(0, (prev.comments_count || 0) - 1),
-      }));
-    } catch (err) {
-      console.error(err);
-      alert("Xóa bình luận thất bại");
-    }
+        setComments((prev) => prev.filter((c) => c.id !== commentId));
+        setPost((prev: any) => ({
+          ...prev,
+          comments_count: Math.max(0, (prev.comments_count || 0) - 1),
+        }));
+      } catch (err) {
+        console.error(err);
+        toast.error("Xóa bình luận thất bại");
+      }
+    });
   };
 
   // ================= EDIT COMMENT =================
@@ -240,7 +243,7 @@ export default function PostDetailPage() {
       setEditingCommentId(null);
     } catch (err) {
       console.error(err);
-      alert("Sửa bình luận thất bại");
+      toast.error("Sửa bình luận thất bại");
     }
   };
 

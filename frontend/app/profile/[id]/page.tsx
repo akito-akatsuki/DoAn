@@ -2,8 +2,7 @@
 
 import { use, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import Navbar from "@/components/navbar";
-import Link from "next/link";
+import toast from "react-hot-toast";
 import { Heart, MoreHorizontal, X, Trash2, Smile } from "lucide-react";
 import { useRef } from "react";
 import {
@@ -13,6 +12,7 @@ import {
   updateComment,
   toggleLike,
 } from "@/lib/api";
+import { showConfirm } from "@/components/GlobalConfirm";
 
 type UserProfile = {
   id: string;
@@ -269,14 +269,16 @@ export default function ProfilePage({
   };
 
   const handleDeleteComment = async (commentId: string) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa bình luận này?")) return;
-    try {
-      await deleteComment(commentId);
-      setModalComments((prev) => prev.filter((c) => c.id !== commentId));
-      setOpenCommentMenuId(null);
-    } catch (err) {
-      console.error(err);
-    }
+    showConfirm("Bạn có chắc chắn muốn xóa bình luận này?", async () => {
+      try {
+        await deleteComment(commentId);
+        setModalComments((prev) => prev.filter((c) => c.id !== commentId));
+        setOpenCommentMenuId(null);
+      } catch (err) {
+        console.error(err);
+        toast.error("Xóa bình luận thất bại.");
+      }
+    });
   };
 
   const submitEditComment = async (commentId: string) => {
@@ -295,17 +297,21 @@ export default function ProfilePage({
 
   // ================= DELETE POST =================
   const handleDeletePost = async (postId: string) => {
-    if (!confirm("Xóa bài viết này?")) return;
-    try {
-      const { error } = await supabase.from("posts").delete().eq("id", postId);
-      if (error) throw error;
+    showConfirm("Bạn có chắc chắn muốn xóa bài viết này?", async () => {
+      try {
+        const { error } = await supabase
+          .from("posts")
+          .delete()
+          .eq("id", postId);
+        if (error) throw error;
 
-      setPosts((prev) => prev.filter((p) => p.id !== postId));
-      closeModal();
-    } catch (err) {
-      console.error("DELETE ERROR:", err);
-      alert("Xóa bài viết thất bại.");
-    }
+        setPosts((prev) => prev.filter((p) => p.id !== postId));
+        closeModal();
+      } catch (err) {
+        console.error("DELETE ERROR:", err);
+        toast.error("Xóa bài viết thất bại.");
+      }
+    });
   };
 
   // ================= EDIT PROFILE HANDLERS =================
@@ -356,7 +362,9 @@ export default function ProfilePage({
       setIsEditProfileOpen(false);
     } catch (err) {
       console.error(err);
-      alert("Lỗi khi lưu thông tin. Hãy kiểm tra quyền (RLS) của bảng users.");
+      toast.error(
+        "Lỗi khi lưu thông tin. Hãy kiểm tra quyền (RLS) của bảng users.",
+      );
     } finally {
       setIsSavingProfile(false);
     }
@@ -381,8 +389,6 @@ export default function ProfilePage({
 
   return (
     <div className="min-h-screen text-gray-900 dark:text-gray-100 transition-colors duration-500 bg-gray-50 dark:bg-neutral-900">
-      {/* 🔥 NAVBAR ADDED */}
-
       <div className="max-w-[935px] mx-auto pt-24 px-4 pb-24 md:pb-10">
         {/* ================= HEADER ================= */}
         <div className="flex items-center gap-8 border-b border-gray-200 dark:border-neutral-800 pb-8">

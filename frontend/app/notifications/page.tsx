@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import toast from "react-hot-toast";
 import ChatBox from "@/components/ChatBox";
 import {
   Heart,
@@ -20,6 +21,7 @@ import {
   updateComment,
   toggleLike,
 } from "@/lib/api";
+import { showConfirm } from "@/components/GlobalConfirm";
 
 export default function NotificationsPage() {
   const [user, setUser] = useState<any>(null);
@@ -159,7 +161,7 @@ export default function NotificationsPage() {
         .single();
 
       if (error || !postData) {
-        alert("Bài viết này không tồn tại hoặc đã bị xóa!");
+        toast.error("Bài viết này không tồn tại hoặc đã bị xóa!");
         return;
       }
 
@@ -194,7 +196,7 @@ export default function NotificationsPage() {
       setModalComments(commentsData);
     } catch (err) {
       console.error("Lỗi mở modal:", err);
-      alert("Đã xảy ra lỗi khi tải bài viết.");
+      toast.error("Đã xảy ra lỗi khi tải bài viết.");
     }
   };
 
@@ -272,15 +274,16 @@ export default function NotificationsPage() {
   };
 
   const handleDeleteComment = async (commentId: string) => {
-    if (!confirm("Bạn có chắc chắn muốn xóa bình luận này?")) return;
-    try {
-      await deleteComment(commentId);
-      setModalComments((prev) => prev.filter((c) => c.id !== commentId));
-      setOpenCommentMenuId(null);
-    } catch (err) {
-      console.error(err);
-      alert("Xóa bình luận thất bại.");
-    }
+    showConfirm("Bạn có chắc chắn muốn xóa bình luận này?", async () => {
+      try {
+        await deleteComment(commentId);
+        setModalComments((prev) => prev.filter((c) => c.id !== commentId));
+        setOpenCommentMenuId(null);
+      } catch (err) {
+        console.error(err);
+        toast.error("Xóa bình luận thất bại.");
+      }
+    });
   };
 
   const submitEditComment = async (commentId: string) => {
@@ -294,7 +297,7 @@ export default function NotificationsPage() {
       setOpenCommentMenuId(null);
     } catch (err) {
       console.error(err);
-      alert("Sửa bình luận thất bại.");
+      toast.error("Sửa bình luận thất bại.");
     }
   };
 

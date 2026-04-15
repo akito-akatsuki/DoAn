@@ -32,7 +32,24 @@ export default function Navbar({ user: propUser }: any) {
 
   // ================= THEME =================
   useEffect(() => {
-    setIsDark(document.documentElement.classList.contains("dark"));
+    // Ưu tiên đọc từ localStorage (client-side persistence)
+    const savedTheme = localStorage.getItem("theme");
+    let initialIsDark = false;
+
+    if (savedTheme !== null) {
+      initialIsDark = savedTheme === "dark";
+    } else {
+      // Nếu không có trong localStorage, kiểm tra class 'dark' do SSR đặt
+      initialIsDark = document.documentElement.classList.contains("dark");
+    }
+
+    setIsDark(initialIsDark);
+    const root = document.documentElement;
+    if (initialIsDark) {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
 
     const fetchUser = async () => {
       if (propUser) {
@@ -237,7 +254,7 @@ export default function Navbar({ user: propUser }: any) {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search user..."
+            placeholder="Tìm kiếm "
             className="w-[215px] bg-secondary border border-gray-200 dark:border-neutral-700 shadow-inner px-4 py-[10px] rounded-full text-sm outline-none focus:bg-white dark:focus:bg-[#262626] transition-colors placeholder:text-muted-foreground text-gray-900 dark:text-gray-100 font-medium"
           />
 
