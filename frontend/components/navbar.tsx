@@ -48,6 +48,11 @@ export default function Navbar({ user: propUser }: any) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [changePasswordLoading, setChangePasswordLoading] = useState(false);
 
+  // Kiểm tra user đã có mật khẩu chưa (Dựa vào provider gốc hoặc cờ has_password)
+  const hasPasswordSet =
+    user?.app_metadata?.providers?.includes("email") ||
+    user?.user_metadata?.has_password;
+
   const handleChangePasswordSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
@@ -56,34 +61,40 @@ export default function Navbar({ user: propUser }: any) {
     }
     setChangePasswordLoading(true);
 
-    // 1. Xác thực mật khẩu cũ
-    const { error: verifyError } = await supabase.auth.signInWithPassword({
-      email: user.email,
-      password: oldPassword,
-    });
+    if (hasPasswordSet) {
+      // 1. Xác thực mật khẩu cũ
+      const { error: verifyError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: oldPassword,
+      });
 
-    if (verifyError) {
-      setChangePasswordLoading(false);
-      toast.error(
-        "Mật khẩu hiện tại không đúng (hoặc bạn đang đăng nhập bằng Google).",
-      );
-      return;
+      if (verifyError) {
+        setChangePasswordLoading(false);
+        toast.error("Mật khẩu hiện tại không đúng.");
+        return;
+      }
     }
 
-    // 2. Đổi mật khẩu mới
+    // 2. Đổi/Tạo mật khẩu mới
     const { error: updateError } = await supabase.auth.updateUser({
       password: newPassword,
+      data: { has_password: true }, // Lưu cờ để hệ thống nhận diện
     });
 
     setChangePasswordLoading(false);
     if (updateError) {
       toast.error(updateError.message || "Đổi mật khẩu thất bại.");
     } else {
-      toast.success("Đổi mật khẩu thành công!");
+      toast.success(
+        hasPasswordSet
+          ? "Đổi mật khẩu thành công!"
+          : "Tạo mật khẩu thành công! Giờ bạn có thể đăng nhập bằng Email.",
+      );
       setShowChangePasswordPopup(false);
       setOldPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      window.location.reload(); // Tải lại để hệ thống nhận diện cập nhật mới
     }
   };
 
@@ -542,7 +553,30 @@ export default function Navbar({ user: propUser }: any) {
                       Tạo Fanpage
                     </button>
 
-                    {user?.app_metadata?.provider !== "google" && (
+                    {/* NÚT LIÊN KẾT GOOGLE (Chỉ hiện nếu tài khoản chưa liên kết Google) */}
+                    {user?.app_metadata?.providers &&
+                      !user.app_metadata.providers.includes("google") && (
+                        <button
+                          onClick={async () => {
+                            setOpen(false);
+                            const { error } = await supabase.auth.linkIdentity({
+                              provider: "google",
+                              options: { redirectTo: window.location.origin },
+                            });
+                            if (error) {
+                              toast.error(
+                                "Liên kết thất bại: " + error.message,
+                              );
+                            }
+                          }}
+                          className="w-full text-left px-3 py-2 hover:bg-secondary transition-colors text-blue-500 font-semibold"
+                        >
+                          Liên kết Google
+                        </button>
+                      )}
+
+                    {/* Nếu ĐÃ CÓ mật khẩu (dù là nick Google hay Email) */}
+                    {hasPasswordSet ? (
                       <button
                         onClick={() => {
                           setOpen(false);
@@ -551,6 +585,16 @@ export default function Navbar({ user: propUser }: any) {
                         className="w-full text-left px-3 py-2 hover:bg-secondary transition-colors"
                       >
                         Đổi mật khẩu
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setOpen(false);
+                          setShowChangePasswordPopup(true);
+                        }}
+                        className="w-full text-left px-3 py-2 hover:bg-secondary transition-colors"
+                      >
+                        Tạo mật khẩu
                       </button>
                     )}
 
@@ -801,10 +845,12 @@ export default function Navbar({ user: propUser }: any) {
           >
             <div className="p-6 text-center pb-4">
               <h3 className="text-[18px] font-bold text-gray-900 dark:text-gray-100 mb-1">
-                Đổi mật khẩu
+                {hasPasswordSet ? "Đổi mật khẩu" : "Tạo mật khẩu"}
               </h3>
               <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">
-                Vui lòng nhập mật khẩu hiện tại và mật khẩu mới của bạn.
+                {hasPasswordSet
+                  ? "Vui lòng nhập mật khẩu hiện tại và mật khẩu mới của bạn."
+                  : "Vui lòng tạo một mật khẩu để có thể đăng nhập bằng Email."}
               </p>
             </div>
 
@@ -812,17 +858,19 @@ export default function Navbar({ user: propUser }: any) {
               onSubmit={handleChangePasswordSubmit}
               className="px-6 pb-4 flex flex-col gap-3"
             >
+              {hasPasswordSet && (
+                <input
+                  type="password"
+                  placeholder="Mật khẩu hiện tại"
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                  required
+                  className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors text-sm"
+                />
+              )}
               <input
                 type="password"
-                placeholder="Mật khẩu hiện tại"
-                value={oldPassword}
-                onChange={(e) => setOldPassword(e.target.value)}
-                required
-                className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors text-sm"
-              />
-              <input
-                type="password"
-                placeholder="Mật khẩu mới"
+                placeholder={hasPasswordSet ? "Mật khẩu mới" : "Nhập mật khẩu"}
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 required
@@ -831,7 +879,9 @@ export default function Navbar({ user: propUser }: any) {
               />
               <input
                 type="password"
-                placeholder="Nhập lại mật khẩu mới"
+                placeholder={
+                  hasPasswordSet ? "Nhập lại mật khẩu mới" : "Xác nhận mật khẩu"
+                }
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
@@ -843,7 +893,11 @@ export default function Navbar({ user: propUser }: any) {
                 disabled={changePasswordLoading}
                 className="w-full bg-blue-500 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-600 transition disabled:opacity-50 text-sm mt-2"
               >
-                {changePasswordLoading ? "Đang xử lý..." : "Cập nhật mật khẩu"}
+                {changePasswordLoading
+                  ? "Đang xử lý..."
+                  : hasPasswordSet
+                    ? "Cập nhật mật khẩu"
+                    : "Tạo mật khẩu"}
               </button>
             </form>
 
