@@ -25,6 +25,12 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
   const [results, setResults] = useState<any[]>([]);
   const [conversations, setConversations] = useState<any[]>([]);
 
+  const [isTyping, setIsTyping] = useState(false);
+  const typingChannelRef = useRef<any>(null);
+  const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const lastTypingTimeRef = useRef(0);
+  const receiveTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // ================= SMOOTH SCROLL (FIX LAG) =================
@@ -34,7 +40,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
     requestAnimationFrame(() => {
       scrollRef.current!.scrollTop = scrollRef.current!.scrollHeight;
     });
-  }, [messages.length]);
+  }, [messages.length, isTyping]);
 
   // ================= REALTIME (FIX DUPLICATE + STABLE) =================
   useEffect(() => {
@@ -45,18 +51,26 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
       .on(
         "postgres_changes",
         {
-          event: "INSERT",
+          event: "*",
           schema: "public",
           table: "messages",
         },
         (payload) => {
-          const newMsg = payload.new;
-          // Tự filter bằng client để luôn nhận được event (vượt qua lỗi RLS của Supabase)
-          if (newMsg.conversation_id === conversationId) {
-            setMessages((prev) => {
-              if (prev.some((m) => m.id === newMsg.id)) return prev;
-              return [...prev, newMsg];
-            });
+          if (payload.eventType === "INSERT") {
+            const newMsg = payload.new as any;
+            if (newMsg.conversation_id === conversationId) {
+              setMessages((prev) => {
+                if (prev.some((m) => m.id === newMsg.id)) return prev;
+                return [...prev, newMsg];
+              });
+            }
+          } else if (payload.eventType === "UPDATE") {
+            const updatedMsg = payload.new as any;
+            if (updatedMsg.conversation_id === conversationId) {
+              setMessages((prev) =>
+                prev.map((m) => (m.id === updatedMsg.id ? updatedMsg : m)),
+              );
+            }
           }
         },
       )
@@ -66,6 +80,52 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
       supabase.removeChannel(channel);
     };
   }, [conversationId]);
+
+  // ================= BROADCAST (TYPING INDICATOR) =================
+  useEffect(() => {
+    if (!conversationId || !userId) return;
+
+    const typingChannel = supabase.channel(`typing_${conversationId}`);
+    typingChannelRef.current = typingChannel;
+
+    typingChannel
+      .on("broadcast", { event: "typing" }, (payload) => {
+        const { isTyping: remoteIsTyping, senderId } = payload.payload;
+        if (senderId !== userId) {
+          setIsTyping(remoteIsTyping);
+          if (receiveTypingTimeoutRef.current)
+            clearTimeout(receiveTypingTimeoutRef.current);
+          if (remoteIsTyping) {
+            receiveTypingTimeoutRef.current = setTimeout(
+              () => setIsTyping(false),
+              3000,
+            );
+          }
+        }
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(typingChannel);
+    };
+  }, [conversationId, userId]);
+
+  // ================= READ RECEIPTS (ĐÃ XEM) =================
+  useEffect(() => {
+    if (!conversationId || !userId || messages.length === 0) return;
+
+    const unreadMsgs = messages.filter(
+      (m) => m.sender_id !== userId && !m.is_read,
+    );
+
+    if (unreadMsgs.length > 0) {
+      const ids = unreadMsgs.map((m) => m.id);
+      supabase.from("messages").update({ is_read: true }).in("id", ids).then();
+      setMessages((prev) =>
+        prev.map((m) => (ids.includes(m.id) ? { ...m, is_read: true } : m)),
+      );
+    }
+  }, [messages, conversationId, userId]);
 
   // ================= LOAD CONVERSATIONS (OPTIMIZED) =================
   const loadConversations = useCallback(async () => {
@@ -222,6 +282,17 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
     } catch (err) {
       console.error(err);
     }
+
+    // Tắt trạng thái typing ngay khi vừa gửi tin nhắn
+    if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+    if (typingChannelRef.current) {
+      typingChannelRef.current.send({
+        type: "broadcast",
+        event: "typing",
+        payload: { isTyping: false, senderId: userId },
+      });
+    }
+    lastTypingTimeRef.current = 0;
   };
 
   return (
@@ -306,20 +377,36 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
             ))}
           </>
         ) : (
-          messages.map((m) => (
-            <div
-              key={m.id}
-              className={`flex ${m.sender_id === userId ? "justify-end" : "justify-start"}`}
-            >
-              <div
-                className={`px-3 py-2 rounded-2xl text-sm max-w-[75%]
+          <>
+            {messages.map((m, index) => {
+              const isLastMessage = index === messages.length - 1;
+              return (
+                <div key={m.id} className="flex flex-col">
+                  <div
+                    className={`flex ${m.sender_id === userId ? "justify-end" : "justify-start"}`}
+                  >
+                    <div
+                      className={`px-3 py-2 rounded-2xl text-sm max-w-[75%] break-words
                 ${m.sender_id === userId ? "bg-blue-500 text-white shadow-sm" : "bg-gray-100 dark:bg-[#333333] border border-transparent dark:border-neutral-700 text-gray-900 dark:text-gray-100 shadow-sm"}
               `}
-              >
-                {m.content}
+                    >
+                      {m.content}
+                    </div>
+                  </div>
+                  {m.sender_id === userId && m.is_read && isLastMessage && (
+                    <span className="text-[10px] text-muted-foreground text-right mt-1 pr-1">
+                      Đã xem
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+            {isTyping && (
+              <div className="text-xs text-muted-foreground italic ml-2 mt-1">
+                {targetUser?.name} đang soạn tin...
               </div>
-            </div>
-          ))
+            )}
+          </>
         )}
       </div>
 
@@ -328,7 +415,42 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
         <div className="p-3 border-t border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#262626] flex gap-2 transition-colors duration-500 shadow-[0_-2px_10px_rgba(0,0,0,0.02)] dark:shadow-black/20">
           <input
             value={text}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => {
+              setText(e.target.value);
+              // Bắn sự kiện đang gõ phím
+              if (typingChannelRef.current) {
+                if (e.target.value === "") {
+                  if (typingTimeoutRef.current)
+                    clearTimeout(typingTimeoutRef.current);
+                  typingChannelRef.current.send({
+                    type: "broadcast",
+                    event: "typing",
+                    payload: { isTyping: false, senderId: userId },
+                  });
+                  lastTypingTimeRef.current = 0;
+                } else {
+                  const now = Date.now();
+                  if (now - lastTypingTimeRef.current > 1000) {
+                    typingChannelRef.current.send({
+                      type: "broadcast",
+                      event: "typing",
+                      payload: { isTyping: true, senderId: userId },
+                    });
+                    lastTypingTimeRef.current = now;
+                  }
+                  if (typingTimeoutRef.current)
+                    clearTimeout(typingTimeoutRef.current);
+                  typingTimeoutRef.current = setTimeout(() => {
+                    typingChannelRef.current?.send({
+                      type: "broadcast",
+                      event: "typing",
+                      payload: { isTyping: false, senderId: userId },
+                    });
+                    lastTypingTimeRef.current = 0;
+                  }, 2000);
+                }
+              }
+            }}
             onKeyDown={(e) => e.key === "Enter" && handleSend()}
             className="flex-1 border border-gray-200 dark:border-neutral-700 shadow-inner bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] text-gray-900 dark:text-gray-100 transition-colors outline-none rounded-xl px-3 py-2 text-sm placeholder:text-gray-500 dark:placeholder:text-gray-400"
             placeholder="Nhập tin nhắn..."

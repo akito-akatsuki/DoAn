@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
-import { Heart, MoreHorizontal, X, Trash2, Smile } from "lucide-react";
+import { Heart, MoreHorizontal, X, Trash2, Smile, Flag } from "lucide-react";
 import { useRef } from "react";
 import {
   getComments,
@@ -11,6 +11,7 @@ import {
   deleteComment,
   updateComment,
   toggleLike,
+  reportPost,
 } from "@/lib/api";
 import { showConfirm } from "@/components/GlobalConfirm";
 
@@ -48,6 +49,10 @@ export default function ProfilePage({
   const [openPostMenu, setOpenPostMenu] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState("");
+
+  // ================= REPORT POST =================
+  const [reportPostId, setReportPostId] = useState<string | null>(null);
+  const [reportReason, setReportReason] = useState("");
 
   // ================= EDIT PROFILE STATES =================
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
@@ -279,6 +284,25 @@ export default function ProfilePage({
         toast.error("Xóa bình luận thất bại.");
       }
     });
+  };
+
+  const handleReportPost = (postId: string) => {
+    setReportPostId(postId);
+    setReportReason("");
+    setOpenPostMenu(false);
+  };
+
+  const submitReport = async () => {
+    if (!reportPostId || !reportReason.trim()) return;
+    try {
+      await reportPost(reportPostId, reportReason);
+      toast.success("Đã gửi báo cáo thành công!");
+      setReportPostId(null);
+      setReportReason("");
+    } catch (err) {
+      console.error("REPORT POST ERROR:", err);
+      toast.error("Đã xảy ra lỗi khi báo cáo bài viết.");
+    }
   };
 
   const submitEditComment = async (commentId: string) => {
@@ -835,6 +859,60 @@ export default function ProfilePage({
                 className="px-4 py-2 rounded-lg font-semibold text-sm bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 transition-colors"
               >
                 {isSavingProfile ? "Đang lưu..." : "Lưu thay đổi"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL REPORT POST ================= */}
+      {reportPostId && (
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4 animate-in fade-in duration-200"
+          onClick={() => setReportPostId(null)}
+        >
+          <div
+            className="bg-white dark:bg-[#262626] rounded-2xl shadow-2xl w-full max-w-[400px] overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-200 dark:border-neutral-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                Báo cáo bài viết
+              </h3>
+              <button
+                onClick={() => setReportPostId(null)}
+                className="hover:text-gray-500 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Vui lòng nhập lý do báo cáo bài viết này. Quản trị viên sẽ xem
+                xét báo cáo của bạn.
+              </p>
+              <textarea
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                placeholder="Ví dụ: Nội dung phản cảm, spam..."
+                className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none transition-colors resize-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] text-sm text-gray-900 dark:text-gray-100"
+                rows={4}
+                autoFocus
+              />
+            </div>
+            <div className="p-4 border-t border-gray-200 dark:border-neutral-800 flex justify-end gap-2">
+              <button
+                className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#333333] transition-colors rounded-lg"
+                onClick={() => setReportPostId(null)}
+              >
+                Hủy
+              </button>
+              <button
+                className="px-4 py-2 text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition-colors rounded-lg disabled:opacity-50"
+                onClick={submitReport}
+                disabled={!reportReason.trim()}
+              >
+                Gửi báo cáo
               </button>
             </div>
           </div>

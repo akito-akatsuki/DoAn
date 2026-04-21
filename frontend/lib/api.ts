@@ -12,36 +12,53 @@ const handleError = (error: any, label: string) => {
    GET FEED
 ========================= */
 export const getFeed = async () => {
-  const { data, error } = await supabase
-    .from("posts")
-    .select(
-      `
-      *,
-      users (
-        id,
-        name,
-        avatar_url
-      )
-    `,
-    )
-    .order("created_at", { ascending: false });
-
-  if (error) handleError(error, "getFeed");
-
   const { data: userData } = await supabase.auth.getUser();
-  const userId = userData.user?.id;
+  const userId = userData.user?.id || null;
 
-  if (userId && data) {
-    const { data: savedPosts } = await supabase
-      .from("saved_posts")
-      .select("post_id")
-      .eq("user_id", userId);
+  // 1. Gọi RPC tính điểm Hot Score (Thuật toán gợi ý)
+  const { data, error } = await supabase.rpc("get_hot_feed", {
+    current_user_id: userId,
+  });
 
-    const savedSet = new Set(savedPosts?.map((s) => s.post_id) || []);
+  // Nếu bị lỗi (do bạn chưa tạo Function SQL), tự động Fallback về cách lấy cũ an toàn
+  if (error) {
+    console.warn(
+      "Chưa tìm thấy hàm get_hot_feed trên Supabase, fallback lấy bài viết mới nhất...",
+      error.message,
+    );
+    const { data: fallbackData, error: fallbackError } = await supabase
+      .from("posts")
+      .select("*, users (id, name, avatar_url)")
+      .order("created_at", { ascending: false });
 
-    return data.map((post) => ({
+    if (fallbackError) handleError(fallbackError, "getFeed fallback");
+
+    if (userId && fallbackData) {
+      const { data: savedPosts } = await supabase
+        .from("saved_posts")
+        .select("post_id")
+        .eq("user_id", userId);
+      const savedSet = new Set(savedPosts?.map((s) => s.post_id) || []);
+      return fallbackData.map((post) => ({
+        ...post,
+        is_saved: savedSet.has(post.id),
+      }));
+    }
+    return fallbackData;
+  }
+
+  // 2. Vì Hàm SQL (RPC) chưa trả về relation `users`, ta tự fetch `users` và nối vào
+  if (data && data.length > 0) {
+    const userIds = Array.from(new Set(data.map((p: any) => p.user_id)));
+    const { data: usersInfo } = await supabase
+      .from("users")
+      .select("id, name, avatar_url")
+      .in("id", userIds);
+
+    const userMap = new Map((usersInfo || []).map((u) => [u.id, u]));
+    return data.map((post: any) => ({
       ...post,
-      is_saved: savedSet.has(post.id),
+      users: userMap.get(post.user_id) || null,
     }));
   }
 
@@ -54,6 +71,7 @@ export const getFeed = async () => {
 export const createPost = async (payload: {
   content: string;
   image_url?: string | null;
+  is_flagged?: boolean;
 }) => {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
@@ -66,6 +84,7 @@ export const createPost = async (payload: {
       content: payload.content,
       image_url: payload.image_url ?? null,
       user_id: user.id,
+      is_flagged: payload.is_flagged ?? false,
     })
     .select(
       `

@@ -12,6 +12,7 @@ import {
   PlusCircle,
   Bookmark,
   Search,
+  Users,
 } from "lucide-react";
 
 export default function Navbar({ user: propUser }: any) {
@@ -227,6 +228,7 @@ export default function Navbar({ user: propUser }: any) {
   // ================= CẤU HÌNH TABS CHO ANIMATION TRƯỢT =================
   const desktopTabs = [
     { path: "/", icon: Home },
+    { path: "/suggested", icon: Users },
     { path: "/messages", icon: MessageCircle },
     { path: "/notifications", icon: Heart },
     { path: "/saved", icon: Bookmark },
@@ -238,6 +240,7 @@ export default function Navbar({ user: propUser }: any) {
   const mobileTabs = [
     { path: "/", icon: Home },
     { path: "/search", icon: Search },
+    { path: "/suggested", icon: Users },
     { path: "/messages", icon: MessageCircle },
     { path: "/saved", icon: Bookmark },
     { path: "/notifications", icon: Heart },
@@ -399,7 +402,7 @@ export default function Navbar({ user: propUser }: any) {
             <div
               className="absolute top-0 bottom-0 flex items-center justify-center transition-transform duration-300 ease-out pointer-events-none"
               style={{
-                width: "20%",
+                width: `${100 / mobileTabs.length}%`,
                 transform: `translateX(${mobileActiveIndex * 100}%)`,
               }}
             >

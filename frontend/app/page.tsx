@@ -77,6 +77,12 @@ export default function HomePage() {
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editPostContent, setEditPostContent] = useState("");
 
+  // ================= REPORT POST =================
+  const [reportPostId, setReportPostId] = useState<string | null>(null);
+  const [reportReason, setReportReason] = useState("");
+
+  const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
+
   // ================= INIT =================
   useEffect(() => {
     // Kích hoạt scroll mượt toàn trang
@@ -94,8 +100,12 @@ export default function HomePage() {
       placeholders[Math.floor(Math.random() * placeholders.length)],
     );
 
-    loadUser();
-    loadFeed();
+    // Gọi tuần tự để tránh lỗi kẹt (deadlock) của Supabase khi tải lại trang
+    const init = async () => {
+      await loadUser();
+      await loadFeed();
+    };
+    init();
 
     const channel = supabase
       .channel("posts")
@@ -108,6 +118,24 @@ export default function HomePage() {
 
     return () => {
       supabase.removeChannel(channel);
+    };
+  }, []);
+
+  // ================= XỬ LÝ LỖI "URL STALE" (Xóa hash sau khi đăng nhập) =================
+  useEffect(() => {
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (
+        event === "SIGNED_IN" &&
+        window.location.hash.includes("access_token")
+      ) {
+        // Sử dụng History API gốc thay vì router.replace để tránh lỗi Next.js chưa khởi tạo
+        window.history.replaceState(null, "", window.location.pathname);
+      }
+    });
+    return () => {
+      subscription.unsubscribe();
     };
   }, []);
 
@@ -159,10 +187,23 @@ export default function HomePage() {
           .eq("id", data.user.id)
           .single();
         setUser({ ...data.user, ...dbUser });
+
+        // Tải danh sách Gợi ý kết bạn (hiển thị 5 người khác mình)
+        const { data: suggestions } = await supabase
+          .from("users")
+          .select("id, name, avatar_url")
+          .neq("id", data.user.id)
+          .limit(5);
+        if (suggestions) setSuggestedUsers(suggestions);
       }
     } catch (err) {
       console.error("Lỗi mạng khi tải user ở Home:", err);
     }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.reload();
   };
 
   const loadFeed = async () => {
@@ -530,13 +571,20 @@ export default function HomePage() {
   };
 
   // ================= REPORT POST =================
-  const handleReportPost = async (postId: string) => {
-    const reason = prompt("Vui lòng nhập lý do báo cáo bài viết này:");
-    if (!reason) return;
+  const handleReportPost = (postId: string) => {
+    setReportPostId(postId);
+    setReportReason("");
+    setOpenMenuId(null);
+    setOpenPostMenu(false);
+  };
+
+  const submitReport = async () => {
+    if (!reportPostId || !reportReason.trim()) return;
     try {
-      await reportPost(postId, reason);
+      await reportPost(reportPostId, reportReason);
       toast.success("Đã gửi báo cáo thành công!");
-      setOpenMenuId(null);
+      setReportPostId(null);
+      setReportReason("");
     } catch (err) {
       console.error("REPORT POST ERROR:", err);
       toast.error("Đã xảy ra lỗi khi báo cáo bài viết.");
@@ -547,478 +595,635 @@ export default function HomePage() {
     <div className="min-h-screen transition-colors duration-500 bg-gray-50 dark:bg-neutral-900 text-gray-900 dark:text-gray-100">
       {" "}
       {/* select-none ở root để mượt hơn khi double click */}
-      <main className="pt-24 max-w-[470px] mx-auto px-2 pb-24 md:pb-10">
-        {/* CREATE POST */}
-        <div className="shadow-md hover:shadow-lg dark:shadow-black/40 rounded-[12px] p-4 mb-4 border border-gray-200 dark:border-neutral-800 transition-all duration-500 bg-white dark:bg-[#262626]">
-          <div className="flex items-start gap-4">
-            <img
-              src={
-                user?.avatar_url ||
-                user?.user_metadata?.avatar_url ||
-                `https://api.dicebear.com/7.x/identicon/svg?seed=${user?.id}`
-              }
-              className="w-10 h-10 rounded-full ring-1 ring-border flex-shrink-0 mt-1 cursor-pointer hover:opacity-80 transition-opacity"
-              onClick={() => router.push(`/profile/${user?.id}`)}
-              alt="Your avatar"
-            />
-            <div className="flex-1 min-w-0">
-              <textarea
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                placeholder={placeholder}
-                className="w-full text-base resize-none outline-none min-h-[80px] text-gray-900 dark:text-gray-100 font-semibold bg-transparent pt-1 placeholder:text-gray-500 dark:placeholder:text-gray-400"
-                rows={2}
-              />
-
-              {/* IMAGE PREVIEW */}
-              {file && (
-                <div className="relative mb-3 inline-block mt-2">
-                  <img
-                    src={URL.createObjectURL(file)}
-                    alt="Preview"
-                    className="max-h-48 rounded-lg object-contain border border-border shadow-sm"
-                  />
-                  <button
-                    onClick={() => setFile(null)}
-                    className="absolute -top-2 -right-2 bg-white dark:bg-[#262626] border border-gray-200 dark:border-neutral-700 text-gray-900 dark:text-gray-100 rounded-full p-1 shadow-md hover:bg-secondary transition-colors z-10"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-              <div className="flex items-center justify-between pt-1">
-                <label className="flex items-center gap-1 text-primary text-sm cursor-pointer hover:underline">
-                  📷 Ảnh
-                  <input
-                    type="file"
-                    onChange={(e) => setFile(e.target.files?.[0] || null)}
-                    className="hidden"
-                    accept="image/*"
-                  />
-                </label>
-                <button
-                  onClick={async () => {
-                    if (!content && !file) return;
-
-                    try {
-                      let imageUrl = null;
-
-                      // ================= UPLOAD IMAGE =================
-                      if (file) {
-                        const cleanName = file.name.replace(
-                          /[^a-zA-Z0-9.]/g,
-                          "_",
-                        );
-                        const fileName = `${Date.now()}_${cleanName}`;
-
-                        const { error: uploadError } = await supabase.storage
-                          .from("posts")
-                          .upload(fileName, file);
-
-                        if (uploadError) {
-                          console.error("UPLOAD ERROR:", uploadError.message);
-                          return;
-                        }
-
-                        const { data } = supabase.storage
-                          .from("posts")
-                          .getPublicUrl(fileName);
-
-                        imageUrl = data.publicUrl;
-                      }
-
-                      // ================= CREATE POST =================
-                      const newPost = await createPost({
-                        content,
-                        image_url: imageUrl,
-                      });
-
-                      if (!newPost) {
-                        console.error("CREATE POST FAILED");
-                        return;
-                      }
-
-                      // ================= UPDATE UI =================
-                      setPosts((prev) => [newPost, ...prev]);
-
-                      // ================= RESET =================
-                      setContent("");
-                      setFile(null);
-                    } catch (err) {
-                      console.error("POST ERROR:", err);
-                    }
-                  }}
-                  disabled={!content && !file}
-                  className="bg-gradient-to-r from-primary to-accent text-primary-fg px-5 py-1.5 rounded-full font-semibold text-sm shadow-ig hover:brightness-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+      <main className="pt-24 max-w-[1200px] mx-auto px-4 pb-24 md:pb-10 flex justify-center gap-8">
+        {/* ================= CỘT TRÁI: THÔNG TIN ================= */}
+        <div className="hidden xl:flex w-[320px] shrink-0 justify-end items-start">
+          <div className="sticky top-[100px] w-[240px] h-fit">
+            <div className="text-[13px] text-muted-foreground space-y-4">
+              <div className="flex flex-col gap-y-4 font-medium">
+                <a
+                  href="#"
+                  className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
                 >
-                  Đăng
-                </button>
+                  Giới thiệu
+                </a>
+                <a
+                  href="#"
+                  className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                >
+                  Trợ giúp
+                </a>
+                <a
+                  href="#"
+                  className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                >
+                  API
+                </a>
+                <a
+                  href="#"
+                  className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                >
+                  Quyền riêng tư
+                </a>
+                <a
+                  href="#"
+                  className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                >
+                  Điều khoản
+                </a>
               </div>
+              <p className="pt-4 mt-4 border-t border-gray-200 dark:border-neutral-800 text-[12px]">
+                © 2026 INSTAMINI BY akitø
+              </p>
             </div>
           </div>
         </div>
 
-        {/* FEED */}
-        <div className="space-y-3">
-          {loading && (
-            <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-muted"></div>
-            </div>
-          )}
+        <div className="w-full max-w-[470px]">
+          {/* CREATE POST */}
+          <div className="shadow-md hover:shadow-lg dark:shadow-black/40 rounded-[12px] p-4 mb-4 border border-gray-200 dark:border-neutral-800 transition-all duration-500 bg-white dark:bg-[#262626]">
+            <div className="flex items-start gap-4">
+              <img
+                src={
+                  user?.avatar_url ||
+                  user?.user_metadata?.avatar_url ||
+                  `https://api.dicebear.com/7.x/identicon/svg?seed=${user?.id}`
+                }
+                className="w-10 h-10 rounded-full ring-1 ring-border flex-shrink-0 mt-1 cursor-pointer hover:opacity-80 transition-opacity"
+                onClick={() => router.push(`/profile/${user?.id}`)}
+                alt="Your avatar"
+              />
+              <div className="flex-1 min-w-0">
+                <textarea
+                  value={content}
+                  onChange={(e) => setContent(e.target.value)}
+                  placeholder={placeholder}
+                  className="w-full text-base resize-none outline-none min-h-[80px] text-gray-900 dark:text-gray-100 font-semibold bg-transparent pt-1 placeholder:text-gray-500 dark:placeholder:text-gray-400"
+                  rows={2}
+                />
 
-          {posts.map((post) => (
-            <div
-              key={post.id}
-              className="shadow-md hover:shadow-lg dark:shadow-black/40 rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 relative transition-all duration-500 bg-white dark:bg-[#262626]"
-              onDoubleClick={() => handleLike(post.id, true)}
-            >
-              {/* BIG HEART POP ANIMATION */}
-              {showHeartId === String(post.id) && (
-                <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
-                  <Heart className="w-24 h-24 text-white fill-white drop-shadow-[0_0_15px_rgba(0,0,0,0.4)] animate-heart-pop opacity-90" />
-                </div>
-              )}
-
-              {/* HEADER */}
-              <div className="flex items-center justify-between p-4 pb-2 relative">
-                <div className="flex items-center gap-3">
-                  <img
-                    src={
-                      post?.users?.avatar_url ||
-                      `https://api.dicebear.com/7.x/identicon/svg?seed=${post.user_id}`
-                    }
-                    className="w-10 h-10 rounded-full ring-1 ring-border cursor-pointer hover:brightness-105"
-                  />
-                  <div>
-                    <span className="font-semibold text-sm block leading-tight">
-                      {post?.users?.name || "unknown"}
-                    </span>
-                    <span className="text-xs text-muted leading-tight mt-0.5 block">
-                      {new Date(
-                        post.created_at.includes("Z") ||
-                          post.created_at.includes("+")
-                          ? post.created_at
-                          : `${post.created_at}Z`,
-                      ).toLocaleString("vi-VN", {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                        day: "numeric",
-                        month: "short",
-                      })}
-                    </span>
-                  </div>
-                </div>
-
-                {/* 3 DOT MENU */}
-                <div
-                  className="relative"
-                  onDoubleClick={(e) => e.stopPropagation()}
-                >
-                  <MoreHorizontal
-                    className="w-5 h-5 cursor-pointer p-1 hover:bg-secondary rounded-full transition-all"
-                    onClick={(e) => {
-                      e.stopPropagation(); // Ngăn sự kiện click outside ngay lập tức
-                      setOpenMenuId(
-                        openMenuId === String(post.id) ? null : String(post.id),
-                      );
-                    }}
-                  />
-
-                  {openMenuId === String(post.id) && (
-                    <div
-                      ref={menuRef}
-                      className="absolute right-0 mt-2 w-44 border border-gray-200 dark:border-neutral-700 rounded-xl shadow-xl dark:shadow-black/50 py-1 z-[100] transition-colors duration-500 bg-white dark:bg-[#333333]"
+                {/* IMAGE PREVIEW */}
+                {file && (
+                  <div className="relative mb-3 inline-block mt-2">
+                    <img
+                      src={URL.createObjectURL(file)}
+                      alt="Preview"
+                      className="max-h-48 rounded-lg object-contain border border-border shadow-sm"
+                    />
+                    <button
+                      onClick={() => setFile(null)}
+                      className="absolute -top-2 -right-2 bg-white dark:bg-[#262626] border border-gray-200 dark:border-neutral-700 text-gray-900 dark:text-gray-100 rounded-full p-1 shadow-md hover:bg-secondary transition-colors z-10"
                     >
-                      <button
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleSavePost(post.id);
-                        }}
-                        className="flex items-center gap-3 px-4 py-2 hover:bg-secondary w-full text-sm font-semibold transition-all"
-                      >
-                        <Bookmark
-                          size={18}
-                          className={post.is_saved ? "fill-current" : ""}
-                        />
-                        {post.is_saved ? "Bỏ lưu bài viết" : "Lưu bài viết"}
-                      </button>
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                )}
+                <div className="flex items-center justify-between pt-1">
+                  <label className="flex items-center gap-1 text-primary text-sm cursor-pointer hover:underline">
+                    📷 Ảnh
+                    <input
+                      type="file"
+                      onChange={(e) => setFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                      accept="image/*"
+                    />
+                  </label>
+                  <button
+                    onClick={async () => {
+                      if (!content && !file) return;
 
-                      <button
-                        onMouseDown={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          handleReportPost(post.id);
-                        }}
-                        className="flex items-center gap-3 px-4 py-2 hover:bg-secondary w-full text-sm font-semibold transition-all"
-                      >
-                        <Flag size={18} />
-                        Báo cáo
-                      </button>
+                      try {
+                        let imageUrl = null;
 
-                      {/* Chỉ hiện nút Xóa nếu là bài viết của chính người dùng */}
-                      {user?.id === post.user_id && (
-                        <>
-                          <button
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setEditingPostId(post.id);
-                              setEditPostContent(post.content || "");
-                              setOpenMenuId(null);
-                            }}
-                            className="flex items-center gap-3 px-4 py-2 hover:bg-secondary w-full text-sm font-semibold transition-all"
-                          >
-                            <Pencil size={18} />
-                            Sửa bài viết
-                          </button>
-                          <button
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleDeletePost(post.id);
-                            }}
-                            className="flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-500/10 w-full text-sm font-semibold transition-all"
-                          >
-                            <Trash2 size={18} />
-                            Xóa bài viết
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
+                        // ================= UPLOAD IMAGE =================
+                        if (file) {
+                          const cleanName = file.name.replace(
+                            /[^a-zA-Z0-9.]/g,
+                            "_",
+                          );
+                          const fileName = `${Date.now()}_${cleanName}`;
+
+                          const { error: uploadError } = await supabase.storage
+                            .from("posts")
+                            .upload(fileName, file);
+
+                          if (uploadError) {
+                            console.error("UPLOAD ERROR:", uploadError.message);
+                            return;
+                          }
+
+                          const { data } = supabase.storage
+                            .from("posts")
+                            .getPublicUrl(fileName);
+
+                          imageUrl = data.publicUrl;
+                        }
+
+                        // ================= KIỂM DUYỆT AI =================
+                        let is_flagged = false;
+                        if (content) {
+                          try {
+                            const modRes = await fetch("/api/moderate", {
+                              method: "POST",
+                              headers: { "Content-Type": "application/json" },
+                              body: JSON.stringify({ content }),
+                            });
+                            const modData = await modRes.json();
+                            is_flagged = modData.flagged;
+
+                            if (is_flagged) {
+                              toast.error(
+                                "Nội dung vi phạm tiêu chuẩn cộng đồng và đã bị hệ thống chặn!",
+                                { duration: 4000 },
+                              );
+                            }
+                          } catch (err) {
+                            console.error("Lỗi quét AI:", err);
+                          }
+                        }
+
+                        // ================= CHẶN & XÓA BÀI VI PHẠM =================
+                        if (is_flagged) {
+                          // Nếu có ảnh đi kèm thì xóa luôn ảnh đó khỏi Supabase Storage để tránh rác dữ liệu
+                          if (imageUrl) {
+                            const uploadedFileName = imageUrl.split("/").pop();
+                            if (uploadedFileName) {
+                              await supabase.storage
+                                .from("posts")
+                                .remove([uploadedFileName]);
+                            }
+                          }
+                          return; // Dừng lại ngay lập tức, không cho phép chạy lệnh createPost()
+                        }
+
+                        // ================= CREATE POST =================
+                        const newPost = await createPost({
+                          content,
+                          image_url: imageUrl,
+                          is_flagged,
+                        });
+
+                        if (!newPost) {
+                          console.error("CREATE POST FAILED");
+                          return;
+                        }
+
+                        // ================= UPDATE UI =================
+                        setPosts((prev) => [newPost, ...prev]);
+
+                        // ================= RESET =================
+                        setContent("");
+                        setFile(null);
+                      } catch (err) {
+                        console.error("POST ERROR:", err);
+                      }
+                    }}
+                    disabled={!content && !file}
+                    className="bg-gradient-to-r from-primary to-accent text-primary-fg px-5 py-1.5 rounded-full font-semibold text-sm shadow-ig hover:brightness-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Đăng
+                  </button>
                 </div>
               </div>
+            </div>
+          </div>
 
-              {/* NỘI DUNG (CONTENT) */}
-              {editingPostId === post.id ? (
-                <div className="px-4 pb-3 text-sm">
-                  <textarea
-                    className="w-full border border-border bg-secondary/30 rounded-lg p-2 outline-none focus:bg-background transition-colors resize-none"
-                    value={editPostContent}
-                    onChange={(e) => setEditPostContent(e.target.value)}
-                    rows={3}
-                  />
-                  <div className="flex justify-end gap-3 mt-2">
-                    <button
-                      onClick={() => setEditingPostId(null)}
-                      className="text-xs font-semibold text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
-                    >
-                      Hủy
-                    </button>
-                    <button
-                      onClick={() => handleSavePost(post.id)}
-                      className="text-xs font-semibold text-blue-500 hover:text-blue-600"
-                    >
-                      Lưu
-                    </button>
+          {/* FEED */}
+          <div className="space-y-3">
+            {loading && (
+              <div className="flex justify-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+              </div>
+            )}
+
+            {posts.map((post) => (
+              <div
+                key={post.id}
+                className="shadow-md hover:shadow-lg dark:shadow-black/40 rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 relative transition-all duration-500 bg-white dark:bg-[#262626]"
+                onDoubleClick={() => handleLike(post.id, true)}
+              >
+                {/* BIG HEART POP ANIMATION */}
+                {showHeartId === String(post.id) && (
+                  <div className="absolute inset-0 flex items-center justify-center z-50 pointer-events-none">
+                    <Heart className="w-24 h-24 text-white fill-white drop-shadow-[0_0_15px_rgba(0,0,0,0.4)] animate-heart-pop opacity-90" />
                   </div>
-                </div>
-              ) : (
-                post.content && (
-                  <div className="px-4 pb-3 text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-300">
-                    {post.content}
+                )}
+
+                {/* HEADER */}
+                <div className="flex items-center justify-between p-4 pb-2 relative">
+                  <div className="flex items-center gap-3">
+                    <img
+                      src={
+                        post?.users?.avatar_url ||
+                        `https://api.dicebear.com/7.x/identicon/svg?seed=${post.user_id}`
+                      }
+                      className="w-10 h-10 rounded-full ring-1 ring-border cursor-pointer hover:brightness-105"
+                    />
+                    <div>
+                      <span className="font-semibold text-sm block leading-tight">
+                        {post?.users?.name || "unknown"}
+                      </span>
+                      <span className="text-xs text-muted leading-tight mt-0.5 block">
+                        {new Date(
+                          post.created_at.includes("Z") ||
+                            post.created_at.includes("+")
+                            ? post.created_at
+                            : `${post.created_at}Z`,
+                        ).toLocaleString("vi-VN", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          day: "numeric",
+                          month: "short",
+                        })}
+                      </span>
+                    </div>
+                    {post.is_flagged && (
+                      <span className="ml-3 px-2 py-0.5 bg-red-100 text-red-600 text-[10px] font-bold rounded-sm border border-red-200">
+                        Vi phạm
+                      </span>
+                    )}
                   </div>
-                )
-              )}
 
-              {/* IMAGE WITH DOUBLE CLICK LIKE */}
-              {post.image_url && (
-                <div className="relative overflow-hidden bg-secondary/20">
-                  <img
-                    src={post.image_url}
-                    className="w-full aspect-square object-cover cursor-pointer hover:brightness-[0.98] transition-all duration-300 select-none pointer-events-none"
-                    alt="Post content"
-                  />
-
-                  {/* Overlay ẩn để catch event tốt hơn */}
+                  {/* 3 DOT MENU */}
                   <div
-                    className="absolute inset-0 z-10 cursor-pointer"
-                    onClick={() => handleImageClick(post)}
-                    onDoubleClick={(e) => handleImageDoubleClick(e, post)}
-                  />
-                </div>
-              )}
+                    className="relative"
+                    onDoubleClick={(e) => e.stopPropagation()}
+                  >
+                    <MoreHorizontal
+                      className="w-5 h-5 cursor-pointer p-1 hover:bg-secondary rounded-full transition-all"
+                      onClick={(e) => {
+                        e.stopPropagation(); // Ngăn sự kiện click outside ngay lập tức
+                        setOpenMenuId(
+                          openMenuId === String(post.id)
+                            ? null
+                            : String(post.id),
+                        );
+                      }}
+                    />
 
-              {/* ACTIONS */}
-              <div className="p-3">
-                <div className="flex gap-3 pt-2 pb-1">
-                  <Heart
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleLike(post.id);
-                    }}
-                    className={`cursor-pointer transition-all active:scale-150 hover:scale-110 w-7 h-7 ${
-                      (post.is_liked ?? false)
-                        ? "text-red-500 fill-red-500" // Đổi từ destructive sang red-500 cho chắc chắn
-                        : "stroke-[2px] text-gray-900 dark:text-gray-100"
-                    }`}
-                  />
-                  <MessageCircle
-                    onClick={() => openPostModal(post)}
-                    className="w-7 h-7 cursor-pointer stroke-[2px]"
-                  />
-                  <Send className="w-7 h-7 cursor-pointer stroke-[2px]" />
-                </div>
-
-                <p className="text-sm font-bold mt-1">
-                  {post.likes_count || 0} lượt thích
-                </p>
-
-                {/* COMMENTS SECTION */}
-                <div className="mt-2 space-y-1">
-                  {/* Nút Xem tất cả bình luận nếu có nhiều hơn 1 */}
-                  {commentsMap[post.id]?.length > 1 && (
-                    <p
-                      className="text-sm text-muted-foreground cursor-pointer hover:text-gray-900 dark:hover:text-gray-100 transition-colors mb-1"
-                      onClick={() => openPostModal(post)}
-                    >
-                      Xem tất cả {commentsMap[post.id].length} bình luận
-                    </p>
-                  )}
-
-                  {/* Giới hạn hiển thị 1 bình luận ở ngoài Feed */}
-                  {commentsMap[post.id]
-                    ?.slice(0, 1)
-                    .map((c: any, idx: number) => {
-                      const isReply = c.content?.trim().startsWith("@");
-                      return (
-                        <div
-                          key={c.id ?? idx}
-                          className={`flex justify-between items-start group cursor-pointer transition-all ${
-                            isReply
-                              ? "ml-6 text-[13px] border-l-[2px] border-border/70 pl-2 mt-1"
-                              : "text-sm mt-2"
-                          }`}
-                          onDoubleClick={(e) =>
-                            handleReplyClick(post.id, c?.users?.name, e)
-                          }
+                    {openMenuId === String(post.id) && (
+                      <div
+                        ref={menuRef}
+                        className="absolute right-0 mt-2 w-44 border border-gray-200 dark:border-neutral-700 rounded-xl shadow-xl dark:shadow-black/50 py-1 z-[100] transition-colors duration-500 bg-white dark:bg-[#333333]"
+                      >
+                        <button
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleSavePost(post.id);
+                          }}
+                          className="flex items-center gap-3 px-4 py-2 hover:bg-secondary w-full text-sm font-semibold transition-all"
                         >
-                          <div className="flex-1">
-                            <span className="font-bold mr-1">
-                              {c?.users?.name || "user"}:
-                            </span>
-                            {editingCommentId === c.id ? (
-                              <div className="flex flex-col gap-1 mt-1">
-                                <input
-                                  className="border px-2 py-1 rounded w-full outline-none text-sm bg-transparent"
-                                  value={editCommentText}
-                                  onChange={(e) =>
-                                    setEditCommentText(e.target.value)
-                                  }
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter")
-                                      submitEditComment(c.id, post.id);
-                                    if (e.key === "Escape")
-                                      setEditingCommentId(null);
-                                  }}
-                                  autoFocus
-                                />
-                                <div className="flex gap-2 text-xs">
-                                  <button
-                                    onClick={() =>
-                                      submitEditComment(c.id, post.id)
-                                    }
-                                    className="text-blue-500 font-semibold"
-                                  >
-                                    Lưu
-                                  </button>
-                                  <button
-                                    onClick={() => setEditingCommentId(null)}
-                                    className="text-muted-foreground"
-                                  >
-                                    Hủy
-                                  </button>
-                                </div>
-                              </div>
-                            ) : (
-                              <span>{c.content}</span>
-                            )}
-                          </div>
+                          <Bookmark
+                            size={18}
+                            className={post.is_saved ? "fill-current" : ""}
+                          />
+                          {post.is_saved ? "Bỏ lưu bài viết" : "Lưu bài viết"}
+                        </button>
 
-                          {user?.id === c.user_id && !editingCommentId && (
-                            <div className="relative opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity ml-2">
-                              <MoreHorizontal
-                                className="w-4 h-4 cursor-pointer text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setOpenCommentMenuId(
-                                    openCommentMenuId === c.id ? null : c.id,
-                                  );
-                                }}
-                              />
-                              {openCommentMenuId === c.id && (
-                                <div className="absolute right-0 mt-1 w-24 border border-gray-200 dark:border-neutral-700 shadow-lg dark:shadow-black/50 rounded-lg py-1 z-50 transition-colors duration-500 bg-white dark:bg-[#333333]">
-                                  <button
-                                    onMouseDown={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      setEditingCommentId(c.id);
-                                      setEditCommentText(c.content);
-                                      setOpenCommentMenuId(null);
+                        <button
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleReportPost(post.id);
+                          }}
+                          className="flex items-center gap-3 px-4 py-2 hover:bg-secondary w-full text-sm font-semibold transition-all"
+                        >
+                          <Flag size={18} />
+                          Báo cáo
+                        </button>
+
+                        {/* Chỉ hiện nút Xóa nếu là bài viết của chính người dùng */}
+                        {user?.id === post.user_id && (
+                          <>
+                            <button
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setEditingPostId(post.id);
+                                setEditPostContent(post.content || "");
+                                setOpenMenuId(null);
+                              }}
+                              className="flex items-center gap-3 px-4 py-2 hover:bg-secondary w-full text-sm font-semibold transition-all"
+                            >
+                              <Pencil size={18} />
+                              Sửa bài viết
+                            </button>
+                            <button
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleDeletePost(post.id);
+                              }}
+                              className="flex items-center gap-3 px-4 py-2 text-red-600 hover:bg-red-500/10 w-full text-sm font-semibold transition-all"
+                            >
+                              <Trash2 size={18} />
+                              Xóa bài viết
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* NỘI DUNG (CONTENT) */}
+                {editingPostId === post.id ? (
+                  <div className="px-4 pb-3 text-sm">
+                    <textarea
+                      className="w-full border border-border bg-secondary/30 rounded-lg p-2 outline-none focus:bg-background transition-colors resize-none"
+                      value={editPostContent}
+                      onChange={(e) => setEditPostContent(e.target.value)}
+                      rows={3}
+                    />
+                    <div className="flex justify-end gap-3 mt-2">
+                      <button
+                        onClick={() => setEditingPostId(null)}
+                        className="text-xs font-semibold text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        onClick={() => handleSavePost(post.id)}
+                        className="text-xs font-semibold text-blue-500 hover:text-blue-600"
+                      >
+                        Lưu
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  post.content && (
+                    <div
+                      className={`px-4 pb-3 text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-300 ${post.is_flagged ? "text-red-500 font-semibold italic" : ""}`}
+                    >
+                      {post.is_flagged
+                        ? "Nội dung này đã bị ẩn do vi phạm tiêu chuẩn cộng đồng."
+                        : post.content}
+                    </div>
+                  )
+                )}
+
+                {/* IMAGE WITH DOUBLE CLICK LIKE */}
+                {post.image_url && (
+                  <div className="relative overflow-hidden bg-secondary/20">
+                    <img
+                      src={post.image_url}
+                      className={`w-full aspect-square object-cover cursor-pointer hover:brightness-[0.98] transition-all duration-300 select-none pointer-events-none ${post.is_flagged ? "blur-xl scale-110" : ""}`}
+                      alt="Post content"
+                    />
+
+                    {post.is_flagged && (
+                      <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/30 z-20 pointer-events-none">
+                        <Flag className="w-12 h-12 mb-2 text-red-500 drop-shadow-md" />
+                        <span className="font-bold text-lg drop-shadow-md">
+                          Hình ảnh nhạy cảm
+                        </span>
+                        <span className="text-sm drop-shadow-md">
+                          Bài viết đã bị gắn cờ bởi AI
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Overlay ẩn để catch event tốt hơn */}
+                    <div
+                      className="absolute inset-0 z-10 cursor-pointer"
+                      onClick={() => handleImageClick(post)}
+                      onDoubleClick={(e) => handleImageDoubleClick(e, post)}
+                    />
+                  </div>
+                )}
+
+                {/* ACTIONS */}
+                <div className="p-3">
+                  <div className="flex gap-3 pt-2 pb-1">
+                    <Heart
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleLike(post.id);
+                      }}
+                      className={`cursor-pointer transition-all active:scale-150 hover:scale-110 w-7 h-7 ${
+                        (post.is_liked ?? false)
+                          ? "text-red-500 fill-red-500" // Đổi từ destructive sang red-500 cho chắc chắn
+                          : "stroke-[2px] text-gray-900 dark:text-gray-100"
+                      }`}
+                    />
+                    <MessageCircle
+                      onClick={() => openPostModal(post)}
+                      className="w-7 h-7 cursor-pointer stroke-[2px]"
+                    />
+                    <Send className="w-7 h-7 cursor-pointer stroke-[2px]" />
+                  </div>
+
+                  <p className="text-sm font-bold mt-1">
+                    {post.likes_count || 0} lượt thích
+                  </p>
+
+                  {/* COMMENTS SECTION */}
+                  <div className="mt-2 space-y-1">
+                    {/* Nút Xem tất cả bình luận nếu có nhiều hơn 1 */}
+                    {commentsMap[post.id]?.length > 1 && (
+                      <p
+                        className="text-sm text-muted-foreground cursor-pointer hover:text-gray-900 dark:hover:text-gray-100 transition-colors mb-1"
+                        onClick={() => openPostModal(post)}
+                      >
+                        Xem tất cả {commentsMap[post.id].length} bình luận
+                      </p>
+                    )}
+
+                    {/* Giới hạn hiển thị 1 bình luận ở ngoài Feed */}
+                    {commentsMap[post.id]
+                      ?.slice(0, 1)
+                      .map((c: any, idx: number) => {
+                        const isReply = c.content?.trim().startsWith("@");
+                        return (
+                          <div
+                            key={c.id ?? idx}
+                            className={`flex justify-between items-start group cursor-pointer transition-all ${
+                              isReply
+                                ? "ml-6 text-[13px] border-l-[2px] border-border/70 pl-2 mt-1"
+                                : "text-sm mt-2"
+                            }`}
+                            onDoubleClick={(e) =>
+                              handleReplyClick(post.id, c?.users?.name, e)
+                            }
+                          >
+                            <div className="flex-1">
+                              <span className="font-bold mr-1">
+                                {c?.users?.name || "user"}:
+                              </span>
+                              {editingCommentId === c.id ? (
+                                <div className="flex flex-col gap-1 mt-1">
+                                  <input
+                                    className="border px-2 py-1 rounded w-full outline-none text-sm bg-transparent"
+                                    value={editCommentText}
+                                    onChange={(e) =>
+                                      setEditCommentText(e.target.value)
+                                    }
+                                    onKeyDown={(e) => {
+                                      if (e.key === "Enter")
+                                        submitEditComment(c.id, post.id);
+                                      if (e.key === "Escape")
+                                        setEditingCommentId(null);
                                     }}
-                                    className="w-full text-left px-3 py-1 text-sm hover:bg-secondary"
-                                  >
-                                    Sửa
-                                  </button>
-                                  <button
-                                    onMouseDown={(e) => {
-                                      e.preventDefault();
-                                      e.stopPropagation();
-                                      handleDeleteComment(c.id, post.id);
-                                    }}
-                                    className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-secondary"
-                                  >
-                                    Xóa
-                                  </button>
+                                    autoFocus
+                                  />
+                                  <div className="flex gap-2 text-xs">
+                                    <button
+                                      onClick={() =>
+                                        submitEditComment(c.id, post.id)
+                                      }
+                                      className="text-blue-500 font-semibold"
+                                    >
+                                      Lưu
+                                    </button>
+                                    <button
+                                      onClick={() => setEditingCommentId(null)}
+                                      className="text-muted-foreground"
+                                    >
+                                      Hủy
+                                    </button>
+                                  </div>
                                 </div>
+                              ) : (
+                                <span>{c.content}</span>
                               )}
                             </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                </div>
 
-                {/* ADD COMMENT */}
-                <div className="flex items-center gap-3 pt-3 mt-2 border-t border-border">
-                  <img
-                    src={
-                      user?.user_metadata?.avatar_url ||
-                      `https://api.dicebear.com/7.x/identicon/svg?seed=${user?.id}`
-                    }
-                    className="w-7 h-7 rounded-full flex-shrink-0"
-                    alt="User"
-                  />
-                  <input
-                    ref={(el) => {
-                      commentInputRefs.current[post.id] = el;
-                    }}
-                    value={commentInput[post.id] ?? ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
+                            {user?.id === c.user_id && !editingCommentId && (
+                              <div className="relative opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                                <MoreHorizontal
+                                  className="w-4 h-4 cursor-pointer text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenCommentMenuId(
+                                      openCommentMenuId === c.id ? null : c.id,
+                                    );
+                                  }}
+                                />
+                                {openCommentMenuId === c.id && (
+                                  <div className="absolute right-0 mt-1 w-24 border border-gray-200 dark:border-neutral-700 shadow-lg dark:shadow-black/50 rounded-lg py-1 z-50 transition-colors duration-500 bg-white dark:bg-[#333333]">
+                                    <button
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setEditingCommentId(c.id);
+                                        setEditCommentText(c.content);
+                                        setOpenCommentMenuId(null);
+                                      }}
+                                      className="w-full text-left px-3 py-1 text-sm hover:bg-secondary"
+                                    >
+                                      Sửa
+                                    </button>
+                                    <button
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        handleDeleteComment(c.id, post.id);
+                                      }}
+                                      className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-secondary"
+                                    >
+                                      Xóa
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        );
+                      })}
+                  </div>
 
-                      setCommentInput((prev) => ({
-                        ...prev,
-                        [post.id]: value,
-                      }));
-                    }}
-                    onDoubleClick={(e) => e.stopPropagation()}
-                    className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-500 dark:placeholder:text-gray-400"
-                    placeholder="Thêm bình luận..."
-                  />
-                  {commentInput[post.id] && (
-                    <button
-                      onClick={() => handleComment(post.id)}
-                      className="text-primary font-semibold text-sm"
-                    >
-                      Đăng
-                    </button>
-                  )}
+                  {/* ADD COMMENT */}
+                  <div className="flex items-center gap-3 pt-3 mt-2 border-t border-border">
+                    <img
+                      src={
+                        user?.user_metadata?.avatar_url ||
+                        `https://api.dicebear.com/7.x/identicon/svg?seed=${user?.id}`
+                      }
+                      className="w-7 h-7 rounded-full flex-shrink-0"
+                      alt="User"
+                    />
+                    <input
+                      ref={(el) => {
+                        commentInputRefs.current[post.id] = el;
+                      }}
+                      value={commentInput[post.id] ?? ""}
+                      onChange={(e) => {
+                        const value = e.target.value;
+
+                        setCommentInput((prev) => ({
+                          ...prev,
+                          [post.id]: value,
+                        }));
+                      }}
+                      onDoubleClick={(e) => e.stopPropagation()}
+                      className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-500 dark:placeholder:text-gray-400"
+                      placeholder="Thêm bình luận..."
+                    />
+                    {commentInput[post.id] && (
+                      <button
+                        onClick={() => handleComment(post.id)}
+                        className="text-primary font-semibold text-sm"
+                      >
+                        Đăng
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ================= CỘT PHẢI: GỢI Ý KẾT BẠN ================= */}
+        <div className="hidden lg:block w-[320px] shrink-0">
+          <div className="sticky top-[100px]">
+            {/* PROFILE MINI CỦA MÌNH */}
+
+            {/* DANH SÁCH GỢI Ý */}
+            <div className="flex items-center justify-between mb-4 mt-2">
+              <p className="text-sm font-bold text-muted-foreground">
+                Gợi ý cho bạn
+              </p>
+              <button
+                onClick={() => router.push("/suggested")}
+                className="text-xs font-bold hover:text-gray-900 dark:hover:text-white transition-colors"
+              >
+                Xem tất cả
+              </button>
             </div>
-          ))}
+
+            <div className="space-y-4">
+              {suggestedUsers.map((u) => (
+                <div key={u.id} className="flex items-center justify-between">
+                  <div
+                    className="flex items-center gap-3 cursor-pointer"
+                    onClick={() => router.push(`/profile/${u.id}`)}
+                  >
+                    <img
+                      src={
+                        u.avatar_url ||
+                        `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
+                      }
+                      className="w-10 h-10 rounded-full border border-gray-200 dark:border-neutral-700 object-cover shadow-sm"
+                      alt={u.name}
+                    />
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-[14px] truncate max-w-[130px]">
+                        {u.name}
+                      </span>
+                      <span className="text-[12px] text-muted-foreground">
+                        Gợi ý kết bạn
+                      </span>
+                    </div>
+                  </div>
+                  <button className="text-xs font-bold text-blue-500 hover:text-gray-900 dark:hover:text-white transition-colors">
+                    Theo dõi
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </main>
       {/* ================= MODAL POST ================= */}
@@ -1373,6 +1578,59 @@ export default function HomePage() {
           {isChatOpen ? <X size={28} /> : <MessageSquare size={28} />}
         </button>
       </div>
+      {/* ================= MODAL REPORT POST ================= */}
+      {reportPostId && (
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4 animate-in fade-in duration-200"
+          onClick={() => setReportPostId(null)}
+        >
+          <div
+            className="bg-white dark:bg-[#262626] rounded-2xl shadow-2xl w-full max-w-[400px] overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-200 dark:border-neutral-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                Báo cáo bài viết
+              </h3>
+              <button
+                onClick={() => setReportPostId(null)}
+                className="hover:text-gray-500 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Vui lòng nhập lý do báo cáo bài viết này. Quản trị viên sẽ xem
+                xét báo cáo của bạn.
+              </p>
+              <textarea
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                placeholder="Ví dụ: Nội dung phản cảm, spam..."
+                className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none transition-colors resize-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] text-sm text-gray-900 dark:text-gray-100"
+                rows={4}
+                autoFocus
+              />
+            </div>
+            <div className="p-4 border-t border-gray-200 dark:border-neutral-800 flex justify-end gap-2">
+              <button
+                className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#333333] transition-colors rounded-lg"
+                onClick={() => setReportPostId(null)}
+              >
+                Hủy
+              </button>
+              <button
+                className="px-4 py-2 text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition-colors rounded-lg disabled:opacity-50"
+                onClick={submitReport}
+                disabled={!reportReason.trim()}
+              >
+                Gửi báo cáo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Tailwind Extra Styles for Animations */}
       <style jsx global>{`
         @keyframes heart-pop {
