@@ -42,12 +42,16 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
     });
   }, [messages.length, isTyping]);
 
-  // ================= REALTIME (FIX DUPLICATE + STABLE) =================
+  // ================= REALTIME + BROADCAST (MULTIPLEXING) =================
   useEffect(() => {
-    if (!conversationId) return;
+    if (!conversationId || !userId) return;
 
     const channel = supabase
-      .channel(`chat_${conversationId}`)
+      .channel(`chat_${conversationId}`, {
+        config: {
+          broadcast: { ack: false },
+        },
+      })
       .on(
         "postgres_changes",
         {
@@ -74,21 +78,6 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
           }
         },
       )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [conversationId]);
-
-  // ================= BROADCAST (TYPING INDICATOR) =================
-  useEffect(() => {
-    if (!conversationId || !userId) return;
-
-    const typingChannel = supabase.channel(`typing_${conversationId}`);
-    typingChannelRef.current = typingChannel;
-
-    typingChannel
       .on("broadcast", { event: "typing" }, (payload) => {
         const { isTyping: remoteIsTyping, senderId } = payload.payload;
         if (senderId !== userId) {
@@ -103,10 +92,18 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
           }
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          typingChannelRef.current = channel;
+        }
+      });
+
+    // Gán tạm thời ngay lập tức để người dùng gõ nhanh không bị lỗi
+    typingChannelRef.current = channel;
 
     return () => {
-      supabase.removeChannel(typingChannel);
+      supabase.removeChannel(channel);
+      typingChannelRef.current = null;
     };
   }, [conversationId, userId]);
 
