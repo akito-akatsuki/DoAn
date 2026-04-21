@@ -90,6 +90,29 @@ export default function HomePage() {
   const [userPages, setUserPages] = useState<any[]>([]);
   const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
 
+  // ================= LOGIN POPUP =================
+  const [showLoginPopup, setShowLoginPopup] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  const handlePopupLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: loginEmail,
+      password: loginPassword,
+    });
+    setLoginLoading(false);
+    if (error) {
+      toast.error(error.message || "Đăng nhập thất bại");
+    } else {
+      toast.success("Đăng nhập thành công!");
+      setShowLoginPopup(false);
+      window.location.reload();
+    }
+  };
+
   // ================= INIT =================
   useEffect(() => {
     // Kích hoạt scroll mượt toàn trang
@@ -180,6 +203,15 @@ export default function HomePage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [openMenuId, isChatOpen, showEmojiPicker]);
 
+  // ================= CHECK LOGIN =================
+  const checkLogin = () => {
+    if (!user) {
+      setShowLoginPopup(true);
+      return false;
+    }
+    return true;
+  };
+
   const loadUser = async () => {
     try {
       const { data, error } = await supabase.auth.getUser();
@@ -229,7 +261,7 @@ export default function HomePage() {
     targetId: string,
     targetName: string,
   ) => {
-    if (!user) return;
+    if (!checkLogin()) return;
     try {
       await supabase.from("follows").insert({
         follower_id: user.id,
@@ -300,7 +332,7 @@ export default function HomePage() {
 
   // ================= LIKE + ANIMATION =================
   const handleLike = async (postId: string, isDoubleClick = false) => {
-    if (!user) return;
+    if (!checkLogin()) return;
 
     // Nếu double click, hiện trái tim giữa màn hình bài viết
     if (isDoubleClick) {
@@ -369,7 +401,7 @@ export default function HomePage() {
 
   const handleComment = async (postId: string) => {
     const text = commentInput[postId];
-    if (!text) return;
+    if (!checkLogin() || !text) return;
 
     // Xóa input ngay lập tức
     setCommentInput((prev) => ({ ...prev, [postId]: "" }));
@@ -461,7 +493,7 @@ export default function HomePage() {
   };
 
   const handleModalComment = async () => {
-    if (!user || !modalCommentText.trim() || !selectedPost) return;
+    if (!checkLogin() || !modalCommentText.trim() || !selectedPost) return;
 
     const text = modalCommentText;
     setModalCommentText(""); // Xóa input ngay lập tức
@@ -599,6 +631,7 @@ export default function HomePage() {
 
   // ================= SAVE POST =================
   const handleSavePost = async (postId: string) => {
+    if (!checkLogin()) return;
     try {
       const { is_saved } = await toggleSavePost(postId);
       // Cập nhật lại UI cho bài viết ở ngoài trang chủ
@@ -622,6 +655,7 @@ export default function HomePage() {
 
   // ================= REPORT POST =================
   const handleReportPost = (postId: string) => {
+    if (!checkLogin()) return;
     setReportPostId(postId);
     setReportReason("");
     setOpenMenuId(null);
@@ -691,195 +725,214 @@ export default function HomePage() {
 
         <div className="w-full max-w-[470px]">
           {/* CREATE POST */}
-          <div className="shadow-md hover:shadow-lg dark:shadow-black/40 rounded-[12px] p-4 mb-4 border border-gray-200 dark:border-neutral-800 transition-all duration-500 bg-white dark:bg-[#262626]">
-            {userPages.length > 0 && (
-              <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-100 dark:border-neutral-800">
-                <span className="text-xs text-muted-foreground font-medium">
-                  Đăng bài dưới tư cách:
-                </span>
-                <div className="relative">
-                  <select
-                    value={selectedPageId || "user"}
-                    onChange={(e) =>
-                      setSelectedPageId(
-                        e.target.value === "user" ? null : e.target.value,
-                      )
-                    }
-                    className="appearance-none cursor-pointer text-sm border border-gray-200 dark:border-neutral-700 rounded-full pl-3 pr-8 py-1.5 bg-gray-50 hover:bg-gray-100 dark:bg-[#333333] dark:hover:bg-[#3a3a3a] outline-none font-bold text-gray-800 dark:text-gray-100 transition-colors shadow-sm"
-                  >
-                    <option value="user">{user?.name || "Cá nhân"}</option>
-                    {userPages.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-gray-500 dark:text-gray-400">
-                    <svg
-                      className="fill-current h-4 w-4"
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 20 20"
+          {!user ? (
+            <div
+              onClick={() => setShowLoginPopup(true)}
+              className="shadow-md rounded-[12px] p-4 mb-4 border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#262626] cursor-pointer flex items-center gap-3 transition-colors hover:bg-gray-50 dark:hover:bg-[#333333]"
+            >
+              <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-neutral-700 flex-shrink-0" />
+              <div className="flex-1 bg-gray-100 dark:bg-[#333333] rounded-full px-4 py-2.5 text-sm text-muted-foreground font-medium text-left">
+                Đăng nhập để chia sẻ suy nghĩ của bạn...
+              </div>
+            </div>
+          ) : (
+            <div className="shadow-md hover:shadow-lg dark:shadow-black/40 rounded-[12px] p-4 mb-4 border border-gray-200 dark:border-neutral-800 transition-all duration-500 bg-white dark:bg-[#262626]">
+              {userPages.length > 0 && (
+                <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-100 dark:border-neutral-800">
+                  <span className="text-xs text-muted-foreground font-medium">
+                    Đăng bài dưới tư cách:
+                  </span>
+                  <div className="relative">
+                    <select
+                      value={selectedPageId || "user"}
+                      onChange={(e) =>
+                        setSelectedPageId(
+                          e.target.value === "user" ? null : e.target.value,
+                        )
+                      }
+                      className="appearance-none cursor-pointer text-sm border border-gray-200 dark:border-neutral-700 rounded-full pl-3 pr-8 py-1.5 bg-gray-50 hover:bg-gray-100 dark:bg-[#333333] dark:hover:bg-[#3a3a3a] outline-none font-bold text-gray-800 dark:text-gray-100 transition-colors shadow-sm"
                     >
-                      <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
-                    </svg>
+                      <option value="user">{user?.name || "Cá nhân"}</option>
+                      {userPages.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                    <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-gray-500 dark:text-gray-400">
+                      <svg
+                        className="fill-current h-4 w-4"
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 20 20"
+                      >
+                        <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                      </svg>
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-            <div className="flex items-start gap-4">
-              <img
-                src={
-                  (selectedPageId
-                    ? userPages.find((p) => p.id === selectedPageId)?.avatar_url
-                    : user?.avatar_url || user?.user_metadata?.avatar_url) ||
-                  `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPageId || user?.id}`
-                }
-                className="w-10 h-10 rounded-full ring-1 ring-border flex-shrink-0 mt-1 cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() =>
-                  router.push(
-                    selectedPageId
-                      ? `/fanpage/${selectedPageId}`
-                      : `/profile/${user?.id}`,
-                  )
-                }
-                alt="Your avatar"
-              />
-              <div className="flex-1 min-w-0">
-                <textarea
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder={placeholder}
-                  className="w-full text-base resize-none outline-none min-h-[80px] text-gray-900 dark:text-gray-100 font-semibold bg-transparent pt-1 placeholder:text-gray-500 dark:placeholder:text-gray-400"
-                  rows={2}
+              )}
+              <div className="flex items-start gap-4">
+                <img
+                  src={
+                    (selectedPageId
+                      ? userPages.find((p) => p.id === selectedPageId)
+                          ?.avatar_url
+                      : user?.avatar_url || user?.user_metadata?.avatar_url) ||
+                    `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPageId || user?.id}`
+                  }
+                  className="w-10 h-10 rounded-full ring-1 ring-border flex-shrink-0 mt-1 cursor-pointer hover:opacity-80 transition-opacity"
+                  onClick={() =>
+                    router.push(
+                      selectedPageId
+                        ? `/fanpage/${selectedPageId}`
+                        : `/profile/${user?.id}`,
+                    )
+                  }
+                  alt="Your avatar"
                 />
+                <div className="flex-1 min-w-0">
+                  <textarea
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder={placeholder}
+                    className="w-full text-base resize-none outline-none min-h-[80px] text-gray-900 dark:text-gray-100 font-semibold bg-transparent pt-1 placeholder:text-gray-500 dark:placeholder:text-gray-400"
+                    rows={2}
+                  />
 
-                {/* IMAGE PREVIEW */}
-                {file && (
-                  <div className="relative mb-3 inline-block mt-2">
-                    <img
-                      src={URL.createObjectURL(file)}
-                      alt="Preview"
-                      className="max-h-48 rounded-lg object-contain border border-border shadow-sm"
-                    />
+                  {/* IMAGE PREVIEW */}
+                  {file && (
+                    <div className="relative mb-3 inline-block mt-2">
+                      <img
+                        src={URL.createObjectURL(file)}
+                        alt="Preview"
+                        className="max-h-48 rounded-lg object-contain border border-border shadow-sm"
+                      />
+                      <button
+                        onClick={() => setFile(null)}
+                        className="absolute -top-2 -right-2 bg-white dark:bg-[#262626] border border-gray-200 dark:border-neutral-700 text-gray-900 dark:text-gray-100 rounded-full p-1 shadow-md hover:bg-secondary transition-colors z-10"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between pt-1">
+                    <label className="flex items-center gap-1 text-primary text-sm cursor-pointer hover:underline">
+                      📷 Ảnh
+                      <input
+                        type="file"
+                        onChange={(e) => setFile(e.target.files?.[0] || null)}
+                        className="hidden"
+                        accept="image/*"
+                      />
+                    </label>
                     <button
-                      onClick={() => setFile(null)}
-                      className="absolute -top-2 -right-2 bg-white dark:bg-[#262626] border border-gray-200 dark:border-neutral-700 text-gray-900 dark:text-gray-100 rounded-full p-1 shadow-md hover:bg-secondary transition-colors z-10"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-                <div className="flex items-center justify-between pt-1">
-                  <label className="flex items-center gap-1 text-primary text-sm cursor-pointer hover:underline">
-                    📷 Ảnh
-                    <input
-                      type="file"
-                      onChange={(e) => setFile(e.target.files?.[0] || null)}
-                      className="hidden"
-                      accept="image/*"
-                    />
-                  </label>
-                  <button
-                    onClick={async () => {
-                      if (!content && !file) return;
+                      onClick={async () => {
+                        if (!content && !file) return;
 
-                      try {
-                        let imageUrl = null;
+                        try {
+                          let imageUrl = null;
 
-                        // ================= UPLOAD IMAGE =================
-                        if (file) {
-                          const cleanName = file.name.replace(
-                            /[^a-zA-Z0-9.]/g,
-                            "_",
-                          );
-                          const fileName = `${Date.now()}_${cleanName}`;
+                          // ================= UPLOAD IMAGE =================
+                          if (file) {
+                            const cleanName = file.name.replace(
+                              /[^a-zA-Z0-9.]/g,
+                              "_",
+                            );
+                            const fileName = `${Date.now()}_${cleanName}`;
 
-                          const { error: uploadError } = await supabase.storage
-                            .from("posts")
-                            .upload(fileName, file);
+                            const { error: uploadError } =
+                              await supabase.storage
+                                .from("posts")
+                                .upload(fileName, file);
 
-                          if (uploadError) {
-                            console.error("UPLOAD ERROR:", uploadError.message);
+                            if (uploadError) {
+                              console.error(
+                                "UPLOAD ERROR:",
+                                uploadError.message,
+                              );
+                              return;
+                            }
+
+                            const { data } = supabase.storage
+                              .from("posts")
+                              .getPublicUrl(fileName);
+
+                            imageUrl = data.publicUrl;
+                          }
+
+                          // ================= KIỂM DUYỆT AI =================
+                          let is_flagged = false;
+                          if (content) {
+                            try {
+                              const modRes = await fetch("/api/moderate", {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ content }),
+                              });
+                              const modData = await modRes.json();
+                              is_flagged = modData.flagged;
+
+                              if (is_flagged) {
+                                toast.error(
+                                  "Nội dung vi phạm tiêu chuẩn cộng đồng và đã bị hệ thống chặn!",
+                                  { duration: 4000 },
+                                );
+                              }
+                            } catch (err) {
+                              console.error("Lỗi quét AI:", err);
+                            }
+                          }
+
+                          // ================= CHẶN & XÓA BÀI VI PHẠM =================
+                          if (is_flagged) {
+                            // Nếu có ảnh đi kèm thì xóa luôn ảnh đó khỏi Supabase Storage để tránh rác dữ liệu
+                            if (imageUrl) {
+                              const uploadedFileName = imageUrl
+                                .split("/")
+                                .pop();
+                              if (uploadedFileName) {
+                                await supabase.storage
+                                  .from("posts")
+                                  .remove([uploadedFileName]);
+                              }
+                            }
+                            return; // Dừng lại ngay lập tức, không cho phép chạy lệnh createPost()
+                          }
+
+                          // ================= CREATE POST =================
+                          const newPost = await createPost({
+                            content,
+                            image_url: imageUrl,
+                            is_flagged,
+                            page_id: selectedPageId,
+                          });
+
+                          if (!newPost) {
+                            console.error("CREATE POST FAILED");
                             return;
                           }
 
-                          const { data } = supabase.storage
-                            .from("posts")
-                            .getPublicUrl(fileName);
+                          // ================= UPDATE UI =================
+                          setPosts((prev) => [newPost, ...prev]);
 
-                          imageUrl = data.publicUrl;
+                          // ================= RESET =================
+                          setContent("");
+                          setFile(null);
+                          setSelectedPageId(null);
+                        } catch (err) {
+                          console.error("POST ERROR:", err);
                         }
-
-                        // ================= KIỂM DUYỆT AI =================
-                        let is_flagged = false;
-                        if (content) {
-                          try {
-                            const modRes = await fetch("/api/moderate", {
-                              method: "POST",
-                              headers: { "Content-Type": "application/json" },
-                              body: JSON.stringify({ content }),
-                            });
-                            const modData = await modRes.json();
-                            is_flagged = modData.flagged;
-
-                            if (is_flagged) {
-                              toast.error(
-                                "Nội dung vi phạm tiêu chuẩn cộng đồng và đã bị hệ thống chặn!",
-                                { duration: 4000 },
-                              );
-                            }
-                          } catch (err) {
-                            console.error("Lỗi quét AI:", err);
-                          }
-                        }
-
-                        // ================= CHẶN & XÓA BÀI VI PHẠM =================
-                        if (is_flagged) {
-                          // Nếu có ảnh đi kèm thì xóa luôn ảnh đó khỏi Supabase Storage để tránh rác dữ liệu
-                          if (imageUrl) {
-                            const uploadedFileName = imageUrl.split("/").pop();
-                            if (uploadedFileName) {
-                              await supabase.storage
-                                .from("posts")
-                                .remove([uploadedFileName]);
-                            }
-                          }
-                          return; // Dừng lại ngay lập tức, không cho phép chạy lệnh createPost()
-                        }
-
-                        // ================= CREATE POST =================
-                        const newPost = await createPost({
-                          content,
-                          image_url: imageUrl,
-                          is_flagged,
-                          page_id: selectedPageId,
-                        });
-
-                        if (!newPost) {
-                          console.error("CREATE POST FAILED");
-                          return;
-                        }
-
-                        // ================= UPDATE UI =================
-                        setPosts((prev) => [newPost, ...prev]);
-
-                        // ================= RESET =================
-                        setContent("");
-                        setFile(null);
-                        setSelectedPageId(null);
-                      } catch (err) {
-                        console.error("POST ERROR:", err);
-                      }
-                    }}
-                    disabled={!content && !file}
-                    className="bg-gradient-to-r from-primary to-accent text-primary-fg px-5 py-1.5 rounded-full font-semibold text-sm shadow-ig hover:brightness-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Đăng
-                  </button>
+                      }}
+                      disabled={!content && !file}
+                      className="bg-gradient-to-r from-primary to-accent text-primary-fg px-5 py-1.5 rounded-full font-semibold text-sm shadow-ig hover:brightness-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Đăng
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* FEED */}
           <div className="space-y-3">
@@ -1276,11 +1329,16 @@ export default function HomePage() {
                       value={commentInput[post.id] ?? ""}
                       onChange={(e) => {
                         const value = e.target.value;
-
                         setCommentInput((prev) => ({
                           ...prev,
                           [post.id]: value,
                         }));
+                      }}
+                      onFocus={(e) => {
+                        if (!user) {
+                          e.target.blur();
+                          setShowLoginPopup(true);
+                        }
                       }}
                       onDoubleClick={(e) => e.stopPropagation()}
                       className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-500 dark:placeholder:text-gray-400"
@@ -1763,6 +1821,12 @@ export default function HomePage() {
                     value={modalCommentText}
                     onChange={(e) => setModalCommentText(e.target.value)}
                     placeholder="Thêm bình luận..."
+                    onFocus={(e) => {
+                      if (!user) {
+                        e.target.blur();
+                        setShowLoginPopup(true);
+                      }
+                    }}
                     onKeyDown={(e) => e.key === "Enter" && handleModalComment()}
                   />
                   <button
@@ -1789,7 +1853,10 @@ export default function HomePage() {
 
         {/* Nút tròn để Toggle Chat */}
         <button
-          onClick={() => setIsChatOpen(!isChatOpen)}
+          onClick={() => {
+            if (!checkLogin()) return;
+            setIsChatOpen(!isChatOpen);
+          }}
           className={`shadow-2xl transition-all active:scale-90 p-4 rounded-full flex items-center justify-center ${
             isChatOpen
               ? "bg-white dark:bg-[#262626] text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-neutral-800"
@@ -1847,6 +1914,85 @@ export default function HomePage() {
                 disabled={!reportReason.trim()}
               >
                 Gửi báo cáo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ================= MODAL LOGIN REQUIREMENT ================= */}
+      {showLoginPopup && (
+        <div
+          className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4 animate-in fade-in duration-200"
+          onClick={() => setShowLoginPopup(false)}
+        >
+          <div
+            className="bg-white dark:bg-[#262626] rounded-2xl shadow-2xl w-full max-w-[320px] overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-200 dark:border-neutral-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 text-center pb-4">
+              <h3 className="text-[18px] font-bold text-gray-900 dark:text-gray-100 mb-1">
+                Yêu cầu đăng nhập
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">
+                Vui lòng đăng nhập để tiếp tục!
+              </p>
+            </div>
+
+            <form
+              onSubmit={handlePopupLogin}
+              className="px-6 pb-4 flex flex-col gap-3"
+            >
+              <input
+                type="email"
+                placeholder="Email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                required
+                className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors text-sm"
+              />
+              <input
+                type="password"
+                placeholder="Mật khẩu"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                required
+                className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors text-sm"
+              />
+              <button
+                type="submit"
+                disabled={loginLoading}
+                className="w-full bg-blue-500 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-600 transition disabled:opacity-50 text-sm mt-1"
+              >
+                {loginLoading ? "Đang xử lý..." : "Đăng nhập"}
+              </button>
+            </form>
+
+            <div className="flex flex-col border-t border-gray-200 dark:border-neutral-800">
+              <button
+                className="w-full py-3 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[#333333] transition-colors border-b border-gray-200 dark:border-neutral-800 flex justify-center items-center gap-2"
+                onClick={() => {
+                  supabase.auth.signInWithOAuth({
+                    provider: "google",
+                    options: { redirectTo: window.location.origin },
+                  });
+                }}
+              >
+                Đăng nhập với Google
+              </button>
+              <button
+                className="w-full py-3 text-sm font-semibold text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors border-b border-gray-200 dark:border-neutral-800"
+                onClick={() => {
+                  setShowLoginPopup(false);
+                  router.push("/login?view=register");
+                }}
+              >
+                Chưa có tài khoản? Đăng ký
+              </button>
+              <button
+                className="w-full py-3 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#333333] transition-colors"
+                onClick={() => setShowLoginPopup(false)}
+              >
+                Đóng
               </button>
             </div>
           </div>

@@ -15,6 +15,7 @@ import {
   Search,
   Users,
 } from "lucide-react";
+import toast from "react-hot-toast";
 
 export default function Navbar({ user: propUser }: any) {
   const [user, setUser] = useState<any>(propUser);
@@ -32,6 +33,29 @@ export default function Navbar({ user: propUser }: any) {
 
   const searchRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+
+  // ================= LOGIN POPUP =================
+  const [showLoginPopup, setShowLoginPopup] = useState(false);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPassword, setLoginPassword] = useState("");
+  const [loginLoading, setLoginLoading] = useState(false);
+
+  const handlePopupLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email: loginEmail,
+      password: loginPassword,
+    });
+    setLoginLoading(false);
+    if (error) {
+      toast.error(error.message || "Đăng nhập thất bại");
+    } else {
+      toast.success("Đăng nhập thành công!");
+      setShowLoginPopup(false);
+      window.location.reload();
+    }
+  };
 
   // ================= THEME =================
   useEffect(() => {
@@ -499,14 +523,10 @@ export default function Navbar({ user: propUser }: any) {
               </>
             ) : (
               <button
-                onClick={() =>
-                  supabase.auth.signInWithOAuth({
-                    provider: "google",
-                    options: { redirectTo: window.location.origin },
-                  })
-                }
+                onClick={() => setShowLoginPopup(true)}
+                className="font-semibold text-sm bg-blue-500 text-white px-4 py-1.5 rounded-lg hover:bg-blue-600 transition-colors"
               >
-                Login
+                Đăng nhập
               </button>
             )}
           </div>
@@ -560,6 +580,86 @@ export default function Navbar({ user: propUser }: any) {
           })}
         </div>
       </div>
+
+      {/* ================= MODAL LOGIN ================= */}
+      {showLoginPopup && (
+        <div
+          className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4 animate-in fade-in duration-200"
+          onClick={() => setShowLoginPopup(false)}
+        >
+          <div
+            className="bg-white dark:bg-[#262626] rounded-2xl shadow-2xl w-full max-w-[320px] overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-200 dark:border-neutral-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-6 text-center pb-4">
+              <h3 className="text-[18px] font-bold text-gray-900 dark:text-gray-100 mb-1">
+                Đăng nhập
+              </h3>
+              <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">
+                Vui lòng đăng nhập để tiếp tục!
+              </p>
+            </div>
+
+            <form
+              onSubmit={handlePopupLogin}
+              className="px-6 pb-4 flex flex-col gap-3"
+            >
+              <input
+                type="email"
+                placeholder="Email"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                required
+                className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors text-sm"
+              />
+              <input
+                type="password"
+                placeholder="Mật khẩu"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                required
+                className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors text-sm"
+              />
+              <button
+                type="submit"
+                disabled={loginLoading}
+                className="w-full bg-blue-500 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-600 transition disabled:opacity-50 text-sm mt-1"
+              >
+                {loginLoading ? "Đang xử lý..." : "Đăng nhập"}
+              </button>
+            </form>
+
+            <div className="flex flex-col border-t border-gray-200 dark:border-neutral-800">
+              <button
+                className="w-full py-3 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[#333333] transition-colors border-b border-gray-200 dark:border-neutral-800 flex justify-center items-center gap-2"
+                onClick={() => {
+                  supabase.auth.signInWithOAuth({
+                    provider: "google",
+                    options: { redirectTo: window.location.origin },
+                  });
+                }}
+              >
+                Đăng nhập với Google
+              </button>
+              <button
+                className="w-full py-3 text-sm font-semibold text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors border-b border-gray-200 dark:border-neutral-800"
+                onClick={() => {
+                  setShowLoginPopup(false);
+                  router.push("/login?view=register");
+                }}
+              >
+                Chưa có tài khoản? Đăng ký
+              </button>
+              <button
+                className="w-full py-3 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#333333] transition-colors"
+                onClick={() => setShowLoginPopup(false)}
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </nav>
   );
 }
