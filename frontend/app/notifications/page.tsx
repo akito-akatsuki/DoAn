@@ -37,6 +37,9 @@ export default function NotificationsPage() {
   );
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState("");
+  const [expandedReplies, setExpandedReplies] = useState<
+    Record<string, boolean>
+  >({});
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
   const router = useRouter();
@@ -73,9 +76,13 @@ export default function NotificationsPage() {
     const { data } = await supabase.auth.getUser();
     const currentUser = data.user;
 
-    setUser(currentUser);
-
     if (currentUser) {
+      const { data: dbUser } = await supabase
+        .from("users")
+        .select("*")
+        .eq("id", currentUser.id)
+        .single();
+      setUser({ ...currentUser, ...dbUser });
       await loadNotifications(currentUser.id);
     }
   };
@@ -207,6 +214,7 @@ export default function NotificationsPage() {
     setOpenCommentMenuId(null);
     setEditingCommentId(null);
     setShowEmojiPicker(false);
+    setExpandedReplies({});
   };
 
   const handleLike = async (postId: string) => {
@@ -248,8 +256,11 @@ export default function NotificationsPage() {
       users: {
         id: user.id,
         name:
-          user.user_metadata?.name || user.user_metadata?.full_name || "Bạn",
-        avatar_url: user.user_metadata?.avatar_url,
+          user.name ||
+          user.user_metadata?.name ||
+          user.user_metadata?.full_name ||
+          "Bạn",
+        avatar_url: user.avatar_url || user.user_metadata?.avatar_url,
       },
     };
     setModalComments((prev) => [...prev, tempComment]);
@@ -468,9 +479,26 @@ export default function NotificationsPage() {
 
               {/* Comments */}
               <div className="flex-1 p-4 overflow-y-auto space-y-4">
-                {modalComments.map((c: any) => {
-                  const isReply = c.content?.trim().startsWith("@");
-                  return (
+                {(() => {
+                  const items: any[] = [];
+                  let tempReplies: any[] = [];
+                  modalComments.forEach((c: any) => {
+                    const isReply = c.content?.trim().startsWith("@");
+                    if (isReply) {
+                      tempReplies.push(c);
+                    } else {
+                      if (tempReplies.length > 0) {
+                        items.push({ type: "replies", data: tempReplies });
+                        tempReplies = [];
+                      }
+                      items.push({ type: "comment", data: c });
+                    }
+                  });
+                  if (tempReplies.length > 0) {
+                    items.push({ type: "replies", data: tempReplies });
+                  }
+
+                  const renderComment = (c: any, isReply: boolean) => (
                     <div
                       key={c.id}
                       className={`flex items-start gap-3 group relative cursor-pointer ${
@@ -582,7 +610,44 @@ export default function NotificationsPage() {
                       )}
                     </div>
                   );
-                })}
+
+                  return items.map((item, idx) => {
+                    if (item.type === "comment") {
+                      return renderComment(item.data, false);
+                    } else {
+                      const replies = item.data;
+                      if (replies.length === 1) {
+                        return renderComment(replies[0], true);
+                      } else {
+                        const groupId = replies[0].id;
+                        const isExpanded = expandedReplies[groupId];
+                        return (
+                          <div key={`group-${groupId}`} className="space-y-4">
+                            {!isExpanded ? (
+                              <div
+                                className="ml-10 mt-1 flex items-center gap-3 cursor-pointer group"
+                                onClick={() =>
+                                  setExpandedReplies((prev) => ({
+                                    ...prev,
+                                    [groupId]: true,
+                                  }))
+                                }
+                              >
+                                <div className="w-8 h-[1px] bg-gray-400 dark:bg-gray-600"></div>
+                                <span className="text-sm font-semibold text-gray-500 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors">
+                                  Xem {replies.length} câu trả lời từ{" "}
+                                  {replies[0].users?.name || "Người dùng"}
+                                </span>
+                              </div>
+                            ) : (
+                              replies.map((c: any) => renderComment(c, true))
+                            )}
+                          </div>
+                        );
+                      }
+                    }
+                  });
+                })()}
               </div>
 
               {/* Action / Input */}

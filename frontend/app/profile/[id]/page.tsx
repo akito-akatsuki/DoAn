@@ -3,7 +3,7 @@
 import { use, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
-import { Heart, MoreHorizontal, X, Trash2, Smile, Flag } from "lucide-react";
+import { Heart, MoreHorizontal, X, Trash2, Smile, Camera } from "lucide-react";
 import { useRef } from "react";
 import {
   getComments,
@@ -21,6 +21,8 @@ type UserProfile = {
   name: string;
   avatar_url?: string | null;
   bio?: string | null;
+  cover_url?: string | null;
+  cover_position_y?: number | null;
 };
 
 export default function ProfilePage({
@@ -59,6 +61,9 @@ export default function ProfilePage({
   const [openPostMenu, setOpenPostMenu] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState("");
+  const [expandedReplies, setExpandedReplies] = useState<
+    Record<string, boolean>
+  >({});
 
   // ================= REPORT POST =================
   const [reportPostId, setReportPostId] = useState<string | null>(null);
@@ -69,7 +74,12 @@ export default function ProfilePage({
   const [editName, setEditName] = useState("");
   const [editBio, setEditBio] = useState("");
   const [editAvatar, setEditAvatar] = useState<File | null>(null);
+  const [editCover, setEditCover] = useState<File | null>(null);
   const [isSavingProfile, setIsSavingProfile] = useState(false);
+
+  const [editCoverPositionY, setEditCoverPositionY] = useState(50);
+  const [isDraggingCover, setIsDraggingCover] = useState(false);
+  const [dragStartY, setDragStartY] = useState(0);
 
   // ================= CLICK OUTSIDE =================
   useEffect(() => {
@@ -95,7 +105,14 @@ export default function ProfilePage({
   useEffect(() => {
     const loadUser = async () => {
       const { data } = await supabase.auth.getUser();
-      setCurrentUser(data.user);
+      if (data.user) {
+        const { data: dbUser } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", data.user.id)
+          .single();
+        setCurrentUser({ ...data.user, ...dbUser });
+      }
     };
 
     loadUser();
@@ -270,6 +287,7 @@ export default function ProfilePage({
     setModalCommentText("");
     setOpenCommentMenuId(null);
     setShowEmojiPicker(false);
+    setExpandedReplies({});
   };
 
   const handleLike = async (postId: string) => {
@@ -309,10 +327,12 @@ export default function ProfilePage({
       users: {
         id: currentUser.id,
         name:
+          currentUser.name ||
           currentUser.user_metadata?.name ||
           currentUser.user_metadata?.full_name ||
           "Bạn",
-        avatar_url: currentUser.user_metadata?.avatar_url,
+        avatar_url:
+          currentUser.avatar_url || currentUser.user_metadata?.avatar_url,
       },
     };
     setModalComments((prev) => [...prev, tempComment]);
@@ -406,6 +426,8 @@ export default function ProfilePage({
     setEditName(profile?.name || "");
     setEditBio(profile?.bio || "");
     setEditAvatar(null);
+    setEditCover(null);
+    setEditCoverPositionY(profile?.cover_position_y ?? 50);
     setIsEditProfileOpen(true);
   };
 
@@ -413,7 +435,8 @@ export default function ProfilePage({
     if (!currentUser || !profile) return;
     setIsSavingProfile(true);
     try {
-      let newAvatarUrl = profile.avatar_url;
+      let newAvatarUrl = profile.avatar_url ?? null;
+      let newCoverUrl = profile.cover_url ?? null;
 
       // Nếu có chọn ảnh mới, upload lên bucket "posts"
       if (editAvatar) {
@@ -423,21 +446,46 @@ export default function ProfilePage({
           .from("posts")
           .upload(fileName, editAvatar);
 
-        if (!uploadError) {
-          const { data } = supabase.storage
-            .from("posts")
-            .getPublicUrl(fileName);
-          newAvatarUrl = data.publicUrl;
+        if (uploadError) {
+          throw new Error(`Lỗi tải ảnh đại diện: ${uploadError.message}`);
         }
+        const { data } = supabase.storage.from("posts").getPublicUrl(fileName);
+        newAvatarUrl = data.publicUrl;
+      }
+
+      if (editCover) {
+        const cleanName = editCover.name.replace(/[^a-zA-Z0-9.]/g, "_");
+        const fileName = `cover_${Date.now()}_${cleanName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("posts")
+          .upload(fileName, editCover);
+
+        if (uploadError) {
+          throw new Error(`Lỗi tải ảnh bìa: ${uploadError.message}`);
+        }
+        const { data } = supabase.storage.from("posts").getPublicUrl(fileName);
+        newCoverUrl = data.publicUrl;
       }
 
       // Cập nhật thông tin vào bảng users
       const { error } = await supabase
         .from("users")
-        .update({ name: editName, bio: editBio, avatar_url: newAvatarUrl })
+        .update({
+          name: editName,
+          bio: editBio,
+          avatar_url: newAvatarUrl,
+          cover_url: newCoverUrl,
+          cover_position_y: editCoverPositionY,
+        })
         .eq("id", currentUser.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Database update error:", error);
+        throw new Error(
+          error.message ||
+            "Lỗi cập nhật CSDL (Có thể thiếu cột cover_position_y)",
+        );
+      }
 
       // Cập nhật giao diện ngay lập tức
       setProfile({
@@ -445,17 +493,43 @@ export default function ProfilePage({
         name: editName,
         bio: editBio,
         avatar_url: newAvatarUrl,
+        cover_url: newCoverUrl,
+        cover_position_y: editCoverPositionY,
       });
+      if (currentUser && currentUser.id === profile.id) {
+        setCurrentUser((prev: any) => ({
+          ...prev,
+          name: editName,
+          avatar_url: newAvatarUrl,
+        }));
+      }
       setIsEditProfileOpen(false);
-    } catch (err) {
-      console.error(err);
-      toast.error(
-        "Lỗi khi lưu thông tin. Hãy kiểm tra quyền (RLS) của bảng users.",
-      );
+      toast.success("Cập nhật thông tin thành công!");
+    } catch (err: any) {
+      console.error("Lỗi saveProfile:", err);
+      toast.error(err.message || "Đã xảy ra lỗi khi lưu thông tin.");
     } finally {
       setIsSavingProfile(false);
     }
   };
+
+  // ================= DRAG COVER HANDLERS =================
+  const handleDragStart = (clientY: number) => {
+    setIsDraggingCover(true);
+    setDragStartY(clientY);
+  };
+
+  const handleDragMove = (clientY: number) => {
+    if (!isDraggingCover) return;
+    const deltaY = clientY - dragStartY;
+    const deltaPercent = (deltaY / 128) * 100; // 128px là chiều cao container (h-32)
+    setEditCoverPositionY((prev) =>
+      Math.max(0, Math.min(100, prev - deltaPercent)),
+    );
+    setDragStartY(clientY);
+  };
+
+  const handleDragEnd = () => setIsDraggingCover(false);
 
   // ================= UI =================
   if (loading) {
@@ -476,89 +550,103 @@ export default function ProfilePage({
 
   return (
     <div className="min-h-screen text-gray-900 dark:text-gray-100 transition-colors duration-500 bg-gray-50 dark:bg-neutral-900">
-      <div className="max-w-[935px] mx-auto pt-24 px-4 pb-24 md:pb-10">
-        {/* ================= HEADER ================= */}
-        <div className="flex items-center gap-8 border-b border-gray-200 dark:border-neutral-800 pb-8">
-          <img
-            src={
-              profile.avatar_url ||
-              `https://api.dicebear.com/7.x/identicon/svg?seed=${profile.id}`
-            }
-            className="w-28 h-28 rounded-full"
-          />
-
-          <div className="flex-1">
-            <div className="flex items-center gap-4">
-              <h1 className="text-xl font-semibold">{profile.name}</h1>
-
-              {currentUser?.id !== id ? (
-                <button
-                  onClick={toggleFollow}
-                  className={`px-4 py-1.5 rounded-lg font-semibold text-sm transition-colors ${
-                    isFollowing
-                      ? "bg-secondary text-gray-900 dark:text-gray-100 hover:bg-secondary/80"
-                      : "bg-blue-500 text-white hover:bg-blue-600"
-                  }`}
-                >
-                  {isFollowing ? "Đang theo dõi" : "Theo dõi"}
-                </button>
-              ) : (
-                <button
-                  onClick={openEditProfile}
-                  className="px-4 py-1.5 rounded-lg font-semibold text-sm transition-colors bg-secondary text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-neutral-700 hover:bg-secondary/80 shadow-sm"
-                >
-                  Sửa thông tin
-                </button>
-              )}
-            </div>
-
-            <div className="flex gap-6 mt-4 text-sm">
-              <span>
-                <b>{posts.length}</b> bài viết
-              </span>
-              <span
-                className="cursor-pointer hover:underline"
-                onClick={loadFollowers}
-              >
-                <b>{followersCount}</b> người theo dõi
-              </span>
-              <span
-                className="cursor-pointer hover:underline"
-                onClick={loadFollowing}
-              >
-                <b>{followingCount}</b> đang theo dõi
-              </span>
-            </div>
-
-            <p className="mt-3 text-sm text-muted-foreground">
-              {profile.bio || "No bio yet"}
-            </p>
-          </div>
+      <div className="pt-[60px]">
+        {/* ================= HEADER BÌA ================= */}
+        <div className="w-full h-[200px] md:h-[300px] bg-gradient-to-r from-pink-400 to-purple-500 relative">
+          {profile.cover_url && (
+            <img
+              src={profile.cover_url}
+              className="w-full h-full object-cover"
+              style={{
+                objectPosition: `50% ${profile.cover_position_y ?? 50}%`,
+              }}
+            />
+          )}
         </div>
 
-        {/* ================= POSTS GRID ================= */}
-        <div className="grid grid-cols-3 gap-1 mt-4">
-          {posts.map((post) => (
-            <div
-              key={post.id}
-              onClick={() => openPostModal(post)}
-              className="aspect-square border border-gray-200 dark:border-neutral-800 shadow-sm hover:shadow-md dark:shadow-black/40 rounded-sm overflow-hidden relative group cursor-pointer transition-all bg-white dark:bg-[#262626]"
-            >
-              {post.image_url ? (
-                <img
-                  src={post.image_url}
-                  className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
-                />
-              ) : (
-                <div className="p-4 flex items-center justify-center w-full h-full text-center text-sm md:text-base break-words">
-                  {post.content}
-                </div>
-              )}
+        <div className="max-w-[935px] mx-auto px-4 -mt-16 relative z-10 pb-24 md:pb-10">
+          <div className="flex flex-col md:flex-row items-center md:items-end gap-6 bg-white dark:bg-[#262626] p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-neutral-800 mb-8 text-center md:text-left">
+            <img
+              src={
+                profile.avatar_url ||
+                `https://api.dicebear.com/7.x/identicon/svg?seed=${profile.id}`
+              }
+              className="w-32 h-32 rounded-full border-4 border-white dark:border-[#262626] bg-white shadow-md object-cover flex-shrink-0"
+            />
 
-              {/* Hover Dark Layer */}
-              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 pointer-events-none" />
+            <div className="flex-1 pb-2">
+              <div className="flex flex-col md:flex-row items-center justify-center md:justify-start gap-4 mb-4 md:mb-2">
+                <h1 className="text-2xl font-bold">{profile.name}</h1>
+
+                {currentUser?.id !== id ? (
+                  <button
+                    onClick={toggleFollow}
+                    className={`px-4 py-1.5 rounded-lg font-semibold text-sm transition-colors ${
+                      isFollowing
+                        ? "bg-secondary text-gray-900 dark:text-gray-100 hover:bg-secondary/80"
+                        : "bg-blue-500 text-white hover:bg-blue-600"
+                    }`}
+                  >
+                    {isFollowing ? "Đang theo dõi" : "Theo dõi"}
+                  </button>
+                ) : (
+                  <button
+                    onClick={openEditProfile}
+                    className="px-4 py-1.5 rounded-lg font-semibold text-sm transition-colors bg-secondary text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-neutral-700 hover:bg-secondary/80 shadow-sm"
+                  >
+                    Sửa thông tin
+                  </button>
+                )}
+              </div>
+
+              <div className="flex justify-center md:justify-start gap-6 text-sm mb-3">
+                <span>
+                  <b>{posts.length}</b> bài viết
+                </span>
+                <span
+                  className="cursor-pointer hover:underline"
+                  onClick={loadFollowers}
+                >
+                  <b>{followersCount}</b> người theo dõi
+                </span>
+                <span
+                  className="cursor-pointer hover:underline"
+                  onClick={loadFollowing}
+                >
+                  <b>{followingCount}</b> đang theo dõi
+                </span>
+              </div>
+
+              <p className="text-sm text-muted-foreground">
+                {profile.bio || "Chưa có thông tin giới thiệu"}
+              </p>
             </div>
-          ))}
+          </div>
+
+          {/* ================= POSTS GRID ================= */}
+          <div className="grid grid-cols-3 gap-1 mt-4">
+            {posts.map((post) => (
+              <div
+                key={post.id}
+                onClick={() => openPostModal(post)}
+                className="aspect-square border border-gray-200 dark:border-neutral-800 shadow-sm hover:shadow-md dark:shadow-black/40 rounded-sm overflow-hidden relative group cursor-pointer transition-all bg-white dark:bg-[#262626]"
+              >
+                {post.image_url ? (
+                  <img
+                    src={post.image_url}
+                    className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
+                  />
+                ) : (
+                  <div className="p-4 flex items-center justify-center w-full h-full text-center text-sm md:text-base break-words">
+                    {post.content}
+                  </div>
+                )}
+
+                {/* Hover Dark Layer */}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 pointer-events-none" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -652,9 +740,26 @@ export default function ProfilePage({
 
               {/* Comments */}
               <div className="flex-1 p-4 overflow-y-auto space-y-4">
-                {modalComments.map((c: any) => {
-                  const isReply = c.content?.trim().startsWith("@");
-                  return (
+                {(() => {
+                  const items: any[] = [];
+                  let tempReplies: any[] = [];
+                  modalComments.forEach((c: any) => {
+                    const isReply = c.content?.trim().startsWith("@");
+                    if (isReply) {
+                      tempReplies.push(c);
+                    } else {
+                      if (tempReplies.length > 0) {
+                        items.push({ type: "replies", data: tempReplies });
+                        tempReplies = [];
+                      }
+                      items.push({ type: "comment", data: c });
+                    }
+                  });
+                  if (tempReplies.length > 0) {
+                    items.push({ type: "replies", data: tempReplies });
+                  }
+
+                  const renderComment = (c: any, isReply: boolean) => (
                     <div
                       key={c.id}
                       className={`flex items-start gap-3 group relative cursor-pointer ${
@@ -766,7 +871,44 @@ export default function ProfilePage({
                       )}
                     </div>
                   );
-                })}
+
+                  return items.map((item, idx) => {
+                    if (item.type === "comment") {
+                      return renderComment(item.data, false);
+                    } else {
+                      const replies = item.data;
+                      if (replies.length === 1) {
+                        return renderComment(replies[0], true);
+                      } else {
+                        const groupId = replies[0].id;
+                        const isExpanded = expandedReplies[groupId];
+                        return (
+                          <div key={`group-${groupId}`} className="space-y-4">
+                            {!isExpanded ? (
+                              <div
+                                className="ml-10 mt-1 flex items-center gap-3 cursor-pointer group"
+                                onClick={() =>
+                                  setExpandedReplies((prev) => ({
+                                    ...prev,
+                                    [groupId]: true,
+                                  }))
+                                }
+                              >
+                                <div className="w-8 h-[1px] bg-gray-400 dark:bg-gray-600"></div>
+                                <span className="text-sm font-semibold text-gray-500 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors">
+                                  Xem {replies.length} câu trả lời từ{" "}
+                                  {replies[0].users?.name || "Người dùng"}
+                                </span>
+                              </div>
+                            ) : (
+                              replies.map((c: any) => renderComment(c, true))
+                            )}
+                          </div>
+                        );
+                      }
+                    }
+                  });
+                })()}
               </div>
 
               {/* Action / Input */}
@@ -868,26 +1010,81 @@ export default function ProfilePage({
             </div>
 
             <div className="p-4 space-y-4">
-              <div className="flex flex-col gap-2 items-center">
-                <img
-                  src={
-                    editAvatar
-                      ? URL.createObjectURL(editAvatar)
-                      : profile?.avatar_url ||
-                        `https://api.dicebear.com/7.x/identicon/svg?seed=${profile?.id}`
-                  }
-                  className="w-20 h-20 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shadow-sm"
-                  alt="Preview Avatar"
-                />
-                <label className="text-blue-500 font-semibold text-sm cursor-pointer hover:text-blue-600 transition-colors">
-                  Đổi ảnh đại diện
-                  <input
-                    type="file"
-                    className="hidden"
-                    accept="image/*"
-                    onChange={(e) => setEditAvatar(e.target.files?.[0] || null)}
+              <div className="flex flex-col gap-4 items-center">
+                {/* COVER UPLOAD */}
+                <div
+                  className="relative w-full h-32 bg-gray-100 dark:bg-[#333333] rounded-lg overflow-hidden flex items-center justify-center border-2 border-gray-200 dark:border-neutral-700 cursor-grab active:cursor-grabbing touch-none"
+                  onMouseDown={(e) => handleDragStart(e.clientY)}
+                  onMouseMove={(e) => handleDragMove(e.clientY)}
+                  onMouseUp={handleDragEnd}
+                  onMouseLeave={handleDragEnd}
+                  onTouchStart={(e) => handleDragStart(e.touches[0].clientY)}
+                  onTouchMove={(e) => handleDragMove(e.touches[0].clientY)}
+                  onTouchEnd={handleDragEnd}
+                >
+                  {(editCover || profile?.cover_url) && (
+                    <img
+                      src={
+                        editCover
+                          ? URL.createObjectURL(editCover)
+                          : profile?.cover_url!
+                      }
+                      className="w-full h-full object-cover pointer-events-none select-none"
+                      style={{ objectPosition: `50% ${editCoverPositionY}%` }}
+                      alt="Cover preview"
+                    />
+                  )}
+
+                  <label
+                    className="absolute top-2 right-2 cursor-pointer bg-black/50 hover:bg-black/70 transition-colors flex items-center justify-center text-white px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm z-10"
+                    onMouseDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
+                  >
+                    <Camera size={14} className="mr-1.5" />
+                    Đổi ảnh bìa
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={(e) =>
+                        setEditCover(e.target.files?.[0] || null)
+                      }
+                    />
+                  </label>
+
+                  {(editCover || profile?.cover_url) && (
+                    <div className="absolute inset-0 pointer-events-none flex items-center justify-center bg-black/0 hover:bg-black/20 transition-colors opacity-0 hover:opacity-100">
+                      <span className="text-white bg-black/50 px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm">
+                        Kéo lên/xuống để căn chỉnh
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {/* AVATAR UPLOAD */}
+                <div className="relative -mt-12">
+                  <img
+                    src={
+                      editAvatar
+                        ? URL.createObjectURL(editAvatar)
+                        : profile?.avatar_url ||
+                          `https://api.dicebear.com/7.x/identicon/svg?seed=${profile?.id}`
+                    }
+                    className="w-20 h-20 rounded-full object-cover border-4 border-white dark:border-[#262626] shadow-sm bg-white dark:bg-neutral-800"
+                    alt="Preview Avatar"
                   />
-                </label>
+                  <label className="absolute inset-0 cursor-pointer bg-black/0 hover:bg-black/20 transition-colors flex items-center justify-center text-white opacity-0 hover:opacity-100 rounded-full">
+                    <Camera size={20} />
+                    <input
+                      type="file"
+                      className="hidden"
+                      accept="image/*"
+                      onChange={(e) =>
+                        setEditAvatar(e.target.files?.[0] || null)
+                      }
+                    />
+                  </label>
+                </div>
               </div>
 
               <div>

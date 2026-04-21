@@ -326,12 +326,17 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
         return;
       }
 
-      const { data } = await supabase
+      let dbQuery = supabase
         .from("users")
         .select("id, name, avatar_url")
-        .in("id", followingIds)
-        .ilike("name", `%${search}%`)
-        .limit(15);
+        .in("id", followingIds);
+
+      const words = search.trim().split(/\s+/);
+      words.forEach((word) => {
+        dbQuery = dbQuery.ilike("name", `%${word}%`);
+      });
+
+      const { data } = await dbQuery.limit(15);
 
       setResults(data || []);
     }, 300);

@@ -29,6 +29,7 @@ import {
   reportPost,
   deleteComment,
   updateComment,
+  getUserPages,
 } from "@/lib/api";
 import { showConfirm } from "@/components/GlobalConfirm";
 
@@ -65,6 +66,9 @@ export default function HomePage() {
   const [modalCommentText, setModalCommentText] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [openPostMenu, setOpenPostMenu] = useState(false);
+  const [expandedReplies, setExpandedReplies] = useState<
+    Record<string, boolean>
+  >({});
 
   // ================= COMMENT MENUS & EDIT =================
   const [openCommentMenuId, setOpenCommentMenuId] = useState<string | null>(
@@ -82,6 +86,9 @@ export default function HomePage() {
   const [reportReason, setReportReason] = useState("");
 
   const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
+
+  const [userPages, setUserPages] = useState<any[]>([]);
+  const [selectedPageId, setSelectedPageId] = useState<string | null>(null);
 
   // ================= INIT =================
   useEffect(() => {
@@ -209,6 +216,9 @@ export default function HomePage() {
 
         const { data: suggestions } = await query.limit(5);
         if (suggestions) setSuggestedUsers(suggestions);
+
+        const pages = await getUserPages();
+        setUserPages(pages || []);
       }
     } catch (err) {
       console.error("Lỗi mạng khi tải user ở Home:", err);
@@ -373,8 +383,11 @@ export default function HomePage() {
       users: {
         id: user?.id,
         name:
-          user?.user_metadata?.name || user?.user_metadata?.full_name || "Bạn",
-        avatar_url: user?.user_metadata?.avatar_url,
+          user?.name ||
+          user?.user_metadata?.name ||
+          user?.user_metadata?.full_name ||
+          "Bạn",
+        avatar_url: user?.avatar_url || user?.user_metadata?.avatar_url,
       },
     };
 
@@ -444,6 +457,7 @@ export default function HomePage() {
     setModalCommentText("");
     setShowEmojiPicker(false);
     setOpenPostMenu(false);
+    setExpandedReplies({});
   };
 
   const handleModalComment = async () => {
@@ -461,8 +475,11 @@ export default function HomePage() {
       users: {
         id: user?.id,
         name:
-          user?.user_metadata?.name || user?.user_metadata?.full_name || "Bạn",
-        avatar_url: user?.user_metadata?.avatar_url,
+          user?.name ||
+          user?.user_metadata?.name ||
+          user?.user_metadata?.full_name ||
+          "Bạn",
+        avatar_url: user?.avatar_url || user?.user_metadata?.avatar_url,
       },
     };
 
@@ -675,15 +692,56 @@ export default function HomePage() {
         <div className="w-full max-w-[470px]">
           {/* CREATE POST */}
           <div className="shadow-md hover:shadow-lg dark:shadow-black/40 rounded-[12px] p-4 mb-4 border border-gray-200 dark:border-neutral-800 transition-all duration-500 bg-white dark:bg-[#262626]">
+            {userPages.length > 0 && (
+              <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-100 dark:border-neutral-800">
+                <span className="text-xs text-muted-foreground font-medium">
+                  Đăng bài dưới tư cách:
+                </span>
+                <div className="relative">
+                  <select
+                    value={selectedPageId || "user"}
+                    onChange={(e) =>
+                      setSelectedPageId(
+                        e.target.value === "user" ? null : e.target.value,
+                      )
+                    }
+                    className="appearance-none cursor-pointer text-sm border border-gray-200 dark:border-neutral-700 rounded-full pl-3 pr-8 py-1.5 bg-gray-50 hover:bg-gray-100 dark:bg-[#333333] dark:hover:bg-[#3a3a3a] outline-none font-bold text-gray-800 dark:text-gray-100 transition-colors shadow-sm"
+                  >
+                    <option value="user">{user?.name || "Cá nhân"}</option>
+                    {userPages.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center pr-2.5 text-gray-500 dark:text-gray-400">
+                    <svg
+                      className="fill-current h-4 w-4"
+                      xmlns="http://www.w3.org/2000/svg"
+                      viewBox="0 0 20 20"
+                    >
+                      <path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 5.757 6.586 4.343 8z" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="flex items-start gap-4">
               <img
                 src={
-                  user?.avatar_url ||
-                  user?.user_metadata?.avatar_url ||
-                  `https://api.dicebear.com/7.x/identicon/svg?seed=${user?.id}`
+                  (selectedPageId
+                    ? userPages.find((p) => p.id === selectedPageId)?.avatar_url
+                    : user?.avatar_url || user?.user_metadata?.avatar_url) ||
+                  `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPageId || user?.id}`
                 }
                 className="w-10 h-10 rounded-full ring-1 ring-border flex-shrink-0 mt-1 cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={() => router.push(`/profile/${user?.id}`)}
+                onClick={() =>
+                  router.push(
+                    selectedPageId
+                      ? `/fanpage/${selectedPageId}`
+                      : `/profile/${user?.id}`,
+                  )
+                }
                 alt="Your avatar"
               />
               <div className="flex-1 min-w-0">
@@ -794,6 +852,7 @@ export default function HomePage() {
                           content,
                           image_url: imageUrl,
                           is_flagged,
+                          page_id: selectedPageId,
                         });
 
                         if (!newPost) {
@@ -807,6 +866,7 @@ export default function HomePage() {
                         // ================= RESET =================
                         setContent("");
                         setFile(null);
+                        setSelectedPageId(null);
                       } catch (err) {
                         console.error("POST ERROR:", err);
                       }
@@ -847,16 +907,48 @@ export default function HomePage() {
                   <div className="flex items-center gap-3">
                     <img
                       src={
-                        post?.users?.avatar_url ||
-                        `https://api.dicebear.com/7.x/identicon/svg?seed=${post.user_id}`
+                        post.pages?.avatar_url ||
+                        post.users?.avatar_url ||
+                        `https://api.dicebear.com/7.x/identicon/svg?seed=${post.pages?.id || post.user_id}`
                       }
-                      className="w-10 h-10 rounded-full ring-1 ring-border cursor-pointer hover:brightness-105"
+                      onClick={() =>
+                        router.push(
+                          post.pages
+                            ? `/fanpage/${post.pages.id}`
+                            : `/profile/${post.user_id}`,
+                        )
+                      }
+                      className="w-10 h-10 rounded-full ring-1 ring-border cursor-pointer hover:brightness-105 object-cover"
                     />
                     <div>
-                      <span className="font-semibold text-sm block leading-tight">
-                        {post?.users?.name || "unknown"}
+                      <span
+                        onClick={() =>
+                          router.push(
+                            post.pages
+                              ? `/fanpage/${post.pages.id}`
+                              : `/profile/${post.user_id}`,
+                          )
+                        }
+                        className="font-semibold text-sm block leading-tight cursor-pointer hover:underline"
+                      >
+                        {post.pages?.name || post.users?.name || "unknown"}
                       </span>
                       <span className="text-xs text-muted leading-tight mt-0.5 block">
+                        {post.pages && (
+                          <>
+                            Đăng bởi{" "}
+                            <strong
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/profile/${post.user_id}`);
+                              }}
+                              className="cursor-pointer hover:underline text-gray-900 dark:text-gray-100"
+                            >
+                              {post.users?.name}
+                            </strong>
+                            {" • "}
+                          </>
+                        )}
                         {new Date(
                           post.created_at.includes("Z") ||
                             post.created_at.includes("+")
@@ -1170,6 +1262,7 @@ export default function HomePage() {
                   <div className="flex items-center gap-3 pt-3 mt-2 border-t border-border">
                     <img
                       src={
+                        user?.avatar_url ||
                         user?.user_metadata?.avatar_url ||
                         `https://api.dicebear.com/7.x/identicon/svg?seed=${user?.id}`
                       }
@@ -1303,15 +1396,53 @@ export default function HomePage() {
                   <div className="flex items-center gap-3">
                     <img
                       src={
+                        selectedPost.pages?.avatar_url ||
                         selectedPost.users?.avatar_url ||
-                        `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPost.users?.id}`
+                        `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPost.pages?.id || selectedPost.users?.id}`
                       }
-                      className="w-10 h-10 rounded-full border object-cover"
+                      className="w-10 h-10 rounded-full border object-cover cursor-pointer hover:opacity-80"
                       alt="avatar"
+                      onClick={() => {
+                        closeModal();
+                        router.push(
+                          selectedPost.pages
+                            ? `/fanpage/${selectedPost.pages.id}`
+                            : `/profile/${selectedPost.user_id}`,
+                        );
+                      }}
                     />
-                    <span className="font-semibold text-sm">
-                      {selectedPost.users?.name || "Người dùng"}
-                    </span>
+                    <div className="flex flex-col">
+                      <span
+                        className="font-semibold text-sm cursor-pointer hover:underline"
+                        onClick={() => {
+                          closeModal();
+                          router.push(
+                            selectedPost.pages
+                              ? `/fanpage/${selectedPost.pages.id}`
+                              : `/profile/${selectedPost.user_id}`,
+                          );
+                        }}
+                      >
+                        {selectedPost.pages?.name ||
+                          selectedPost.users?.name ||
+                          "Người dùng"}
+                      </span>
+                      {selectedPost.pages && (
+                        <span className="text-xs text-muted-foreground">
+                          Đăng bởi{" "}
+                          <strong
+                            className="cursor-pointer hover:underline text-gray-900 dark:text-gray-100"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              closeModal();
+                              router.push(`/profile/${selectedPost.user_id}`);
+                            }}
+                          >
+                            {selectedPost.users?.name}
+                          </strong>
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   <div className="relative">
@@ -1385,9 +1516,26 @@ export default function HomePage() {
 
               {/* Comments */}
               <div className="flex-1 p-4 overflow-y-auto space-y-4">
-                {modalComments.map((c: any) => {
-                  const isReply = c.content?.trim().startsWith("@");
-                  return (
+                {(() => {
+                  const items: any[] = [];
+                  let tempReplies: any[] = [];
+                  modalComments.forEach((c: any) => {
+                    const isReply = c.content?.trim().startsWith("@");
+                    if (isReply) {
+                      tempReplies.push(c);
+                    } else {
+                      if (tempReplies.length > 0) {
+                        items.push({ type: "replies", data: tempReplies });
+                        tempReplies = [];
+                      }
+                      items.push({ type: "comment", data: c });
+                    }
+                  });
+                  if (tempReplies.length > 0) {
+                    items.push({ type: "replies", data: tempReplies });
+                  }
+
+                  const renderComment = (c: any, isReply: boolean) => (
                     <div
                       key={c.id}
                       className={`flex items-start gap-3 group relative cursor-pointer ${
@@ -1510,7 +1658,44 @@ export default function HomePage() {
                       )}
                     </div>
                   );
-                })}
+
+                  return items.map((item, idx) => {
+                    if (item.type === "comment") {
+                      return renderComment(item.data, false);
+                    } else {
+                      const replies = item.data;
+                      if (replies.length === 1) {
+                        return renderComment(replies[0], true);
+                      } else {
+                        const groupId = replies[0].id;
+                        const isExpanded = expandedReplies[groupId];
+                        return (
+                          <div key={`group-${groupId}`} className="space-y-4">
+                            {!isExpanded ? (
+                              <div
+                                className="ml-10 mt-1 flex items-center gap-3 cursor-pointer group"
+                                onClick={() =>
+                                  setExpandedReplies((prev) => ({
+                                    ...prev,
+                                    [groupId]: true,
+                                  }))
+                                }
+                              >
+                                <div className="w-8 h-[1px] bg-gray-400 dark:bg-gray-600"></div>
+                                <span className="text-sm font-semibold text-gray-500 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors">
+                                  Xem {replies.length} câu trả lời từ{" "}
+                                  {replies[0].users?.name || "Người dùng"}
+                                </span>
+                              </div>
+                            ) : (
+                              replies.map((c: any) => renderComment(c, true))
+                            )}
+                          </div>
+                        );
+                      }
+                    }
+                  });
+                })()}
               </div>
 
               {/* Action / Input */}

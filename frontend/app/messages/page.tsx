@@ -35,7 +35,14 @@ export default function MessagesPage() {
     const loadUser = async () => {
       try {
         const { data } = await supabase.auth.getUser();
-        setUser(data?.user || null);
+        if (data?.user) {
+          const { data: dbUser } = await supabase
+            .from("users")
+            .select("*")
+            .eq("id", data.user.id)
+            .single();
+          setUser({ ...data.user, ...dbUser });
+        }
       } catch (err) {
         console.error("Lỗi lấy thông tin user ở Messages:", err);
       }
@@ -215,12 +222,17 @@ export default function MessagesPage() {
       if (!user?.id) return;
       if (search.length < 2) return setResults([]);
 
-      const { data } = await supabase
+      let dbQuery = supabase
         .from("users")
         .select("id, name, avatar_url")
-        .neq("id", user.id)
-        .ilike("name", `%${search}%`)
-        .limit(5);
+        .neq("id", user.id);
+
+      const words = search.trim().split(/\s+/);
+      words.forEach((word) => {
+        dbQuery = dbQuery.ilike("name", `%${word}%`);
+      });
+
+      const { data } = await dbQuery.limit(5);
 
       setResults(data || []);
     }, 300);
@@ -303,7 +315,7 @@ export default function MessagesPage() {
           className={`w-full md:w-[350px] border border-gray-200 dark:border-neutral-800 shadow-sm dark:shadow-black/30 rounded-xl flex flex-col h-full transition-all duration-500 bg-white dark:bg-[#262626] ${targetUser ? "hidden md:flex" : "flex"}`}
         >
           <div className="p-4 border-b border-gray-200 dark:border-neutral-800 font-bold text-lg flex items-center">
-            {user?.user_metadata?.name || "Tin nhắn"}
+            {user?.name || user?.user_metadata?.name || "Tin nhắn"}
           </div>
 
           <div className="p-3">

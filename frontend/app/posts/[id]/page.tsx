@@ -26,6 +26,9 @@ export default function PostDetailPage() {
   const [isLiked, setIsLiked] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [showHeart, setShowHeart] = useState(false);
+  const [expandedReplies, setExpandedReplies] = useState<
+    Record<string, boolean>
+  >({});
 
   const [openCommentMenuId, setOpenCommentMenuId] = useState<string | null>(
     null,
@@ -37,8 +40,15 @@ export default function PostDetailPage() {
 
   // ================= LOAD USER =================
   useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => {
-      setUser(data.user);
+    supabase.auth.getUser().then(async ({ data }) => {
+      if (data.user) {
+        const { data: dbUser } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", data.user.id)
+          .single();
+        setUser({ ...data.user, ...dbUser });
+      }
     });
     const handleClickOutside = () => setOpenCommentMenuId(null);
     document.addEventListener("click", handleClickOutside);
@@ -193,8 +203,11 @@ export default function PostDetailPage() {
       users: {
         id: user.id,
         name:
-          user.user_metadata?.name || user.user_metadata?.full_name || "Bạn",
-        avatar_url: user.user_metadata?.avatar_url,
+          user.name ||
+          user.user_metadata?.name ||
+          user.user_metadata?.full_name ||
+          "Bạn",
+        avatar_url: user.avatar_url || user.user_metadata?.avatar_url,
       },
     };
 
@@ -373,9 +386,26 @@ export default function PostDetailPage() {
         <div className="mt-4">
           <h2 className="font-bold mb-4">Bình luận</h2>
 
-          {comments.map((c) => {
-            const isReply = c.content?.trim().startsWith("@");
-            return (
+          {(() => {
+            const items: any[] = [];
+            let tempReplies: any[] = [];
+            comments.forEach((c: any) => {
+              const isReply = c.content?.trim().startsWith("@");
+              if (isReply) {
+                tempReplies.push(c);
+              } else {
+                if (tempReplies.length > 0) {
+                  items.push({ type: "replies", data: tempReplies });
+                  tempReplies = [];
+                }
+                items.push({ type: "comment", data: c });
+              }
+            });
+            if (tempReplies.length > 0) {
+              items.push({ type: "replies", data: tempReplies });
+            }
+
+            const renderComment = (c: any, isReply: boolean) => (
               <div
                 key={c.id}
                 className={`flex gap-3 group items-start cursor-pointer ${
@@ -478,7 +508,44 @@ export default function PostDetailPage() {
                 )}
               </div>
             );
-          })}
+
+            return items.map((item, idx) => {
+              if (item.type === "comment") {
+                return renderComment(item.data, false);
+              } else {
+                const replies = item.data;
+                if (replies.length === 1) {
+                  return renderComment(replies[0], true);
+                } else {
+                  const groupId = replies[0].id;
+                  const isExpanded = expandedReplies[groupId];
+                  return (
+                    <div key={`group-${groupId}`} className="space-y-4">
+                      {!isExpanded ? (
+                        <div
+                          className="ml-10 mb-2 flex items-center gap-3 cursor-pointer group"
+                          onClick={() =>
+                            setExpandedReplies((prev) => ({
+                              ...prev,
+                              [groupId]: true,
+                            }))
+                          }
+                        >
+                          <div className="w-8 h-[1px] bg-gray-400 dark:bg-gray-600"></div>
+                          <span className="text-sm font-semibold text-gray-500 dark:text-gray-400 group-hover:text-gray-900 dark:group-hover:text-gray-100 transition-colors">
+                            Xem {replies.length} câu trả lời từ{" "}
+                            {replies[0].users?.name || "Người dùng"}
+                          </span>
+                        </div>
+                      ) : (
+                        replies.map((c: any) => renderComment(c, true))
+                      )}
+                    </div>
+                  );
+                }
+              }
+            });
+          })()}
         </div>
       </div>
 

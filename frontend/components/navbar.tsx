@@ -3,6 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
+import { getUserPages } from "@/lib/api";
 import {
   Sun,
   Moon,
@@ -27,6 +28,7 @@ export default function Navbar({ user: propUser }: any) {
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
+  const [userPages, setUserPages] = useState<any[]>([]);
 
   const searchRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -77,6 +79,20 @@ export default function Navbar({ user: propUser }: any) {
     };
     fetchUser();
   }, [propUser]);
+
+  // ================= LOAD FANPAGES CỦA USER =================
+  useEffect(() => {
+    if (!user?.id) return;
+    const fetchPages = async () => {
+      try {
+        const pages = await getUserPages();
+        setUserPages(pages || []);
+      } catch (err) {
+        console.error("Lỗi tải danh sách fanpage:", err);
+      }
+    };
+    fetchPages();
+  }, [user?.id]);
 
   // ================= LẮNG NGHE THÔNG BÁO CHƯA ĐỌC =================
   useEffect(() => {
@@ -235,13 +251,30 @@ export default function Navbar({ user: propUser }: any) {
         return;
       }
 
-      const { data } = await supabase
-        .from("users")
-        .select("id, name, avatar_url")
-        .ilike("name", `%${query}%`)
-        .limit(5);
+      let userQuery = supabase.from("users").select("id, name, avatar_url");
+      let pageQuery = supabase.from("pages").select("id, name, avatar_url");
 
-      setResults(data || []);
+      const words = query.trim().split(/\s+/);
+      words.forEach((word) => {
+        userQuery = userQuery.ilike("name", `%${word}%`);
+        pageQuery = pageQuery.ilike("name", `%${word}%`);
+      });
+
+      const [usersRes, pagesRes] = await Promise.all([
+        userQuery.limit(5),
+        pageQuery.limit(5),
+      ]);
+
+      const usersData = (usersRes.data || []).map((u) => ({
+        ...u,
+        type: "user",
+      }));
+      const pagesData = (pagesRes.data || []).map((p) => ({
+        ...p,
+        type: "page",
+      }));
+
+      setResults([...usersData, ...pagesData]);
     }, 300);
 
     return () => clearTimeout(delay);
@@ -286,17 +319,27 @@ export default function Navbar({ user: propUser }: any) {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && query.trim().length > 0) {
+                router.push(`/search?q=${encodeURIComponent(query.trim())}`);
+                setResults([]);
+              }
+            }}
             placeholder="Tìm kiếm "
             className="w-[215px] bg-secondary border border-gray-200 dark:border-neutral-700 shadow-inner px-4 py-[10px] rounded-full text-sm outline-none focus:bg-white dark:focus:bg-[#262626] transition-colors placeholder:text-muted-foreground text-gray-900 dark:text-gray-100 font-medium"
           />
 
           {results.length > 0 && (
             <div className="absolute top-full mt-2 w-full bg-white/85 dark:bg-[#262626]/85 backdrop-blur-md border border-gray-200 dark:border-neutral-700 rounded-xl shadow-lg dark:shadow-black/50 z-50 transition-colors duration-500">
-              {results.map((u) => (
+              {results.map((item) => (
                 <div
-                  key={u.id}
+                  key={`${item.type}-${item.id}`}
                   onClick={() => {
-                    router.push(`/profile/${u.id}`);
+                    if (item.type === "page") {
+                      router.push(`/fanpage/${item.id}`);
+                    } else {
+                      router.push(`/profile/${item.id}`);
+                    }
                     setResults([]);
                     setQuery("");
                   }}
@@ -304,12 +347,19 @@ export default function Navbar({ user: propUser }: any) {
                 >
                   <img
                     src={
-                      u.avatar_url ||
-                      `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
+                      item.avatar_url ||
+                      `https://api.dicebear.com/7.x/identicon/svg?seed=${item.id}`
                     }
-                    className="w-7 h-7 rounded-full"
+                    className="w-7 h-7 rounded-full object-cover"
                   />
-                  <span className="text-sm">{u.name}</span>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-semibold">{item.name}</span>
+                    {item.type === "page" && (
+                      <span className="text-[10px] text-muted-foreground uppercase font-bold tracking-wider">
+                        Trang
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -397,6 +447,46 @@ export default function Navbar({ user: propUser }: any) {
                     >
                       Hồ sơ
                     </button>
+
+                    <button
+                      onClick={() => {
+                        setOpen(false);
+                        router.push("/fanpage");
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-secondary"
+                    >
+                      Tạo Fanpage
+                    </button>
+
+                    {userPages.length > 0 && (
+                      <div className="border-t border-gray-200 dark:border-neutral-700 my-1 pt-1 pb-1">
+                        <div className="px-3 py-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                          Trang của bạn
+                        </div>
+                        {userPages.map((p) => (
+                          <button
+                            key={p.id}
+                            onClick={() => {
+                              setOpen(false);
+                              router.push(`/fanpage/${p.id}`);
+                            }}
+                            className="w-full text-left flex items-center gap-2 px-3 py-2 hover:bg-secondary text-sm transition-colors"
+                          >
+                            <img
+                              src={
+                                p.avatar_url ||
+                                `https://api.dicebear.com/7.x/identicon/svg?seed=${p.id}`
+                              }
+                              className="w-6 h-6 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shrink-0"
+                              alt="page avatar"
+                            />
+                            <span className="truncate font-medium">
+                              {p.name}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
 
                     <button
                       onClick={handleLogout}

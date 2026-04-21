@@ -4,7 +4,7 @@ import { supabase } from "./supabaseClient";
    SAFE ERROR HANDLER
 ========================= */
 const handleError = (error: any, label: string) => {
-  console.error(`${label} error:`, error);
+  console.error(`${label} error:`, JSON.stringify(error, null, 2));
   throw new Error(error?.message || `${label} failed`);
 };
 
@@ -28,7 +28,7 @@ export const getFeed = async () => {
     );
     const { data: fallbackData, error: fallbackError } = await supabase
       .from("posts")
-      .select("*, users (id, name, avatar_url)")
+      .select("*, users (id, name, avatar_url), pages (id, name, avatar_url)")
       .order("created_at", { ascending: false });
 
     if (fallbackError) handleError(fallbackError, "getFeed fallback");
@@ -47,19 +47,32 @@ export const getFeed = async () => {
     return fallbackData;
   }
 
-  // 2. Vì Hàm SQL (RPC) chưa trả về relation `users`, ta tự fetch `users` và nối vào
+  // 2. Vì Hàm SQL (RPC) không trả về relations (users, pages), ta fetch bổ sung và ghép vào
   if (data && data.length > 0) {
-    const userIds = Array.from(new Set(data.map((p: any) => p.user_id)));
-    const { data: usersInfo } = await supabase
-      .from("users")
-      .select("id, name, avatar_url")
-      .in("id", userIds);
+    const postIds = data.map((p: any) => p.id);
 
-    const userMap = new Map((usersInfo || []).map((u) => [u.id, u]));
-    return data.map((post: any) => ({
-      ...post,
-      users: userMap.get(post.user_id) || null,
-    }));
+    // Truy vấn trực tiếp từ bảng posts để lấy thông tin đầy đủ và relations
+    const { data: fullPosts, error: fullError } = await supabase
+      .from("posts")
+      .select("*, users (id, name, avatar_url), pages (id, name, avatar_url)")
+      .in("id", postIds);
+
+    if (fullError) handleError(fullError, "getFeed fullPosts");
+
+    // Tạo một Map để tra cứu thông tin đầy đủ của bài viết một cách hiệu quả
+    const fullPostsMap = new Map((fullPosts || []).map((p: any) => [p.id, p]));
+
+    // Duyệt qua kết quả từ RPC (đã được sắp xếp) và bổ sung thông tin
+    const enrichedData = data
+      .map((rpcPost: any) => {
+        const fullPost = fullPostsMap.get(rpcPost.id);
+        if (!fullPost) return null; // Bỏ qua nếu bài viết không còn tồn tại
+
+        return { ...fullPost, ...rpcPost };
+      })
+      .filter(Boolean); // Lọc ra các kết quả null
+
+    return enrichedData;
   }
 
   return data;
@@ -72,6 +85,7 @@ export const createPost = async (payload: {
   content: string;
   image_url?: string | null;
   is_flagged?: boolean;
+  page_id?: string | null;
 }) => {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
@@ -85,6 +99,7 @@ export const createPost = async (payload: {
       image_url: payload.image_url ?? null,
       user_id: user.id,
       is_flagged: payload.is_flagged ?? false,
+      page_id: payload.page_id ?? null,
     })
     .select(
       `
@@ -93,7 +108,8 @@ export const createPost = async (payload: {
         id,
         name,
         avatar_url
-      )
+      ),
+      pages ( id, name, avatar_url )
     `,
     )
     .single();
@@ -306,4 +322,122 @@ export const reportPost = async (postId: string, reason: string = "spam") => {
 
   if (error) throw error;
   return data;
+};
+
+/* =========================
+   PAGES (FANPAGE) API
+========================= */
+export const createPage = async (payload: {
+  name: string;
+  bio?: string;
+  avatar_url?: string | null;
+  cover_url?: string | null;
+}) => {
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+  if (!user) throw new Error("Not authenticated");
+
+  const { data, error } = await supabase
+    .from("pages")
+    .insert({
+      name: payload.name,
+      bio: payload.bio || null,
+      avatar_url: payload.avatar_url || null,
+      cover_url: payload.cover_url || null,
+      created_by: user.id,
+    })
+    .select()
+    .single();
+
+  if (error) handleError(error, "createPage");
+
+  // Tự động thêm người tạo làm admin
+  await supabase.from("page_admins").insert({
+    page_id: data.id,
+    user_id: user.id,
+    role: "admin",
+  });
+
+  return data;
+};
+
+export const getUserPages = async () => {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) return [];
+  const { data, error } = await supabase
+    .from("page_admins")
+    .select("page_id, pages(*)")
+    .eq("user_id", userData.user.id);
+  if (error) return [];
+  return data.map((d: any) => d.pages);
+};
+
+export const updatePageInfo = async (
+  pageId: string,
+  payload: {
+    name?: string;
+    bio?: string;
+    avatar_url?: string | null;
+    cover_url?: string | null;
+    cover_position_y?: number | null;
+  },
+) => {
+  const { data, error } = await supabase
+    .from("pages")
+    .update(payload)
+    .eq("id", pageId)
+    .select()
+    .single();
+  if (error) handleError(error, "updatePageInfo");
+  return data;
+};
+
+export const getPageAdmins = async (pageId: string) => {
+  const { data, error } = await supabase
+    .from("page_admins")
+    .select("role, users (id, name, avatar_url)")
+    .eq("page_id", pageId);
+  if (error) handleError(error, "getPageAdmins");
+  return data;
+};
+
+export const addPageAdmin = async (pageId: string, userId: string) => {
+  const { data, error } = await supabase
+    .from("page_admins")
+    .insert({ page_id: pageId, user_id: userId, role: "admin" });
+  if (error) handleError(error, "addPageAdmin");
+  return data;
+};
+
+export const removePageAdmin = async (pageId: string, userId: string) => {
+  const { error } = await supabase
+    .from("page_admins")
+    .delete()
+    .match({ page_id: pageId, user_id: userId });
+  if (error) handleError(error, "removePageAdmin");
+  return true;
+};
+
+export const getPageMembers = async (pageId: string) => {
+  const { data, error } = await supabase
+    .from("page_followers")
+    .select("users (id, name, avatar_url)")
+    .eq("page_id", pageId);
+  if (error) handleError(error, "getPageMembers");
+  return data;
+};
+
+export const removePageMember = async (pageId: string, userId: string) => {
+  const { error } = await supabase
+    .from("page_followers")
+    .delete()
+    .match({ page_id: pageId, user_id: userId });
+  if (error) handleError(error, "removePageMember");
+  return true;
+};
+
+export const deletePage = async (pageId: string) => {
+  const { error } = await supabase.from("pages").delete().eq("id", pageId);
+  if (error) handleError(error, "deletePage");
+  return true;
 };
