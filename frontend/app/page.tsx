@@ -92,24 +92,38 @@ export default function HomePage() {
 
   // ================= LOGIN POPUP =================
   const [showLoginPopup, setShowLoginPopup] = useState(false);
+  const [popupView, setPopupView] = useState<"login" | "forgot">("login");
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
 
-  const handlePopupLogin = async (e: React.FormEvent) => {
+  const handlePopupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({
-      email: loginEmail,
-      password: loginPassword,
-    });
-    setLoginLoading(false);
-    if (error) {
-      toast.error(error.message || "Đăng nhập thất bại");
+    if (popupView === "login") {
+      const { error } = await supabase.auth.signInWithPassword({
+        email: loginEmail,
+        password: loginPassword,
+      });
+      setLoginLoading(false);
+      if (error) {
+        toast.error(error.message || "Đăng nhập thất bại");
+      } else {
+        toast.success("Đăng nhập thành công!");
+        setShowLoginPopup(false);
+        window.location.reload();
+      }
     } else {
-      toast.success("Đăng nhập thành công!");
-      setShowLoginPopup(false);
-      window.location.reload();
+      const { error } = await supabase.auth.resetPasswordForEmail(loginEmail, {
+        redirectTo: `${window.location.origin}/login?view=update`,
+      });
+      setLoginLoading(false);
+      if (error) {
+        toast.error(error.message || "Không thể gửi email khôi phục.");
+      } else {
+        toast.success("Đã gửi email khôi phục! Vui lòng kiểm tra hộp thư.");
+        setPopupView("login");
+      }
     }
   };
 
@@ -1932,7 +1946,10 @@ export default function HomePage() {
       {showLoginPopup && (
         <div
           className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4 animate-in fade-in duration-200"
-          onClick={() => setShowLoginPopup(false)}
+          onClick={() => {
+            setShowLoginPopup(false);
+            setPopupView("login");
+          }}
         >
           <div
             className="bg-white dark:bg-[#262626] rounded-2xl shadow-2xl w-full max-w-[320px] overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-200 dark:border-neutral-800"
@@ -1940,15 +1957,19 @@ export default function HomePage() {
           >
             <div className="p-6 text-center pb-4">
               <h3 className="text-[18px] font-bold text-gray-900 dark:text-gray-100 mb-1">
-                Yêu cầu đăng nhập
+                {popupView === "login"
+                  ? "Yêu cầu đăng nhập"
+                  : "Khôi phục mật khẩu"}
               </h3>
               <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">
-                Vui lòng đăng nhập để tiếp tục!
+                {popupView === "login"
+                  ? "Vui lòng đăng nhập để tiếp tục!"
+                  : "Nhập email để nhận liên kết khôi phục."}
               </p>
             </div>
 
             <form
-              onSubmit={handlePopupLogin}
+              onSubmit={handlePopupSubmit}
               className="px-6 pb-4 flex flex-col gap-3"
             >
               <input
@@ -1959,47 +1980,98 @@ export default function HomePage() {
                 required
                 className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors text-sm"
               />
-              <input
-                type="password"
-                placeholder="Mật khẩu"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                required
-                className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors text-sm"
-              />
+              {popupView === "login" && (
+                <input
+                  type="password"
+                  placeholder="Mật khẩu"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  required
+                  className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors text-sm"
+                />
+              )}
+
+              {popupView === "login" && (
+                <div className="flex justify-end mt-[-4px]">
+                  <button
+                    type="button"
+                    onClick={() => setPopupView("forgot")}
+                    className="text-xs font-medium text-blue-500 hover:underline"
+                  >
+                    Quên mật khẩu?
+                  </button>
+                </div>
+              )}
+
               <button
                 type="submit"
                 disabled={loginLoading}
                 className="w-full bg-blue-500 text-white py-2.5 rounded-lg font-semibold hover:bg-blue-600 transition disabled:opacity-50 text-sm mt-1"
               >
-                {loginLoading ? "Đang xử lý..." : "Đăng nhập"}
+                {loginLoading
+                  ? "Đang xử lý..."
+                  : popupView === "login"
+                    ? "Đăng nhập"
+                    : "Gửi email khôi phục"}
               </button>
             </form>
 
             <div className="flex flex-col border-t border-gray-200 dark:border-neutral-800">
-              <button
-                className="w-full py-3 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[#333333] transition-colors border-b border-gray-200 dark:border-neutral-800 flex justify-center items-center gap-2"
-                onClick={() => {
-                  supabase.auth.signInWithOAuth({
-                    provider: "google",
-                    options: { redirectTo: window.location.origin },
-                  });
-                }}
-              >
-                Đăng nhập với Google
-              </button>
-              <button
-                className="w-full py-3 text-sm font-semibold text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors border-b border-gray-200 dark:border-neutral-800"
-                onClick={() => {
-                  setShowLoginPopup(false);
-                  router.push("/login?view=register");
-                }}
-              >
-                Chưa có tài khoản? Đăng ký
-              </button>
+              {popupView === "login" ? (
+                <>
+                  <button
+                    className="w-full py-3 text-sm font-bold text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-[#333333] transition-colors border-b border-gray-200 dark:border-neutral-800 flex justify-center items-center gap-2"
+                    onClick={() => {
+                      supabase.auth.signInWithOAuth({
+                        provider: "google",
+                        options: { redirectTo: window.location.origin },
+                      });
+                    }}
+                  >
+                    <svg className="w-5 h-5" viewBox="0 0 48 48">
+                      <path
+                        fill="#FFC107"
+                        d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24s8.955,20,20,20s20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"
+                      ></path>
+                      <path
+                        fill="#FF3D00"
+                        d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"
+                      ></path>
+                      <path
+                        fill="#4CAF50"
+                        d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"
+                      ></path>
+                      <path
+                        fill="#1976D2"
+                        d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571l6.19,5.238C42.021,35.596,44,30.138,44,24C44,22.659,43.862,21.35,43.611,20.083z"
+                      ></path>
+                    </svg>
+                    Đăng nhập với Google
+                  </button>
+                  <button
+                    className="w-full py-3 text-sm font-semibold text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors border-b border-gray-200 dark:border-neutral-800"
+                    onClick={() => {
+                      setShowLoginPopup(false);
+                      router.push("/login?view=register");
+                    }}
+                  >
+                    Chưa có tài khoản? Đăng ký
+                  </button>
+                </>
+              ) : (
+                <button
+                  className="w-full py-3 text-sm font-semibold text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors border-b border-gray-200 dark:border-neutral-800"
+                  onClick={() => setPopupView("login")}
+                >
+                  Quay lại đăng nhập
+                </button>
+              )}
               <button
                 className="w-full py-3 text-sm font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-[#333333] transition-colors"
-                onClick={() => setShowLoginPopup(false)}
+                onClick={() => {
+                  setShowLoginPopup(false);
+                  setPopupView("login");
+                }}
               >
                 Đóng
               </button>
