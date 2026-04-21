@@ -40,6 +40,7 @@ import {
   removePageMember,
   getComments,
   createComment,
+  createPost,
   deleteComment,
   updateComment,
   toggleLike,
@@ -86,6 +87,9 @@ export default function FanpageProfile({
   const [editCoverFile, setEditCoverFile] = useState<File | null>(null);
   const [adminSearchQuery, setAdminSearchQuery] = useState("");
   const [adminSearchResults, setAdminSearchResults] = useState<any[]>([]);
+  const [editPostPermission, setEditPostPermission] = useState<
+    "admin_only" | "anyone"
+  >("anyone");
   const [isSaving, setIsSaving] = useState(false);
 
   // ================= DRAG COVER STATES =================
@@ -110,6 +114,11 @@ export default function FanpageProfile({
 
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editPostContent, setEditPostContent] = useState("");
+
+  // ================= CREATE POST STATES =================
+  const [postContent, setPostContent] = useState("");
+  const [postFile, setPostFile] = useState<File | null>(null);
+  const [isPosting, setIsPosting] = useState(false);
 
   const [reportPostId, setReportPostId] = useState<string | null>(null);
   const [reportReason, setReportReason] = useState("");
@@ -158,6 +167,18 @@ export default function FanpageProfile({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [openMenuId, showEmojiPicker, showFollowMenu]);
+
+  // ================= CHẶN LƯỚT BACKGROUND KHI MỞ MODAL =================
+  useEffect(() => {
+    if (selectedPost) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedPost]);
 
   // ================= LOAD DATA =================
   const loadCommentsList = async (postId: string) => {
@@ -320,6 +341,7 @@ export default function FanpageProfile({
     setEditCoverFile(null);
     setEditAvatarFile(null);
     setEditCoverPositionY(pageInfo?.cover_position_y ?? 50);
+    setEditPostPermission(pageInfo?.post_permission || "anyone");
     setIsSettingsOpen(true);
   };
 
@@ -349,6 +371,7 @@ export default function FanpageProfile({
         bio: editBio.trim(),
         // cover_position_y: editCoverPositionY, // Bỏ comment sau khi đã thêm cột cover_position_y vào bảng pages trong Supabase
         cover_position_y: editCoverPositionY,
+        post_permission: editPostPermission,
       };
 
       // Upload Avatar
@@ -555,6 +578,82 @@ export default function FanpageProfile({
       toast.error("Đã xảy ra lỗi khi bỏ theo dõi.");
     } finally {
       setIsFollowLoading(false);
+    }
+  };
+
+  // ================= CREATE POST HANDLER =================
+  const handleCreatePost = async () => {
+    if (!currentUser) {
+      toast.error("Vui lòng đăng nhập để đăng bài!");
+      return;
+    }
+    if (!postContent && !postFile) return;
+
+    setIsPosting(true);
+    try {
+      let imageUrl = null;
+
+      if (postFile) {
+        const cleanName = postFile.name.replace(/[^a-zA-Z0-9.]/g, "_");
+        const fileName = `${Date.now()}_${cleanName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("posts")
+          .upload(fileName, postFile);
+
+        if (uploadError) throw uploadError;
+
+        const { data } = supabase.storage.from("posts").getPublicUrl(fileName);
+        imageUrl = data.publicUrl;
+      }
+
+      let is_flagged = false;
+      if (postContent) {
+        try {
+          const modRes = await fetch("/api/moderate", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ content: postContent }),
+          });
+          const modData = await modRes.json();
+          is_flagged = modData.flagged;
+
+          if (is_flagged) {
+            toast.error(
+              "Nội dung vi phạm tiêu chuẩn cộng đồng và đã bị hệ thống chặn!",
+              { duration: 4000 },
+            );
+          }
+        } catch (err) {
+          console.error("Lỗi quét AI:", err);
+        }
+      }
+
+      if (is_flagged) {
+        if (imageUrl) {
+          const uploadedFileName = imageUrl.split("/").pop();
+          if (uploadedFileName) {
+            await supabase.storage.from("posts").remove([uploadedFileName]);
+          }
+        }
+        return;
+      }
+
+      const newPost = await createPost({
+        content: postContent,
+        image_url: imageUrl,
+        is_flagged,
+        page_id: id,
+      });
+
+      setPosts((prev) => [newPost, ...prev]);
+      setPostContent("");
+      setPostFile(null);
+      toast.success("Đăng bài thành công!");
+    } catch (error: any) {
+      console.error("Lỗi đăng bài:", error);
+      toast.error(error.message || "Đăng bài thất bại.");
+    } finally {
+      setIsPosting(false);
     }
   };
 
@@ -997,6 +1096,75 @@ export default function FanpageProfile({
         {/* NỘI DUNG CHÍNH (VERTICAL FEED) */}
         <div className="flex justify-center mt-6 w-full">
           <div className="w-full max-w-[470px] space-y-4">
+            {/* ================= CREATE POST FORM ================= */}
+            {currentUser &&
+              (isAdmin ||
+                (isFollowing && pageInfo.post_permission !== "admin_only")) && (
+                <div className="shadow-md hover:shadow-lg dark:shadow-black/40 rounded-[12px] p-4 mb-4 border border-gray-200 dark:border-neutral-800 transition-all duration-500 bg-white dark:bg-[#262626]">
+                  <div className="flex items-start gap-4">
+                    <img
+                      src={
+                        currentUser.avatar_url ||
+                        currentUser.user_metadata?.avatar_url ||
+                        `https://api.dicebear.com/7.x/identicon/svg?seed=${currentUser.id}`
+                      }
+                      className="w-10 h-10 rounded-full ring-1 ring-border flex-shrink-0 mt-1 cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={() => router.push(`/profile/${currentUser.id}`)}
+                      alt="Your avatar"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <textarea
+                        value={postContent}
+                        onChange={(e) => setPostContent(e.target.value)}
+                        placeholder={`Viết bài lên trang ${pageInfo.name}...`}
+                        className="w-full text-base resize-none outline-none min-h-[80px] text-gray-900 dark:text-gray-100 font-semibold bg-transparent pt-1 placeholder:text-gray-500 dark:placeholder:text-gray-400"
+                        rows={2}
+                      />
+
+                      {postFile && (
+                        <div className="relative mb-3 inline-block mt-2">
+                          <img
+                            src={URL.createObjectURL(postFile)}
+                            alt="Preview"
+                            className="max-h-48 rounded-lg object-contain border border-border shadow-sm"
+                          />
+                          <button
+                            onClick={() => setPostFile(null)}
+                            className="absolute -top-2 -right-2 bg-white dark:bg-[#262626] border border-gray-200 dark:border-neutral-700 text-gray-900 dark:text-gray-100 rounded-full p-1 shadow-md hover:bg-secondary transition-colors z-10"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between pt-1">
+                        <label className="flex items-center gap-1 text-primary text-sm cursor-pointer hover:underline">
+                          <ImageIcon size={16} /> Ảnh
+                          <input
+                            type="file"
+                            onChange={(e) =>
+                              setPostFile(e.target.files?.[0] || null)
+                            }
+                            className="hidden"
+                            accept="image/*"
+                          />
+                        </label>
+                        <button
+                          onClick={handleCreatePost}
+                          disabled={isPosting || (!postContent && !postFile)}
+                          className="bg-blue-500 text-white px-5 py-1.5 rounded-full font-semibold text-sm shadow-sm hover:bg-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                          {isPosting ? (
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                          ) : (
+                            "Đăng"
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
             <h2 className="text-lg font-bold mb-4">
               Bài viết của trang ({posts.length})
             </h2>
@@ -1139,10 +1307,10 @@ export default function FanpageProfile({
 
                 {/* IMAGE */}
                 {post.image_url && (
-                  <div className="relative overflow-hidden bg-secondary/20">
+                  <div className="relative overflow-hidden bg-gray-100 dark:bg-[#1a1a1a]">
                     <img
                       src={post.image_url}
-                      className={`w-full aspect-square object-cover cursor-pointer hover:brightness-[0.98] transition-all duration-300 select-none pointer-events-none ${post.is_flagged ? "blur-xl scale-110" : ""}`}
+                      className={`w-full h-auto max-h-[650px] object-cover object-center cursor-pointer hover:brightness-[0.98] transition-all duration-300 select-none pointer-events-none ${post.is_flagged ? "blur-xl scale-110" : ""}`}
                     />
                     {post.is_flagged && (
                       <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/30 z-20 pointer-events-none">
@@ -1346,22 +1514,21 @@ export default function FanpageProfile({
             <X className="w-8 h-8" />
           </button>
           <div
-            className="text-gray-900 dark:text-gray-100 flex flex-col md:flex-row w-full max-w-5xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl dark:shadow-black/60 relative animate-in fade-in zoom-in-95 duration-200 cursor-default bg-white dark:bg-[#262626]"
+            className={`text-gray-900 dark:text-gray-100 flex flex-col md:flex-row w-full ${selectedPost.image_url ? "max-w-5xl" : "max-w-xl"} max-h-[90vh] rounded-xl overflow-hidden shadow-2xl dark:shadow-black/60 relative animate-in fade-in zoom-in-95 duration-200 cursor-default bg-white dark:bg-[#262626]`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex-1 bg-[#1a1a1a] flex items-center justify-center min-h-[300px] md:min-h-[500px]">
-              {selectedPost.image_url ? (
+            {selectedPost.image_url && (
+              <div className="flex-1 bg-[#1a1a1a] flex items-center justify-center min-h-[300px] md:min-h-[500px]">
                 <img
                   src={selectedPost.image_url}
-                  className="max-w-full max-h-full object-contain"
+                  className="w-full h-full object-cover object-center"
+                  alt="Post content"
                 />
-              ) : (
-                <div className="p-8 text-center text-white text-xl font-medium">
-                  {selectedPost.content}
-                </div>
-              )}
-            </div>
-            <div className="w-full md:w-[400px] flex flex-col border-l border-gray-200 dark:border-neutral-800 h-[50vh] md:h-auto bg-white dark:bg-[#262626]">
+              </div>
+            )}
+            <div
+              className={`w-full flex flex-col h-[50vh] md:h-auto bg-white dark:bg-[#262626] ${selectedPost.image_url ? "md:w-[400px] border-l border-gray-200 dark:border-neutral-800" : "md:min-h-[500px]"}`}
+            >
               <div className="flex flex-col border-b border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-[#333333]">
                 <div className="flex items-center justify-between p-4 pb-2 relative">
                   <div className="flex items-center gap-3">
@@ -1867,6 +2034,26 @@ export default function FanpageProfile({
                       className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none resize-none bg-gray-50 dark:bg-[#333333]"
                       rows={3}
                     />
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm font-semibold">
+                      Quyền đăng bài
+                    </label>
+                    <select
+                      value={editPostPermission}
+                      onChange={(e) =>
+                        setEditPostPermission(
+                          e.target.value as "admin_only" | "anyone",
+                        )
+                      }
+                      className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none bg-gray-50 dark:bg-[#333333]"
+                    >
+                      <option value="anyone">
+                        Quản trị viên và Thành viên
+                      </option>
+                      <option value="admin_only">Chỉ Quản trị viên</option>
+                    </select>
                   </div>
 
                   <div className="flex flex-col gap-2">

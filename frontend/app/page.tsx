@@ -226,6 +226,18 @@ export default function HomePage() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [openMenuId, isChatOpen, showEmojiPicker]);
 
+  // ================= CHẶN LƯỚT BACKGROUND KHI MỞ MODAL =================
+  useEffect(() => {
+    if (selectedPost) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedPost]);
+
   // ================= CHECK LOGIN =================
   const checkLogin = () => {
     if (!user) {
@@ -1166,10 +1178,10 @@ export default function HomePage() {
 
                 {/* IMAGE WITH DOUBLE CLICK LIKE */}
                 {post.image_url && (
-                  <div className="relative overflow-hidden bg-secondary/20">
+                  <div className="relative overflow-hidden bg-gray-100 dark:bg-[#1a1a1a]">
                     <img
                       src={post.image_url}
-                      className={`w-full aspect-square object-cover cursor-pointer hover:brightness-[0.98] transition-all duration-300 select-none pointer-events-none ${post.is_flagged ? "blur-xl scale-110" : ""}`}
+                      className={`w-full h-auto max-h-[650px] object-cover object-center cursor-pointer hover:brightness-[0.98] transition-all duration-300 select-none pointer-events-none ${post.is_flagged ? "blur-xl scale-110" : ""}`}
                       alt="Post content"
                     />
 
@@ -1450,26 +1462,24 @@ export default function HomePage() {
           </button>
 
           <div
-            className="text-gray-900 dark:text-gray-100 flex flex-col md:flex-row w-full max-w-5xl max-h-[90vh] rounded-xl overflow-hidden shadow-2xl dark:shadow-black/60 relative animate-in fade-in zoom-in-95 duration-200 cursor-default transition-colors duration-500 bg-white dark:bg-[#262626]"
+            className={`text-gray-900 dark:text-gray-100 flex flex-col md:flex-row w-full ${selectedPost.image_url ? "max-w-5xl" : "max-w-xl"} max-h-[90vh] rounded-xl overflow-hidden shadow-2xl dark:shadow-black/60 relative animate-in fade-in zoom-in-95 duration-200 cursor-default transition-colors duration-500 bg-white dark:bg-[#262626]`}
             onClick={(e) => e.stopPropagation()}
           >
             {/* Phần Ảnh */}
-            <div className="flex-1 bg-[#1a1a1a] flex items-center justify-center min-h-[300px] md:min-h-[500px]">
-              {selectedPost.image_url ? (
+            {selectedPost.image_url && (
+              <div className="flex-1 bg-[#1a1a1a] flex items-center justify-center min-h-[300px] md:min-h-[500px]">
                 <img
                   src={selectedPost.image_url}
-                  className="max-w-full max-h-full object-contain"
+                  className="w-full h-full object-cover object-center"
                   alt="Post"
                 />
-              ) : (
-                <div className="p-8 text-center text-white text-xl font-medium">
-                  {selectedPost.content}
-                </div>
-              )}
-            </div>
+              </div>
+            )}
 
             {/* Phần Thông tin / Bình luận */}
-            <div className="w-full md:w-[400px] flex flex-col border-l border-gray-200 dark:border-neutral-800 h-[50vh] md:h-auto transition-colors duration-500 bg-white dark:bg-[#262626]">
+            <div
+              className={`w-full flex flex-col h-[50vh] md:h-auto transition-colors duration-500 bg-white dark:bg-[#262626] ${selectedPost.image_url ? "md:w-[400px] border-l border-gray-200 dark:border-neutral-800" : "md:min-h-[500px]"}`}
+            >
               {/* Header & Content */}
               <div className="flex flex-col border-b border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-[#333333]">
                 {/* Header */}

@@ -396,11 +396,11 @@ export default function Navbar({ user: propUser }: any) {
 
   const mobileTabs = [
     { path: "/", icon: Home },
-    { path: "/search", icon: Search },
     { path: "/suggested", icon: Users },
+    { path: "/search", icon: Search },
     { path: "/messages", icon: MessageCircle },
-    { path: "/saved", icon: Bookmark },
     { path: "/notifications", icon: Heart },
+    { path: "/saved", icon: Bookmark },
   ];
   const mobileActiveIndex = mobileTabs.findIndex((t) =>
     t.path === "/" ? pathname === "/" : pathname?.startsWith(t.path),

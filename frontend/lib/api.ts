@@ -419,6 +419,7 @@ export const updatePageInfo = async (
     avatar_url?: string | null;
     cover_url?: string | null;
     cover_position_y?: number | null;
+    post_permission?: string;
   },
 ) => {
   const { data, error } = await supabase
