@@ -33,6 +33,32 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+
+  // ================= ONLINE STATUS (PRESENCE) =================
+  useEffect(() => {
+    // Lấy state hiện tại nếu Navbar đã sync trước đó
+    if ((window as any).currentOnlineUsers) {
+      setOnlineUsers((window as any).currentOnlineUsers);
+    }
+
+    const handlePresenceSync = (e: any) => {
+      setOnlineUsers(e.detail);
+    };
+
+    window.addEventListener(
+      "presence_sync",
+      handlePresenceSync as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "presence_sync",
+        handlePresenceSync as EventListener,
+      );
+    };
+  }, []);
+
   // ================= SMOOTH SCROLL (FIX LAG) =================
   useEffect(() => {
     if (!scrollRef.current) return;
@@ -308,11 +334,29 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
               <ChevronLeft size={20} />
             </button>
 
-            <img
-              src={targetUser?.avatar_url}
-              className="w-8 h-8 rounded-full"
-            />
-            <span className="text-sm font-semibold">{targetUser?.name}</span>
+            <div className="relative">
+              <img
+                src={targetUser?.avatar_url}
+                className="w-8 h-8 rounded-full"
+              />
+              {onlineUsers.has(targetUser.id) && (
+                <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full"></span>
+              )}
+            </div>
+            <div className="flex flex-col">
+              <span className="text-sm font-semibold leading-tight">
+                {targetUser?.name}
+              </span>
+              {onlineUsers.has(targetUser.id) ? (
+                <span className="text-[10px] text-green-500 leading-tight">
+                  Đang hoạt động
+                </span>
+              ) : (
+                <span className="text-[10px] text-muted-foreground leading-tight">
+                  Ngoại tuyến
+                </span>
+              )}
+            </div>
           </div>
         ) : (
           <span className="font-bold">Tin nhắn</span>
@@ -347,7 +391,12 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                 onClick={() => handleOpenChat(u)}
                 className="flex items-center gap-2 p-2 hover:bg-secondary rounded cursor-pointer transition-colors"
               >
-                <img src={u.avatar_url} className="w-8 h-8 rounded-full" />
+                <div className="relative">
+                  <img src={u.avatar_url} className="w-8 h-8 rounded-full" />
+                  {onlineUsers.has(u.id) && (
+                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full"></span>
+                  )}
+                </div>
                 <span>{u.name}</span>
               </div>
             ))}
@@ -358,10 +407,15 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                 onClick={() => handleOpenExisting(c)}
                 className="flex items-center gap-2 p-2 hover:bg-secondary rounded cursor-pointer transition-colors"
               >
-                <img
-                  src={c.otherUser?.avatar_url}
-                  className="w-10 h-10 rounded-full"
-                />
+                <div className="relative flex-shrink-0">
+                  <img
+                    src={c.otherUser?.avatar_url}
+                    className="w-10 h-10 rounded-full"
+                  />
+                  {onlineUsers.has(c.otherUser?.id) && (
+                    <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full"></span>
+                  )}
+                </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-semibold truncate">
                     {c.otherUser?.name}

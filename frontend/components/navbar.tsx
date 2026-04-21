@@ -135,6 +135,35 @@ export default function Navbar({ user: propUser }: any) {
     }
   }, [pathname]);
 
+  // ================= PRESENCE (ONLINE STATUS) =================
+  useEffect(() => {
+    if (!user?.id) return;
+    const channel = supabase.channel("global_online");
+    channel
+      .on("presence", { event: "sync" }, () => {
+        const state = channel.presenceState();
+        const onlineIds = new Set<string>();
+        for (const key in state) {
+          state[key].forEach((presence: any) => {
+            if (presence.user_id) onlineIds.add(presence.user_id);
+          });
+        }
+        // Lưu trữ toàn cục & phát sự kiện cho ChatBox
+        (window as any).currentOnlineUsers = onlineIds;
+        window.dispatchEvent(
+          new CustomEvent("presence_sync", { detail: onlineIds }),
+        );
+      })
+      .subscribe(async (status) => {
+        if (status === "SUBSCRIBED") {
+          await channel.track({ user_id: user.id });
+        }
+      });
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
   // ================= LẮNG NGHE THAY ĐỔI THÔNG TIN USER (AVATAR/NAME) =================
   useEffect(() => {
     if (!user?.id) return;
