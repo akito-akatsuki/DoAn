@@ -188,16 +188,49 @@ export default function HomePage() {
           .single();
         setUser({ ...data.user, ...dbUser });
 
-        // Tải danh sách Gợi ý kết bạn (hiển thị 5 người khác mình)
-        const { data: suggestions } = await supabase
+        // Lấy danh sách đang theo dõi để lọc
+        const { data: follows } = await supabase
+          .from("follows")
+          .select("following_id")
+          .eq("follower_id", data.user.id);
+        const followedIds = follows
+          ? follows.map((f: any) => f.following_id)
+          : [];
+
+        // Tải danh sách Gợi ý kết bạn (những người chưa follow)
+        let query = supabase
           .from("users")
           .select("id, name, avatar_url")
-          .neq("id", data.user.id)
-          .limit(5);
+          .neq("id", data.user.id);
+
+        if (followedIds.length > 0) {
+          query = query.not("id", "in", `(${followedIds.join(",")})`);
+        }
+
+        const { data: suggestions } = await query.limit(5);
         if (suggestions) setSuggestedUsers(suggestions);
       }
     } catch (err) {
       console.error("Lỗi mạng khi tải user ở Home:", err);
+    }
+  };
+
+  const handleFollowSuggested = async (
+    targetId: string,
+    targetName: string,
+  ) => {
+    if (!user) return;
+    try {
+      await supabase.from("follows").insert({
+        follower_id: user.id,
+        following_id: targetId,
+      });
+      // Xóa người vừa follow khỏi danh sách gợi ý
+      setSuggestedUsers((prev) => prev.filter((u) => u.id !== targetId));
+      toast.success(`Đã theo dõi ${targetName}`);
+    } catch (err) {
+      console.error(err);
+      toast.error("Lỗi khi theo dõi");
     }
   };
 
@@ -1217,7 +1250,10 @@ export default function HomePage() {
                       </span>
                     </div>
                   </div>
-                  <button className="text-xs font-bold text-blue-500 hover:text-gray-900 dark:hover:text-white transition-colors">
+                  <button
+                    onClick={() => handleFollowSuggested(u.id, u.name)}
+                    className="text-xs font-bold text-blue-500 hover:text-gray-900 dark:hover:text-white transition-colors"
+                  >
                     Theo dõi
                   </button>
                 </div>

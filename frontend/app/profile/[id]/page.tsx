@@ -14,6 +14,7 @@ import {
   reportPost,
 } from "@/lib/api";
 import { showConfirm } from "@/components/GlobalConfirm";
+import { useRouter } from "next/navigation";
 
 type UserProfile = {
   id: string;
@@ -30,11 +31,20 @@ export default function ProfilePage({
   // ✅ Next 16 fix params
   const { id } = use(params);
 
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [loading, setLoading] = useState(true);
+
+  // ================= FOLLOW STATS & MODALS =================
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
+  const [showFollowersModal, setShowFollowersModal] = useState(false);
+  const [showFollowingModal, setShowFollowingModal] = useState(false);
+  const [followersList, setFollowersList] = useState<any[]>([]);
+  const [followingList, setFollowingList] = useState<any[]>([]);
 
   // ================= MODAL STATES =================
   const modalInputRef = useRef<HTMLInputElement | null>(null);
@@ -114,6 +124,20 @@ export default function ProfilePage({
 
       setPosts(postsData || []);
 
+      // Lấy số lượng người theo dõi
+      const { count: followers } = await supabase
+        .from("follows")
+        .select("*", { count: "exact", head: true })
+        .eq("following_id", id);
+      setFollowersCount(followers || 0);
+
+      // Lấy số lượng đang theo dõi
+      const { count: following } = await supabase
+        .from("follows")
+        .select("*", { count: "exact", head: true })
+        .eq("follower_id", id);
+      setFollowingCount(following || 0);
+
       setLoading(false);
     };
 
@@ -150,6 +174,7 @@ export default function ProfilePage({
         .eq("following_id", id);
 
       setIsFollowing(false);
+      setFollowersCount((prev) => Math.max(0, prev - 1));
     } else {
       await supabase.from("follows").insert({
         follower_id: currentUser.id,
@@ -157,7 +182,45 @@ export default function ProfilePage({
       });
 
       setIsFollowing(true);
+      setFollowersCount((prev) => prev + 1);
     }
+  };
+
+  // ================= LOAD FOLLOW LISTS =================
+  const loadFollowers = async () => {
+    const { data } = await supabase
+      .from("follows")
+      .select("follower_id")
+      .eq("following_id", id);
+    if (data && data.length > 0) {
+      const ids = data.map((d) => d.follower_id);
+      const { data: users } = await supabase
+        .from("users")
+        .select("id, name, avatar_url")
+        .in("id", ids);
+      setFollowersList(users || []);
+    } else {
+      setFollowersList([]);
+    }
+    setShowFollowersModal(true);
+  };
+
+  const loadFollowing = async () => {
+    const { data } = await supabase
+      .from("follows")
+      .select("following_id")
+      .eq("follower_id", id);
+    if (data && data.length > 0) {
+      const ids = data.map((d) => d.following_id);
+      const { data: users } = await supabase
+        .from("users")
+        .select("id, name, avatar_url")
+        .in("id", ids);
+      setFollowingList(users || []);
+    } else {
+      setFollowingList([]);
+    }
+    setShowFollowingModal(true);
   };
 
   // ================= POST MODAL HANDLERS =================
@@ -451,13 +514,19 @@ export default function ProfilePage({
 
             <div className="flex gap-6 mt-4 text-sm">
               <span>
-                <b>{posts.length}</b> posts
+                <b>{posts.length}</b> bài viết
               </span>
-              <span>
-                <b>0</b> followers
+              <span
+                className="cursor-pointer hover:underline"
+                onClick={loadFollowers}
+              >
+                <b>{followersCount}</b> người theo dõi
               </span>
-              <span>
-                <b>0</b> following
+              <span
+                className="cursor-pointer hover:underline"
+                onClick={loadFollowing}
+              >
+                <b>{followingCount}</b> đang theo dõi
               </span>
             </div>
 
@@ -914,6 +983,116 @@ export default function ProfilePage({
               >
                 Gửi báo cáo
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL FOLLOWERS ================= */}
+      {showFollowersModal && (
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4 animate-in fade-in duration-200"
+          onClick={() => setShowFollowersModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-[#262626] rounded-2xl shadow-2xl w-full max-w-[400px] max-h-[70vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-200 dark:border-neutral-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex justify-between items-center bg-gray-50 dark:bg-[#333333]">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                Người theo dõi
+              </h3>
+              <button
+                onClick={() => setShowFollowersModal(false)}
+                className="hover:text-gray-500 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-2 flex-1 overflow-y-auto">
+              {followersList.length === 0 ? (
+                <p className="text-center text-muted-foreground p-4 text-sm">
+                  Chưa có người theo dõi nào.
+                </p>
+              ) : (
+                followersList.map((u) => (
+                  <div
+                    key={u.id}
+                    className="flex items-center gap-3 p-3 hover:bg-secondary rounded-xl cursor-pointer transition-colors"
+                    onClick={() => {
+                      setShowFollowersModal(false);
+                      router.push(`/profile/${u.id}`);
+                    }}
+                  >
+                    <img
+                      src={
+                        u.avatar_url ||
+                        `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
+                      }
+                      className="w-10 h-10 rounded-full border border-gray-200 dark:border-neutral-700 object-cover shadow-sm"
+                      alt={u.name}
+                    />
+                    <span className="font-semibold text-[15px] text-gray-900 dark:text-gray-100">
+                      {u.name}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL FOLLOWING ================= */}
+      {showFollowingModal && (
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4 animate-in fade-in duration-200"
+          onClick={() => setShowFollowingModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-[#262626] rounded-2xl shadow-2xl w-full max-w-[400px] max-h-[70vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-200 dark:border-neutral-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex justify-between items-center bg-gray-50 dark:bg-[#333333]">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                Đang theo dõi
+              </h3>
+              <button
+                onClick={() => setShowFollowingModal(false)}
+                className="hover:text-gray-500 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-2 flex-1 overflow-y-auto">
+              {followingList.length === 0 ? (
+                <p className="text-center text-muted-foreground p-4 text-sm">
+                  Chưa theo dõi ai.
+                </p>
+              ) : (
+                followingList.map((u) => (
+                  <div
+                    key={u.id}
+                    className="flex items-center gap-3 p-3 hover:bg-secondary rounded-xl cursor-pointer transition-colors"
+                    onClick={() => {
+                      setShowFollowingModal(false);
+                      router.push(`/profile/${u.id}`);
+                    }}
+                  >
+                    <img
+                      src={
+                        u.avatar_url ||
+                        `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
+                      }
+                      className="w-10 h-10 rounded-full border border-gray-200 dark:border-neutral-700 object-cover shadow-sm"
+                      alt={u.name}
+                    />
+                    <span className="font-semibold text-[15px] text-gray-900 dark:text-gray-100">
+                      {u.name}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>
