@@ -169,6 +169,15 @@ export default function HomePage() {
     };
   }, []);
 
+  // ================= TỰ ĐỘNG TẢI LẠI KHI ẤN NÚT QUAY LẠI (MOUSE 4) =================
+  useEffect(() => {
+    const handlePopState = () => {
+      loadFeed(); // Chỉ tải lại bảng tin cho mượt mà (không bị chớp trắng trang)
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
   // Xử lý Click Outside để ẩn menu
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {

@@ -20,38 +20,12 @@ export const getFeed = async () => {
     current_user_id: userId,
   });
 
-  // Nếu bị lỗi (do bạn chưa tạo Function SQL), tự động Fallback về cách lấy cũ an toàn
-  if (error) {
-    console.warn(
-      "Chưa tìm thấy hàm get_hot_feed trên Supabase, fallback lấy bài viết mới nhất...",
-      error.message,
-    );
-    const { data: fallbackData, error: fallbackError } = await supabase
-      .from("posts")
-      .select("*, users (id, name, avatar_url), pages (id, name, avatar_url)")
-      .order("created_at", { ascending: false });
+  let enrichedData: any[] = [];
 
-    if (fallbackError) handleError(fallbackError, "getFeed fallback");
-
-    if (userId && fallbackData) {
-      const { data: savedPosts } = await supabase
-        .from("saved_posts")
-        .select("post_id")
-        .eq("user_id", userId);
-      const savedSet = new Set(savedPosts?.map((s) => s.post_id) || []);
-      return fallbackData.map((post) => ({
-        ...post,
-        is_saved: savedSet.has(post.id),
-      }));
-    }
-    return fallbackData;
-  }
-
-  // 2. Vì Hàm SQL (RPC) không trả về relations (users, pages), ta fetch bổ sung và ghép vào
+  // 2. Xử lý dữ liệu từ Hot Feed (nếu có)
   if (data && data.length > 0) {
     const postIds = data.map((p: any) => p.id);
 
-    // Truy vấn trực tiếp từ bảng posts để lấy thông tin đầy đủ và relations
     const { data: fullPosts, error: fullError } = await supabase
       .from("posts")
       .select("*, users (id, name, avatar_url), pages (id, name, avatar_url)")
@@ -59,23 +33,88 @@ export const getFeed = async () => {
 
     if (fullError) handleError(fullError, "getFeed fullPosts");
 
-    // Tạo một Map để tra cứu thông tin đầy đủ của bài viết một cách hiệu quả
     const fullPostsMap = new Map((fullPosts || []).map((p: any) => [p.id, p]));
 
-    // Duyệt qua kết quả từ RPC (đã được sắp xếp) và bổ sung thông tin
-    const enrichedData = data
+    enrichedData = data
       .map((rpcPost: any) => {
         const fullPost = fullPostsMap.get(rpcPost.id);
-        if (!fullPost) return null; // Bỏ qua nếu bài viết không còn tồn tại
-
+        if (!fullPost) return null;
         return { ...fullPost, ...rpcPost };
       })
-      .filter(Boolean); // Lọc ra các kết quả null
-
-    return enrichedData;
+      .filter(Boolean);
   }
 
-  return data;
+  // 3. Bù thêm bài viết mới nhất nếu Feed quá ít bài (vd: < 10 bài)
+  if (enrichedData.length < 10) {
+    const { data: fallbackData } = await supabase
+      .from("posts")
+      .select("*, users (id, name, avatar_url), pages (id, name, avatar_url)")
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    if (fallbackData) {
+      const existingIds = new Set(enrichedData.map((p) => p.id));
+      // Bỏ qua những bài đã có trong Hot Feed để tránh bị lặp lại
+      const newPosts = fallbackData.filter((p) => !existingIds.has(p.id));
+      enrichedData = [...enrichedData, ...newPosts];
+    }
+  }
+
+  // 4. Lấy trạng thái is_saved cho tất cả bài viết
+  if (userId && enrichedData.length > 0) {
+    const { data: savedPosts } = await supabase
+      .from("saved_posts")
+      .select("post_id")
+      .eq("user_id", userId);
+    const savedSet = new Set(savedPosts?.map((s) => s.post_id) || []);
+    enrichedData = enrichedData.map((post) => ({
+      ...post,
+      is_saved: savedSet.has(post.id),
+    }));
+  }
+
+  // 5. Sắp xếp theo thứ tự ưu tiên
+  const now = Date.now();
+  const NEW_THRESHOLD = 2 * 60 * 60 * 1000; // 2 tiếng (được coi là bài mới đăng)
+
+  enrichedData.sort((a, b) => {
+    const timeA = new Date(
+      a.created_at.includes("Z") || a.created_at.includes("+")
+        ? a.created_at
+        : `${a.created_at}Z`,
+    ).getTime();
+    const timeB = new Date(
+      b.created_at.includes("Z") || b.created_at.includes("+")
+        ? b.created_at
+        : `${b.created_at}Z`,
+    ).getTime();
+
+    const isNewA = now - timeA < NEW_THRESHOLD;
+    const isNewB = now - timeB < NEW_THRESHOLD;
+
+    // Đặc biệt: Bài mới đăng (trong vòng 2h) được đẩy lên trên cùng tuyệt đối
+    if (isNewA && !isNewB) return -1;
+    if (!isNewA && isNewB) return 1;
+
+    // Phân loại mức độ ưu tiên
+    const getPriority = (post: any) => {
+      if (post.page_id) return 1; // Ưu tiên 1: Fanpage
+      if (post.user_id !== userId) return 2; // Ưu tiên 2: Người khác
+      return 3; // Ưu tiên 3: Bản thân
+    };
+
+    const prioA = getPriority(a);
+    const prioB = getPriority(b);
+
+    if (prioA !== prioB) {
+      return prioA - prioB; // Xếp theo 1 -> 2 -> 3
+    }
+
+    // Nếu cùng mức độ ưu tiên -> Bài nào mới hơn xếp trên
+    return timeB - timeA;
+  });
+
+  return enrichedData;
 };
 
 /* =========================
