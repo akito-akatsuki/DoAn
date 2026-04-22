@@ -17,3 +17,4 @@ backend/dist/
 # Chặn SQL trong folder main
 main/*.sql
 usage
+giải thích

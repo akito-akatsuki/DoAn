@@ -3,11 +3,22 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Navbar from "@/components/navbar";
-import { Search, Send, ChevronLeft, Loader2 } from "lucide-react";
+import {
+  Search,
+  Send,
+  ChevronLeft,
+  Loader2,
+  MoreHorizontal,
+  Ban,
+} from "lucide-react";
+import toast from "react-hot-toast";
 import {
   getOrCreateConversation,
   getMessages,
   sendMessage,
+  deleteMessage,
+  getBlockedUsers,
+  unblockUser,
 } from "@/lib/chatApi";
 
 export default function MessagesPage() {
@@ -29,6 +40,13 @@ export default function MessagesPage() {
   const receiveTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [openMessageMenuId, setOpenMessageMenuId] = useState<string | null>(
+    null,
+  );
+
+  // ================= BLOCKED USERS STATES =================
+  const [isBlockedListOpen, setIsBlockedListOpen] = useState(false);
+  const [blockedUsersList, setBlockedUsersList] = useState<any[]>([]);
 
   // ================= LOAD USER =================
   useEffect(() => {
@@ -60,49 +78,81 @@ export default function MessagesPage() {
 
   // ================= LOAD CONVERSATIONS =================
   const loadConversations = useCallback(async () => {
-    if (!user?.id) return;
+    try {
+      if (!user?.id) return;
 
-    // Lấy các cuộc trò chuyện và sắp xếp theo tin nhắn mới nhất
-    const { data } = await supabase
-      .from("conversations")
-      .select("*")
-      .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
-      .order("updated_at", { ascending: false });
+      // Lọc danh sách bị chặn
+      const { data: blockedData } = await supabase
+        .from("blocked_users")
+        .select("blocked_id")
+        .eq("blocker_id", user.id);
+      const { data: blockerData } = await supabase
+        .from("blocked_users")
+        .select("blocker_id")
+        .eq("blocked_id", user.id);
+      const excludedIds = new Set([
+        ...(blockedData || []).map((b) => b.blocked_id),
+        ...(blockerData || []).map((b) => b.blocker_id),
+      ]);
 
-    if (!data) return;
+      // Lấy các cuộc trò chuyện và sắp xếp theo tin nhắn mới nhất
+      const { data } = await supabase
+        .from("conversations")
+        .select("*")
+        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+        .order("updated_at", { ascending: false });
 
-    // Gắn thêm thông tin của user đối phương
-    const enriched = await Promise.all(
-      data.map(async (c) => {
-        const otherId = c.user1_id === user.id ? c.user2_id : c.user1_id;
-        const { data: u } = await supabase
-          .from("users")
-          .select("id, name, avatar_url")
-          .eq("id", otherId)
-          .maybeSingle();
+      if (!data) return;
 
-        // Lấy trực tiếp tin nhắn mới nhất từ bảng messages
-        const { data: lastMsg } = await supabase
-          .from("messages")
-          .select("content, sender_id")
-          .eq("conversation_id", c.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      // Gắn thêm thông tin của user đối phương
+      const enriched = await Promise.all(
+        data.map(async (c) => {
+          const otherId = c.user1_id === user.id ? c.user2_id : c.user1_id;
 
-        let displayTxt = c.last_message;
-        if (lastMsg) {
-          displayTxt =
-            lastMsg.sender_id === user.id
-              ? `Bạn: ${lastMsg.content}`
-              : lastMsg.content;
-        }
+          if (excludedIds.has(otherId)) return null; // Ẩn người bị chặn
 
-        return { ...c, otherUser: u, display_last_message: displayTxt };
-      }),
-    );
+          const { data: u } = await supabase
+            .from("users")
+            .select("id, name, avatar_url")
+            .eq("id", otherId)
+            .maybeSingle();
 
-    setConversations(enriched);
+          // Ưu tiên hiển thị tên gợi nhớ nếu có
+          const { data: nick } = await supabase
+            .from("nicknames")
+            .select("nickname")
+            .eq("conversation_id", c.id)
+            .eq("user_id", user.id)
+            .eq("target_id", otherId)
+            .maybeSingle();
+
+          if (u && nick?.nickname) u.name = nick.nickname;
+
+          // Lấy trực tiếp tin nhắn mới nhất từ bảng messages
+          const { data: lastMsg } = await supabase
+            .from("messages")
+            .select("content, sender_id")
+            .eq("conversation_id", c.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          let displayTxt = c.last_message;
+          if (lastMsg) {
+            displayTxt =
+              lastMsg.sender_id === user.id
+                ? `Bạn: ${lastMsg.content}`
+                : lastMsg.content;
+          }
+
+          return { ...c, otherUser: u, display_last_message: displayTxt };
+        }),
+      );
+
+      setConversations(enriched.filter(Boolean));
+    } catch (err) {
+      console.error("Error loading conversations:", err);
+    }
   }, [user?.id]);
 
   useEffect(() => {
@@ -222,10 +272,25 @@ export default function MessagesPage() {
       if (!user?.id) return;
       if (search.length < 2) return setResults([]);
 
+      // Bỏ qua bản thân và những người đã bị chặn khỏi tìm kiếm
+      const { data: blockedData } = await supabase
+        .from("blocked_users")
+        .select("blocked_id")
+        .eq("blocker_id", user.id);
+      const { data: blockerData } = await supabase
+        .from("blocked_users")
+        .select("blocker_id")
+        .eq("blocked_id", user.id);
+      const excludedIds = [
+        ...(blockedData || []).map((b) => b.blocked_id),
+        ...(blockerData || []).map((b) => b.blocker_id),
+        user.id,
+      ];
+
       let dbQuery = supabase
         .from("users")
         .select("id, name, avatar_url")
-        .neq("id", user.id);
+        .not("id", "in", `(${excludedIds.join(",")})`);
 
       const words = search.trim().split(/\s+/);
       words.forEach((word) => {
@@ -247,8 +312,19 @@ export default function MessagesPage() {
     setLoading(true);
     try {
       const id = await getOrCreateConversation(user.id, target.id);
+
+      // Kiểm tra tên gợi nhớ
+      const { data: nick } = await supabase
+        .from("nicknames")
+        .select("nickname")
+        .eq("conversation_id", id)
+        .eq("user_id", user.id)
+        .eq("target_id", target.id)
+        .maybeSingle();
+
+      const displayTarget = { ...target, name: nick?.nickname || target.name };
       setConversationId(id);
-      setTargetUser(target);
+      setTargetUser(displayTarget);
       setSearch("");
       setResults([]);
 
@@ -307,6 +383,44 @@ export default function MessagesPage() {
     lastTypingTimeRef.current = 0;
   };
 
+  // ================= THU HỒI TIN NHẮN =================
+  const handleDeleteMessage = async (msgId: string) => {
+    if (!window.confirm("Bạn có chắc chắn muốn thu hồi tin nhắn này?")) return;
+    try {
+      await deleteMessage(msgId);
+      setMessages((prev) => prev.filter((m) => m.id !== msgId));
+      setOpenMessageMenuId(null);
+      toast.success("Đã thu hồi tin nhắn");
+    } catch (err) {
+      toast.error("Lỗi thu hồi tin nhắn");
+    }
+  };
+
+  // ================= BLOCKED CONTROL HANDLERS =================
+  const handleLoadBlockedUsers = async () => {
+    if (!user?.id) return;
+    try {
+      setLoading(true);
+      const users = await getBlockedUsers(user.id);
+      setBlockedUsersList(users);
+    } catch (error) {
+      toast.error("Lỗi tải danh sách chặn");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUnblock = async (blockedId: string) => {
+    try {
+      await unblockUser(user?.id, blockedId);
+      setBlockedUsersList((prev) => prev.filter((u) => u.id !== blockedId));
+      toast.success("Đã bỏ chặn người dùng");
+      loadConversations();
+    } catch (error) {
+      toast.error("Lỗi khi bỏ chặn");
+    }
+  };
+
   return (
     <div className="h-screen flex flex-col text-gray-900 dark:text-gray-100 transition-colors duration-500 overflow-hidden bg-gray-50 dark:bg-neutral-900">
       <main className="max-w-[935px] w-full mx-auto flex-1 pt-[76px] px-4 pb-24 md:pb-6 flex gap-4 overflow-hidden">
@@ -314,81 +428,143 @@ export default function MessagesPage() {
         <div
           className={`w-full md:w-[350px] border border-gray-200 dark:border-neutral-800 shadow-sm dark:shadow-black/30 rounded-xl flex flex-col h-full transition-all duration-500 bg-white dark:bg-[#262626] ${targetUser ? "hidden md:flex" : "flex"}`}
         >
-          <div className="p-4 border-b border-gray-200 dark:border-neutral-800 font-bold text-lg flex items-center">
-            {user?.name || user?.user_metadata?.name || "Tin nhắn"}
+          <div className="p-4 border-b border-gray-200 dark:border-neutral-800 font-bold text-lg flex items-center justify-between">
+            <span>{user?.name || user?.user_metadata?.name || "Tin nhắn"}</span>
+            <button
+              onClick={() => {
+                if (isBlockedListOpen) {
+                  setIsBlockedListOpen(false);
+                } else {
+                  setIsBlockedListOpen(true);
+                  handleLoadBlockedUsers();
+                }
+              }}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-[#333333] rounded-full transition-colors"
+              title="Quản lý chặn"
+            >
+              <Ban
+                size={20}
+                className={
+                  isBlockedListOpen ? "text-red-500" : "text-muted-foreground"
+                }
+              />
+            </button>
           </div>
 
-          <div className="p-3">
-            <div className="flex items-center gap-2 border border-gray-200 dark:border-neutral-700 shadow-inner focus-within:ring-1 focus-within:ring-blue-500 transition-all p-2 rounded-xl bg-gray-50 dark:bg-[#333333] focus-within:bg-white dark:focus-within:bg-[#262626]">
-              <Search size={16} className="text-muted-foreground" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="flex-1 outline-none text-[15px] bg-transparent"
-                placeholder="Tìm kiếm người dùng..."
-              />
+          {!isBlockedListOpen && (
+            <div className="p-3">
+              <div className="flex items-center gap-2 border border-gray-200 dark:border-neutral-700 shadow-inner focus-within:ring-1 focus-within:ring-blue-500 transition-all p-2 rounded-xl bg-gray-50 dark:bg-[#333333] focus-within:bg-white dark:focus-within:bg-[#262626]">
+                <Search size={16} className="text-muted-foreground" />
+                <input
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="flex-1 outline-none text-[15px] bg-transparent"
+                  placeholder="Tìm kiếm người dùng..."
+                />
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="flex-1 overflow-y-auto p-2 space-y-1">
-            {/* Hiển thị kết quả tìm kiếm nếu có */}
-            {results.map((u) => (
-              <div
-                key={u.id}
-                onClick={() => handleOpenChat(u)}
-                className="flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-[#333333]"
-              >
-                <img
-                  src={
-                    u.avatar_url ||
-                    `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
-                  }
-                  className="w-12 h-12 rounded-full border border-gray-200 dark:border-neutral-700 shadow-sm object-cover"
-                />
-                <span className="font-medium text-[15px]">{u.name}</span>
-              </div>
-            ))}
-
-            {/* Không có tin nhắn */}
-            {search.length === 0 && conversations.length === 0 && (
-              <div className="text-center text-muted-foreground p-4 text-[15px]">
-                Chưa có cuộc trò chuyện nào.
-              </div>
-            )}
-
-            {/* Lịch sử trò chuyện */}
-            {search.length === 0 &&
-              conversations.map((c) => (
-                <div
-                  key={c.id}
-                  onClick={() => handleOpenExisting(c)}
-                  className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-[#333333] ${
-                    conversationId === c.id
-                      ? "bg-gray-200 dark:bg-[#3f3f3f]"
-                      : ""
-                  }`}
-                >
-                  <img
-                    src={
-                      c.otherUser?.avatar_url ||
-                      `https://api.dicebear.com/7.x/identicon/svg?seed=${c.otherUser?.id}`
-                    }
-                    className="w-14 h-14 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shadow-sm flex-shrink-0"
-                  />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-semibold truncate">
-                      {c.otherUser?.name}
-                    </p>
-                    {/* Hiển thị tin nhắn mới nhất */}
-                    <p
-                      className={`text-[14px] truncate mt-0.5 ${c.display_last_message ? "text-muted-foreground" : "text-gray-400 italic"}`}
-                    >
-                      {c.display_last_message ||
-                        "Hãy là người bắt đầu cuộc trò chuyện"}
-                    </p>
+            {isBlockedListOpen ? (
+              <div className="space-y-2 px-1 mt-2">
+                <h3 className="text-sm font-bold text-muted-foreground mb-3 uppercase tracking-wider">
+                  Danh sách chặn
+                </h3>
+                {blockedUsersList.length === 0 ? (
+                  <div className="text-center text-muted-foreground p-4 text-[15px]">
+                    Không có người bị chặn.
                   </div>
-                </div>
-              ))}
+                ) : (
+                  blockedUsersList.map((u) => (
+                    <div
+                      key={u.id}
+                      className="flex items-center justify-between p-3 bg-gray-50 dark:bg-[#333333] border border-gray-200 dark:border-neutral-800 rounded-xl"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={
+                            u.avatar_url ||
+                            `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
+                          }
+                          className="w-10 h-10 rounded-full border border-gray-200 dark:border-neutral-700 shadow-sm object-cover"
+                        />
+                        <span className="font-medium text-[15px]">
+                          {u.name}
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => handleUnblock(u.id)}
+                        className="bg-gray-200 dark:bg-neutral-700 hover:bg-gray-300 dark:hover:bg-neutral-600 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                      >
+                        Bỏ chặn
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : (
+              <>
+                {/* Hiển thị kết quả tìm kiếm nếu có */}
+                {results.map((u) => (
+                  <div
+                    key={u.id}
+                    onClick={() => handleOpenChat(u)}
+                    className="flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-[#333333]"
+                  >
+                    <img
+                      src={
+                        u.avatar_url ||
+                        `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
+                      }
+                      className="w-12 h-12 rounded-full border border-gray-200 dark:border-neutral-700 shadow-sm object-cover"
+                    />
+                    <span className="font-medium text-[15px]">{u.name}</span>
+                  </div>
+                ))}
+
+                {/* Không có tin nhắn */}
+                {search.length === 0 && conversations.length === 0 && (
+                  <div className="text-center text-muted-foreground p-4 text-[15px]">
+                    Chưa có cuộc trò chuyện nào.
+                  </div>
+                )}
+
+                {/* Lịch sử trò chuyện */}
+                {search.length === 0 &&
+                  conversations.map((c) => (
+                    <div
+                      key={c.id}
+                      onClick={() => handleOpenExisting(c)}
+                      className={`flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-[#333333] ${
+                        conversationId === c.id
+                          ? "bg-gray-200 dark:bg-[#3f3f3f]"
+                          : ""
+                      }`}
+                    >
+                      <img
+                        src={
+                          c.otherUser?.avatar_url ||
+                          `https://api.dicebear.com/7.x/identicon/svg?seed=${c.otherUser?.id}`
+                        }
+                        className="w-14 h-14 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shadow-sm flex-shrink-0"
+                      />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[15px] font-semibold truncate">
+                          {c.otherUser?.name}
+                        </p>
+                        {/* Hiển thị tin nhắn mới nhất */}
+                        <p
+                          className={`text-[14px] truncate mt-0.5 ${c.display_last_message ? "text-muted-foreground" : "text-gray-400 italic"}`}
+                        >
+                          {c.display_last_message ||
+                            "Hãy là người bắt đầu cuộc trò chuyện"}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+              </>
+            )}
           </div>
         </div>
 
@@ -436,14 +612,42 @@ export default function MessagesPage() {
               <div
                 ref={scrollRef}
                 className="flex-1 overflow-y-auto p-4 space-y-3"
+                onClick={() => setOpenMessageMenuId(null)}
               >
                 {messages.map((m, index) => {
                   const isLastMessage = index === messages.length - 1;
                   return (
                     <div key={m.id} className="flex flex-col">
                       <div
-                        className={`flex ${m.sender_id === user?.id ? "justify-end" : "justify-start"}`}
+                        className={`flex ${m.sender_id === user?.id ? "justify-end" : "justify-start"} group relative items-center`}
                       >
+                        {m.sender_id === user?.id && (
+                          <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center pr-2 relative">
+                            <MoreHorizontal
+                              size={16}
+                              className="cursor-pointer text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOpenMessageMenuId(
+                                  openMessageMenuId === m.id ? null : m.id,
+                                );
+                              }}
+                            />
+                            {openMessageMenuId === m.id && (
+                              <div className="absolute right-0 bottom-full mb-1 w-28 bg-white dark:bg-[#333333] border border-gray-200 dark:border-neutral-700 rounded-lg shadow-lg z-50 overflow-hidden">
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteMessage(m.id);
+                                  }}
+                                  className="w-full text-left px-3 py-2 text-[14px] text-red-500 hover:bg-secondary font-medium transition-colors"
+                                >
+                                  Thu hồi
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         <div
                           className={`px-4 py-2 text-[15px] max-w-[70%] break-words ${
                             m.sender_id === user?.id

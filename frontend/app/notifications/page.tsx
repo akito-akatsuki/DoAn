@@ -85,17 +85,21 @@ export default function NotificationsPage() {
   }, []);
 
   const init = async () => {
-    const { data } = await supabase.auth.getUser();
-    const currentUser = data.user;
+    try {
+      const { data } = await supabase.auth.getUser();
+      const currentUser = data?.user;
 
-    if (currentUser) {
-      const { data: dbUser } = await supabase
-        .from("users")
-        .select("*")
-        .eq("id", currentUser.id)
-        .single();
-      setUser({ ...currentUser, ...dbUser });
-      await loadNotifications(currentUser.id);
+      if (currentUser) {
+        const { data: dbUser } = await supabase
+          .from("users")
+          .select("*")
+          .eq("id", currentUser.id)
+          .single();
+        setUser({ ...currentUser, ...dbUser });
+        await loadNotifications(currentUser.id);
+      }
+    } catch (err) {
+      console.error("Lỗi khởi tạo trang thông báo:", err);
     }
   };
 

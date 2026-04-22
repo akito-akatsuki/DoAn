@@ -1,6 +1,8 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import {
   Search,
   Send,
@@ -12,6 +14,10 @@ import {
   Edit3,
   Trash2,
   LogOut,
+  Video,
+  Phone,
+  MoreHorizontal,
+  Ban,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
@@ -23,7 +29,15 @@ import {
   getConversationMembers,
   updateGroupName,
   deleteConversation,
+  deleteMessage,
+  setNickname,
+  blockUser,
+  getBlockedUsers,
+  unblockUser,
 } from "@/lib/chatApi";
+import dynamic from "next/dynamic";
+
+const VideoCall = dynamic(() => import("./VideoCall"), { ssr: false });
 
 interface ChatBoxProps {
   userId: string;
@@ -31,6 +45,7 @@ interface ChatBoxProps {
 }
 
 export default function ChatBox({ userId, onClose }: ChatBoxProps) {
+  const router = useRouter();
   const [targetUser, setTargetUser] = useState<any>(null);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
@@ -45,6 +60,10 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
   const [groupName, setGroupName] = useState("");
   const [selectedMembers, setSelectedMembers] = useState<any[]>([]);
 
+  // ================= BLOCKED USERS STATES =================
+  const [isBlockedListOpen, setIsBlockedListOpen] = useState(false);
+  const [blockedUsersList, setBlockedUsersList] = useState<any[]>([]);
+
   const [isTyping, setIsTyping] = useState(false);
   const typingChannelRef = useRef<any>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -58,13 +77,41 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
   // ================= SETTINGS STATES =================
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settingsView, setSettingsView] = useState<
-    "menu" | "search" | "members" | "edit_name"
+    "menu" | "search" | "members" | "edit_name" | "edit_nickname"
   >("menu");
   const [chatSearchQuery, setChatSearchQuery] = useState("");
   const [groupMembers, setGroupMembers] = useState<any[]>([]);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupAvatar, setNewGroupAvatar] = useState<File | null>(null);
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
+  const [newNickname, setNewNickname] = useState("");
+  const [openMessageMenuId, setOpenMessageMenuId] = useState<string | null>(
+    null,
+  );
+
+  // ================= VIDEO CALL STATES =================
+  const [currentUser, setCurrentUser] = useState<any>(null);
+  const [callState, setCallState] = useState<"idle" | "calling" | "ringing">(
+    "idle",
+  );
+  const [callType, setCallType] = useState<"video" | "voice">("video");
+  const [callRoomId, setCallRoomId] = useState("");
+  const [callUserInfo, setCallUserInfo] = useState<any>(null); // Lưu thông tin người gọi/người nhận
+  const [isInCall, setIsInCall] = useState(false);
+  const globalCallChannelRef = useRef<any>(null);
+
+  // ================= LOAD CURRENT USER =================
+  useEffect(() => {
+    if (!userId) return;
+    supabase
+      .from("users")
+      .select("*")
+      .eq("id", userId)
+      .single()
+      .then(({ data }) => {
+        setCurrentUser(data);
+      });
+  }, [userId]);
 
   // ================= ONLINE STATUS (PRESENCE) =================
   useEffect(() => {
@@ -177,6 +224,49 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
     };
   }, [conversationId, userId]);
 
+  // ================= VIDEO CALL REALTIME (SIGNALING) =================
+  useEffect(() => {
+    if (!userId) return;
+
+    const channel = supabase
+      .channel("global_call")
+      .on("broadcast", { event: "call_signal" }, (payload) => {
+        const {
+          type,
+          roomId,
+          caller,
+          targetUserId,
+          callType: incomingCallType,
+        } = payload.payload;
+        if (targetUserId === userId) {
+          if (type === "OFFER") {
+            setCallRoomId(roomId);
+            setCallUserInfo(caller);
+            setCallType(incomingCallType || "video");
+            setCallState("ringing");
+          } else if (type === "ACCEPT") {
+            setIsInCall(true);
+            setCallState("idle");
+          } else if (type === "REJECT") {
+            setCallState("idle");
+            toast.error(`${caller.name} đã từ chối cuộc gọi.`);
+            setCallUserInfo(null);
+          } else if (type === "END") {
+            setIsInCall(false);
+            setCallState("idle");
+            setCallUserInfo(null);
+          }
+        }
+      })
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") globalCallChannelRef.current = channel;
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [userId]);
+
   // ================= READ RECEIPTS (ĐÃ XEM) =================
   useEffect(() => {
     if (!conversationId || !userId || messages.length === 0) return;
@@ -196,70 +286,107 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
 
   // ================= LOAD CONVERSATIONS (OPTIMIZED) =================
   const loadConversations = useCallback(async () => {
-    if (!userId) return;
+    try {
+      if (!userId) return;
 
-    // Lấy danh sách ID các phòng chat (Bao gồm cả nhóm và 1-1) mà người dùng tham gia
-    const { data: parts } = await supabase
-      .from("conversation_participants")
-      .select("conversation_id")
-      .eq("user_id", userId);
+      // 1. Lấy danh sách ID người dùng đã chặn hoặc bị chặn để ẩn họ đi
+      const { data: blockedData } = await supabase
+        .from("blocked_users")
+        .select("blocked_id")
+        .eq("blocker_id", userId);
+      const { data: blockerData } = await supabase
+        .from("blocked_users")
+        .select("blocker_id")
+        .eq("blocked_id", userId);
+      const excludedIds = new Set([
+        ...(blockedData || []).map((b) => b.blocked_id),
+        ...(blockerData || []).map((b) => b.blocker_id),
+      ]);
 
-    if (!parts || parts.length === 0) return setConversations([]);
-    const convIds = parts.map((p) => p.conversation_id);
+      // Lấy danh sách ID các phòng chat (Bao gồm cả nhóm và 1-1) mà người dùng tham gia
+      const { data: parts } = await supabase
+        .from("conversation_participants")
+        .select("conversation_id")
+        .eq("user_id", userId);
 
-    const { data } = await supabase
-      .from("conversations")
-      .select("*")
-      .in("id", convIds)
-      .order("updated_at", { ascending: false })
-      .limit(20);
+      if (!parts || parts.length === 0) return setConversations([]);
+      const convIds = parts.map((p) => p.conversation_id);
 
-    if (!data) return;
+      const { data } = await supabase
+        .from("conversations")
+        .select("*")
+        .in("id", convIds)
+        .order("updated_at", { ascending: false })
+        .limit(20);
 
-    const enriched = await Promise.all(
-      data.map(async (c) => {
-        let otherUser;
-        if (c.is_group) {
-          otherUser = {
-            id: c.id,
-            name: c.group_name || "Nhóm chưa đặt tên",
-            avatar_url:
-              c.group_avatar ||
-              `https://api.dicebear.com/7.x/identicon/svg?seed=${c.id}`,
-            is_group: true,
-          };
-        } else {
-          const otherId = c.user1_id === userId ? c.user2_id : c.user1_id;
-          const { data: user } = await supabase
-            .from("users")
-            .select("id, name, avatar_url")
-            .eq("id", otherId)
+      if (!data) return;
+
+      const enriched = await Promise.all(
+        data.map(async (c) => {
+          let otherUser;
+          if (c.is_group) {
+            otherUser = {
+              id: c.id,
+              name: c.group_name || "Nhóm chưa đặt tên",
+              avatar_url:
+                c.group_avatar ||
+                `https://api.dicebear.com/7.x/identicon/svg?seed=${c.id}`,
+              is_group: true,
+            };
+          } else {
+            const otherId = c.user1_id === userId ? c.user2_id : c.user1_id;
+
+            // Bỏ qua nếu người này nằm trong danh sách chặn
+            if (excludedIds.has(otherId)) return null;
+
+            const { data: user } = await supabase
+              .from("users")
+              .select("id, name, avatar_url")
+              .eq("id", otherId)
+              .maybeSingle();
+
+            // Ưu tiên hiển thị tên gợi nhớ nếu có thiết lập
+            const { data: nick } = await supabase
+              .from("nicknames")
+              .select("nickname")
+              .eq("conversation_id", c.id)
+              .eq("user_id", userId)
+              .eq("target_id", otherId)
+              .maybeSingle();
+
+            if (user && nick?.nickname) user.name = nick.nickname;
+            otherUser = user;
+          }
+
+          // Lấy trực tiếp tin nhắn mới nhất
+          const { data: lastMsg } = await supabase
+            .from("messages")
+            .select("content, sender_id")
+            .eq("conversation_id", c.id)
+            .order("created_at", { ascending: false })
+            .limit(1)
             .maybeSingle();
-          otherUser = user;
-        }
 
-        // Lấy trực tiếp tin nhắn mới nhất
-        const { data: lastMsg } = await supabase
-          .from("messages")
-          .select("content, sender_id")
-          .eq("conversation_id", c.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+          let displayTxt = c.last_message;
+          if (lastMsg) {
+            displayTxt =
+              lastMsg.sender_id === userId
+                ? `Bạn: ${lastMsg.content}`
+                : lastMsg.content;
+          }
 
-        let displayTxt = c.last_message;
-        if (lastMsg) {
-          displayTxt =
-            lastMsg.sender_id === userId
-              ? `Bạn: ${lastMsg.content}`
-              : lastMsg.content;
-        }
+          return {
+            ...c,
+            otherUser: otherUser,
+            display_last_message: displayTxt,
+          };
+        }),
+      );
 
-        return { ...c, otherUser: otherUser, display_last_message: displayTxt };
-      }),
-    );
-
-    setConversations(enriched);
+      setConversations(enriched.filter(Boolean));
+    } catch (err) {
+      console.error("Error loading conversations:", err);
+    }
   }, [userId]);
 
   // ================= REALTIME DANH SÁCH CHAT BÊN NGOÀI =================
@@ -302,7 +429,22 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
         .select("following_id")
         .eq("follower_id", userId);
 
-      const followingIds = (follows || []).map((f) => f.following_id);
+      const { data: blockedData } = await supabase
+        .from("blocked_users")
+        .select("blocked_id")
+        .eq("blocker_id", userId);
+      const { data: blockerData } = await supabase
+        .from("blocked_users")
+        .select("blocker_id")
+        .eq("blocked_id", userId);
+      const excludedIds = new Set([
+        ...(blockedData || []).map((b) => b.blocked_id),
+        ...(blockerData || []).map((b) => b.blocker_id),
+      ]);
+
+      const followingIds = (follows || [])
+        .map((f) => f.following_id)
+        .filter((id) => !excludedIds.has(id));
 
       // 2. Nếu ô tìm kiếm trống
       if (!search.trim()) {
@@ -397,8 +539,18 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
     try {
       const id = await getOrCreateConversation(userId, user.id);
 
+      // Kiểm tra tên gợi nhớ để hiển thị cho chuẩn xác
+      const { data: nick } = await supabase
+        .from("nicknames")
+        .select("nickname")
+        .eq("conversation_id", id)
+        .eq("user_id", userId)
+        .eq("target_id", user.id)
+        .maybeSingle();
+
+      const displayUser = { ...user, name: nick?.nickname || user.name };
       setConversationId(id);
-      setTargetUser(user);
+      setTargetUser(displayUser);
       setIsSettingsOpen(false); // Đóng cài đặt nếu đang mở
 
       const msgs = await getMessages(id);
@@ -456,6 +608,92 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
       });
     }
     lastTypingTimeRef.current = 0;
+  };
+
+  // ================= CALL CONTROL HANDLERS =================
+  const startCall = (type: "video" | "voice") => {
+    if (!targetUser || targetUser.is_group) return;
+    const roomId = `room_${Date.now()}_${userId}`;
+    setCallRoomId(roomId);
+    setCallUserInfo(targetUser);
+    setCallType(type);
+    setCallState("calling");
+
+    globalCallChannelRef.current?.send({
+      type: "broadcast",
+      event: "call_signal",
+      payload: {
+        type: "OFFER",
+        callType: type,
+        roomId,
+        caller: currentUser,
+        targetUserId: targetUser.id,
+      },
+    });
+  };
+
+  const acceptCall = () => {
+    setIsInCall(true);
+    setCallState("idle");
+    globalCallChannelRef.current?.send({
+      type: "broadcast",
+      event: "call_signal",
+      payload: {
+        type: "ACCEPT",
+        targetUserId: callUserInfo?.id,
+        caller: currentUser,
+      },
+    });
+  };
+
+  const rejectCall = () => {
+    setCallState("idle");
+    globalCallChannelRef.current?.send({
+      type: "broadcast",
+      event: "call_signal",
+      payload: {
+        type: "REJECT",
+        targetUserId: callUserInfo?.id,
+        caller: currentUser,
+      },
+    });
+    setCallUserInfo(null);
+  };
+
+  const handleLeaveCall = () => {
+    setIsInCall(false);
+    setCallState("idle");
+    globalCallChannelRef.current?.send({
+      type: "broadcast",
+      event: "call_signal",
+      payload: { type: "END", targetUserId: callUserInfo?.id },
+    });
+    setCallUserInfo(null);
+  };
+
+  // ================= BLOCKED CONTROL HANDLERS =================
+  const handleLoadBlockedUsers = async () => {
+    if (!userId) return;
+    try {
+      setLoading(true);
+      const users = await getBlockedUsers(userId);
+      setBlockedUsersList(users);
+    } catch (error) {
+      toast.error("Lỗi tải danh sách chặn");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUnblock = async (blockedId: string) => {
+    try {
+      await unblockUser(userId, blockedId);
+      setBlockedUsersList((prev) => prev.filter((u) => u.id !== blockedId));
+      toast.success("Đã bỏ chặn người dùng");
+      loadConversations();
+    } catch (error) {
+      toast.error("Lỗi khi bỏ chặn");
+    }
   };
 
   // ================= SETTINGS HANDLERS =================
@@ -534,133 +772,432 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
     }
   };
 
+  // ================= THU HỒI TIN NHẮN =================
+  const handleDeleteMessage = async (msgId: string) => {
+    if (!window.confirm("Bạn có chắc chắn muốn thu hồi tin nhắn này?")) return;
+    try {
+      await deleteMessage(msgId);
+      setMessages((prev) => prev.filter((m) => m.id !== msgId));
+      setOpenMessageMenuId(null);
+      toast.success("Đã thu hồi tin nhắn");
+    } catch (err) {
+      toast.error("Lỗi thu hồi tin nhắn");
+    }
+  };
+
   return (
     <div className="w-full h-full flex flex-col bg-white dark:bg-[#262626] text-gray-900 dark:text-gray-100 overflow-hidden relative transition-colors duration-500">
       {/* HEADER */}
-      <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-black/20">
-        {targetUser ? (
-          <>
-            <div className="flex items-center gap-2 flex-1">
+      <div className="relative min-h-[68px] shrink-0 border-b border-gray-200 dark:border-neutral-800 flex items-center justify-between shadow-[0_2px_10px_rgba(0,0,0,0.02)] dark:shadow-black/20 overflow-hidden">
+        {/* LIST HEADER */}
+        <div
+          className={`absolute inset-0 flex items-center justify-between p-4 transition-all duration-300 bg-white dark:bg-[#262626] z-10 ${targetUser ? "-translate-x-full opacity-0 invisible pointer-events-none" : "translate-x-0 opacity-100 visible pointer-events-auto"}`}
+        >
+          {isCreatingGroup ? (
+            <>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setIsCreatingGroup(false);
+                    setSelectedMembers([]);
+                    setGroupName("");
+                    setSearch("");
+                  }}
+                >
+                  <ChevronLeft size={20} />
+                </button>
+                <span className="font-bold">Tạo nhóm mới</span>
+              </div>
               <button
-                onClick={() => {
-                  setTargetUser(null);
-                  setConversationId(null);
-                  setMessages([]);
-                  setIsSettingsOpen(false);
-                }}
+                onClick={handleCreateGroup}
+                className="text-blue-500 font-semibold text-sm hover:text-blue-600"
               >
-                <ChevronLeft size={20} />
+                Tạo
               </button>
-
-              <div className="relative">
-                <img
-                  src={targetUser?.avatar_url}
-                  className="w-8 h-8 rounded-full"
+            </>
+          ) : isBlockedListOpen ? (
+            <>
+              <div className="flex items-center gap-2">
+                <button onClick={() => setIsBlockedListOpen(false)}>
+                  <ChevronLeft size={20} />
+                </button>
+                <span className="font-bold">Danh sách chặn</span>
+              </div>
+            </>
+          ) : (
+            <>
+              <span className="font-bold">Tin nhắn</span>
+              {onClose && (
+                <X
+                  size={20}
+                  className="cursor-pointer text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                  onClick={onClose}
                 />
-                {!targetUser.is_group && onlineUsers.has(targetUser.id) && (
+              )}
+            </>
+          )}
+        </div>
+
+        {/* NORMAL CHAT HEADER */}
+        <div
+          className={`absolute inset-0 flex items-center justify-between p-4 transition-all duration-300 bg-white dark:bg-[#262626] z-20 ${!targetUser ? "translate-x-full opacity-0 invisible pointer-events-none" : isSettingsOpen ? "-translate-x-full opacity-0 invisible pointer-events-none" : "translate-x-0 opacity-100 visible pointer-events-auto"}`}
+        >
+          <div className="flex items-center gap-2 flex-1">
+            <button
+              onClick={() => {
+                setTargetUser(null);
+                setConversationId(null);
+                setMessages([]);
+                setIsSettingsOpen(false);
+              }}
+            >
+              <ChevronLeft size={20} />
+            </button>
+
+            <div className="relative">
+              <img
+                src={targetUser?.avatar_url}
+                onClick={() => {
+                  if (!targetUser?.is_group) {
+                    router.push(`/profile/${targetUser?.id}`);
+                    if (onClose) onClose();
+                  }
+                }}
+                className={`w-8 h-8 rounded-full ${!targetUser?.is_group ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
+              />
+              {!targetUser?.is_group &&
+                targetUser &&
+                onlineUsers.has(targetUser.id) && (
                   <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full"></span>
                 )}
-              </div>
-              <div className="flex flex-col">
-                <span className="text-sm font-semibold leading-tight">
-                  {targetUser?.name}
+            </div>
+            <div className="flex flex-col">
+              <span
+                onClick={() => {
+                  if (!targetUser?.is_group) {
+                    router.push(`/profile/${targetUser?.id}`);
+                    if (onClose) onClose();
+                  }
+                }}
+                className={`text-sm font-semibold leading-tight ${!targetUser?.is_group ? "cursor-pointer hover:underline" : ""}`}
+              >
+                {targetUser?.name}
+              </span>
+              {targetUser?.is_group ? (
+                <span className="text-[10px] text-muted-foreground leading-tight">
+                  Nhóm chat
                 </span>
-                {targetUser.is_group ? (
-                  <span className="text-[10px] text-muted-foreground leading-tight">
-                    Nhóm chat
-                  </span>
-                ) : onlineUsers.has(targetUser.id) ? (
-                  <span className="text-[10px] text-green-500 leading-tight">
-                    Đang hoạt động
-                  </span>
-                ) : (
-                  <span className="text-[10px] text-muted-foreground leading-tight">
-                    Ngoại tuyến
-                  </span>
-                )}
-              </div>
+              ) : targetUser && onlineUsers.has(targetUser.id) ? (
+                <span className="text-[10px] text-green-500 leading-tight">
+                  Đang hoạt động
+                </span>
+              ) : (
+                <span className="text-[10px] text-muted-foreground leading-tight">
+                  Ngoại tuyến
+                </span>
+              )}
             </div>
+          </div>
 
-            {/* GEAR ICON CÀI ĐẶT */}
-            <div className="flex items-center gap-1 shrink-0 ml-2">
-              <button
-                onClick={() => {
-                  setIsSettingsOpen(!isSettingsOpen);
-                  setSettingsView("menu");
-                  setChatSearchQuery("");
-                }}
-                className={`p-2 transition-colors rounded-full hover:bg-secondary ${isSettingsOpen ? "bg-secondary text-gray-900 dark:text-gray-100" : "text-muted-foreground"}`}
-              >
-                <Settings size={20} />
-              </button>
-            </div>
-          </>
-        ) : isCreatingGroup ? (
-          <div className="flex items-center w-full justify-between">
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => {
-                  setIsCreatingGroup(false);
-                  setSelectedMembers([]);
-                  setGroupName("");
-                  setSearch("");
-                }}
-              >
-                <ChevronLeft size={20} />
-              </button>
-              <span className="font-bold">Tạo nhóm mới</span>
-            </div>
+          {/* GEAR ICON CÀI ĐẶT */}
+          <div className="flex items-center gap-1 shrink-0 ml-2">
+            {!targetUser?.is_group && (
+              <>
+                <button
+                  onClick={() => startCall("voice")}
+                  className="p-2 transition-colors rounded-full hover:bg-secondary text-muted-foreground"
+                >
+                  <Phone size={20} />
+                </button>
+                <button
+                  onClick={() => startCall("video")}
+                  className="p-2 transition-colors rounded-full hover:bg-secondary text-muted-foreground"
+                >
+                  <Video size={20} />
+                </button>
+              </>
+            )}
             <button
-              onClick={handleCreateGroup}
-              className="text-blue-500 font-semibold text-sm hover:text-blue-600"
+              onClick={() => {
+                setIsSettingsOpen(true);
+                setSettingsView("menu");
+                setChatSearchQuery("");
+              }}
+              className="p-2 transition-colors rounded-full hover:bg-secondary text-muted-foreground"
             >
-              Tạo
+              <Settings size={20} />
             </button>
           </div>
-        ) : (
-          <>
-            <span className="font-bold">Tin nhắn</span>
-            {onClose && (
-              <X
-                size={20}
-                className="cursor-pointer text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-                onClick={onClose}
-              />
-            )}
-          </>
-        )}
-      </div>
+        </div>
 
-      {/* BODY */}
-      {isSettingsOpen && targetUser ? (
-        <div className="flex-1 overflow-y-auto bg-gray-50 dark:bg-[#333333] flex flex-col">
-          <div className="p-3 border-b border-gray-200 dark:border-neutral-700 flex items-center gap-2 bg-white dark:bg-[#262626] shrink-0">
+        {/* SETTINGS HEADER */}
+        <div
+          className={`absolute inset-0 flex items-center justify-between p-4 transition-all duration-300 bg-white dark:bg-[#262626] z-30 ${isSettingsOpen ? "translate-x-0 opacity-100 visible pointer-events-auto" : "translate-x-full opacity-0 invisible pointer-events-none"}`}
+        >
+          <div className="flex items-center gap-2">
             <button
               onClick={() => {
                 if (settingsView === "menu") setIsSettingsOpen(false);
                 else setSettingsView("menu");
               }}
-              className="p-1 hover:bg-secondary rounded-full transition-colors"
             >
               <ChevronLeft size={20} />
             </button>
-            <span className="font-bold text-[15px]">
+            <span className="font-bold text-[16px]">
               {settingsView === "menu" && "Cài đặt chung"}
               {settingsView === "search" && "Tìm kiếm tin nhắn"}
               {settingsView === "members" && "Thành viên nhóm"}
               {settingsView === "edit_name" && "Chỉnh sửa nhóm"}
+              {settingsView === "edit_nickname" && "Đổi tên gợi nhớ"}
             </span>
           </div>
+        </div>
+      </div>
 
+      {/* BODY & INPUT WRAPPER */}
+      <div className="flex-1 relative overflow-hidden flex flex-col w-full">
+        {/* LIST PANEL */}
+        <div
+          className={`absolute inset-0 flex flex-col transition-all duration-300 z-10 bg-white dark:bg-[#262626] ${targetUser ? "-translate-x-full opacity-0 invisible pointer-events-none" : "translate-x-0 opacity-100 visible pointer-events-auto"}`}
+        >
+          <div
+            className="flex-1 overflow-y-auto p-3 space-y-2 bg-white dark:bg-[#262626]"
+            onClick={() => setOpenMessageMenuId(null)}
+          >
+            {isCreatingGroup ? (
+              <div className="space-y-4">
+                <div>
+                  <input
+                    value={groupName}
+                    onChange={(e) => setGroupName(e.target.value)}
+                    placeholder="Nhập tên nhóm..."
+                    className="w-full border-b border-gray-200 dark:border-neutral-700 bg-transparent py-2 outline-none text-sm font-semibold"
+                    autoFocus
+                  />
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2 border border-gray-200 dark:border-neutral-700 shadow-inner bg-gray-50 dark:bg-[#333333] focus-within:bg-white dark:focus-within:bg-[#262626] transition-all p-2 rounded-xl">
+                    <Search size={16} />
+                    <input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="flex-1 outline-none text-sm bg-transparent placeholder:text-gray-500 dark:placeholder:text-gray-400"
+                      placeholder="Tìm để thêm thành viên..."
+                    />
+                  </div>
+                </div>
+
+                {selectedMembers.length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {selectedMembers.map((m) => (
+                      <div
+                        key={m.id}
+                        className="bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 text-xs px-3 py-1 rounded-full flex items-center gap-1.5 font-medium"
+                      >
+                        {m.name}
+                        <X
+                          size={14}
+                          className="cursor-pointer hover:text-red-500"
+                          onClick={() =>
+                            setSelectedMembers((prev) =>
+                              prev.filter((u) => u.id !== m.id),
+                            )
+                          }
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="space-y-1">
+                  {results.map((u) => {
+                    const isSelected = !!selectedMembers.find(
+                      (m) => m.id === u.id,
+                    );
+                    return (
+                      <div
+                        key={u.id}
+                        onClick={() => {
+                          if (isSelected) {
+                            setSelectedMembers((prev) =>
+                              prev.filter((m) => m.id !== u.id),
+                            );
+                          } else {
+                            setSelectedMembers((prev) => [...prev, u]);
+                          }
+                          setSearch("");
+                        }}
+                        className="flex items-center justify-between p-2 hover:bg-secondary rounded-xl cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-3">
+                          <img
+                            src={u.avatar_url}
+                            className="w-10 h-10 rounded-full"
+                          />
+                          <span className="text-sm font-semibold">
+                            {u.name}
+                          </span>
+                        </div>
+                        <div
+                          className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
+                            isSelected
+                              ? "bg-blue-500 border-blue-500"
+                              : "border-gray-300 dark:border-gray-600"
+                          }`}
+                        >
+                          {isSelected && <X size={12} className="text-white" />}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            ) : isBlockedListOpen ? (
+              <div className="space-y-2">
+                {blockedUsersList.length === 0 ? (
+                  <p className="text-sm text-center text-muted-foreground mt-8">
+                    Không có người dùng nào bị chặn.
+                  </p>
+                ) : (
+                  blockedUsersList.map((u) => (
+                    <div
+                      key={u.id}
+                      className="flex items-center justify-between p-2 bg-white dark:bg-[#262626] border border-gray-200 dark:border-neutral-800 shadow-sm rounded-xl"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={
+                            u.avatar_url ||
+                            `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
+                          }
+                          className="w-10 h-10 rounded-full border border-gray-200 dark:border-neutral-700"
+                        />
+                        <span className="font-semibold text-sm">{u.name}</span>
+                      </div>
+                      <button
+                        onClick={() => handleUnblock(u.id)}
+                        className="bg-gray-200 dark:bg-neutral-700 hover:bg-gray-300 dark:hover:bg-neutral-600 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors"
+                      >
+                        Bỏ chặn
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            ) : (
+              <>
+                <div className="flex justify-between items-center px-1 mb-2">
+                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
+                    Gần đây
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setIsBlockedListOpen(true);
+                        handleLoadBlockedUsers();
+                      }}
+                      className="text-xs text-red-500 font-bold hover:underline flex items-center gap-1 bg-red-50 dark:bg-red-500/10 px-2 py-1 rounded-lg transition-colors"
+                    >
+                      <Ban size={14} /> Bị chặn
+                    </button>
+                    <button
+                      onClick={() => setIsCreatingGroup(true)}
+                      className="text-xs text-blue-500 font-bold hover:underline flex items-center gap-1 bg-blue-50 dark:bg-blue-500/10 px-2 py-1 rounded-lg transition-colors"
+                    >
+                      <Users size={14} /> Tạo nhóm mới
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 border border-gray-200 dark:border-neutral-700 shadow-inner bg-gray-50 dark:bg-[#333333] focus-within:bg-white dark:focus-within:bg-[#262626] focus-within:ring-1 focus-within:ring-blue-500 transition-all p-2 rounded-xl mb-3">
+                  <Search size={16} />
+                  <input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="flex-1 outline-none text-sm bg-transparent placeholder:text-gray-500 dark:placeholder:text-gray-400"
+                    placeholder="Tìm người dùng..."
+                  />
+                </div>
+
+                {results.map((u) => (
+                  <div
+                    key={u.id}
+                    onClick={() => handleOpenChat(u)}
+                    className="flex items-center gap-2 p-2 hover:bg-secondary rounded cursor-pointer transition-colors"
+                  >
+                    <div className="relative">
+                      <img
+                        src={u.avatar_url}
+                        className="w-8 h-8 rounded-full"
+                      />
+                      {onlineUsers.has(u.id) && (
+                        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full"></span>
+                      )}
+                    </div>
+                    <span>{u.name}</span>
+                  </div>
+                ))}
+
+                {conversations.map((c) => (
+                  <div
+                    key={c.id}
+                    onClick={() => handleOpenExisting(c)}
+                    className="flex items-center gap-2 p-2 hover:bg-secondary rounded cursor-pointer transition-colors"
+                  >
+                    <div className="relative flex-shrink-0">
+                      <img
+                        src={c.otherUser?.avatar_url}
+                        className="w-10 h-10 rounded-full"
+                      />
+                      {!c.is_group && onlineUsers.has(c.otherUser?.id) && (
+                        <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full"></span>
+                      )}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate">
+                        {c.otherUser?.name}
+                      </p>
+                      <p className="text-xs text-muted-foreground truncate">
+                        {c.display_last_message || "Bắt đầu chat"}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* SETTINGS PANEL */}
+        <div
+          className={`absolute inset-0 flex flex-col transition-all duration-300 z-30 bg-gray-50 dark:bg-[#333333] ${isSettingsOpen ? "translate-x-0 opacity-100 visible pointer-events-auto" : "translate-x-full opacity-0 invisible pointer-events-none"}`}
+        >
           <div className="p-3 flex-1 overflow-y-auto space-y-3">
             {settingsView === "menu" && (
               <>
                 <div className="flex flex-col items-center justify-center py-6">
                   <img
                     src={targetUser?.avatar_url}
-                    className="w-20 h-20 rounded-full mb-3 shadow-md border-2 border-white dark:border-[#262626]"
+                    onClick={() => {
+                      if (!targetUser?.is_group) {
+                        router.push(`/profile/${targetUser?.id}`);
+                        if (onClose) onClose();
+                      }
+                    }}
+                    className={`w-20 h-20 rounded-full mb-3 shadow-md border-2 border-white dark:border-[#262626] ${!targetUser?.is_group ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
                   />
-                  <span className="font-bold text-xl">{targetUser?.name}</span>
+                  <span
+                    onClick={() => {
+                      if (!targetUser?.is_group) {
+                        router.push(`/profile/${targetUser?.id}`);
+                        if (onClose) onClose();
+                      }
+                    }}
+                    className={`font-bold text-xl ${!targetUser?.is_group ? "cursor-pointer hover:underline" : ""}`}
+                  >
+                    {targetUser?.name}
+                  </span>
                   {targetUser?.is_group && (
                     <span className="text-xs text-muted-foreground mt-1 bg-secondary px-2 py-1 rounded-full">
                       Nhóm chat
@@ -701,6 +1238,49 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                           <Edit3 size={18} />
                         </div>{" "}
                         Chỉnh sửa nhóm
+                      </button>
+                    </>
+                  )}
+                  {targetUser && !targetUser.is_group && (
+                    <>
+                      <button
+                        onClick={() => {
+                          setNewNickname(targetUser.name);
+                          setSettingsView("edit_nickname");
+                        }}
+                        className="w-full flex items-center gap-3 p-3.5 hover:bg-secondary transition-colors text-[15px] font-semibold border-b border-gray-200 dark:border-neutral-800"
+                      >
+                        <div className="bg-gray-100 dark:bg-[#333333] p-2 rounded-full">
+                          <Edit3 size={18} />
+                        </div>{" "}
+                        Đổi tên gợi nhớ
+                      </button>
+                      <button
+                        onClick={() => {
+                          if (
+                            window.confirm(
+                              "Bạn có chắc chắn muốn chặn người dùng này? Hai người sẽ không thể thấy tin nhắn của nhau.",
+                            )
+                          ) {
+                            try {
+                              blockUser(userId, targetUser!.id).then(() => {
+                                toast.success("Đã chặn người dùng");
+                                setTargetUser(null);
+                                setConversationId(null);
+                                setIsSettingsOpen(false);
+                                loadConversations();
+                              });
+                            } catch (e) {
+                              toast.error("Lỗi khi chặn người dùng");
+                            }
+                          }
+                        }}
+                        className="w-full flex items-center gap-3 p-3.5 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors text-[15px] font-semibold border-b border-gray-200 dark:border-neutral-800"
+                      >
+                        <div className="bg-red-100 dark:bg-red-900/30 p-2 rounded-full">
+                          <Ban size={18} />
+                        </div>{" "}
+                        Chặn người dùng
                       </button>
                     </>
                   )}
@@ -841,8 +1421,57 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                   onClick={handleUpdateGroupName}
                   disabled={
                     !newGroupName.trim() ||
-                    (newGroupName.trim() === targetUser.name && !newGroupAvatar)
+                    (newGroupName.trim() === targetUser?.name &&
+                      !newGroupAvatar)
                   }
+                  className="w-full bg-blue-500 text-white font-bold rounded-xl p-3 text-[15px] hover:bg-blue-600 transition-colors disabled:opacity-50"
+                >
+                  Lưu thay đổi
+                </button>
+              </div>
+            )}
+
+            {settingsView === "edit_nickname" && (
+              <div className="space-y-4">
+                <div className="flex flex-col items-center gap-3">
+                  <img
+                    src={targetUser?.avatar_url}
+                    className="w-20 h-20 rounded-full object-cover border-2 border-gray-200 dark:border-neutral-700 shadow-sm"
+                    alt="User Avatar"
+                  />
+                </div>
+
+                <div className="bg-white dark:bg-[#262626] rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 shadow-sm p-1">
+                  <input
+                    autoFocus
+                    value={newNickname}
+                    onChange={(e) => setNewNickname(e.target.value)}
+                    placeholder="Nhập tên gợi nhớ..."
+                    className="w-full px-3 py-2 outline-none text-[15px] bg-transparent font-semibold"
+                  />
+                </div>
+                <button
+                  onClick={async () => {
+                    if (!conversationId || !targetUser) return;
+                    try {
+                      await setNickname(
+                        conversationId,
+                        userId,
+                        targetUser.id,
+                        newNickname.trim(),
+                      );
+                      setTargetUser((prev: any) => ({
+                        ...prev,
+                        name: newNickname.trim() || prev?.name,
+                      }));
+                      setSettingsView("menu");
+                      toast.success("Đã cập nhật tên gợi nhớ");
+                      loadConversations();
+                    } catch (e) {
+                      toast.error("Lỗi khi cập nhật tên gợi nhớ");
+                    }
+                  }}
+                  disabled={!newNickname.trim()}
                   className="w-full bg-blue-500 text-white font-bold rounded-xl p-3 text-[15px] hover:bg-blue-600 transition-colors disabled:opacity-50"
                 >
                   Lưu thay đổi
@@ -851,270 +1480,224 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
             )}
           </div>
         </div>
-      ) : (
-        <div ref={scrollRef} className="flex-1 overflow-y-auto p-3 space-y-2">
-          {!targetUser ? (
-            isCreatingGroup ? (
-              <div className="space-y-4">
-                <div>
-                  <input
-                    value={groupName}
-                    onChange={(e) => setGroupName(e.target.value)}
-                    placeholder="Nhập tên nhóm..."
-                    className="w-full border-b border-gray-200 dark:border-neutral-700 bg-transparent py-2 outline-none text-sm font-semibold"
-                    autoFocus
-                  />
-                </div>
 
-                <div>
-                  <div className="flex items-center gap-2 border border-gray-200 dark:border-neutral-700 shadow-inner bg-gray-50 dark:bg-[#333333] focus-within:bg-white dark:focus-within:bg-[#262626] transition-all p-2 rounded-xl">
-                    <Search size={16} />
-                    <input
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="flex-1 outline-none text-sm bg-transparent placeholder:text-gray-500 dark:placeholder:text-gray-400"
-                      placeholder="Tìm để thêm thành viên..."
-                    />
-                  </div>
-                </div>
-
-                {selectedMembers.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {selectedMembers.map((m) => (
-                      <div
-                        key={m.id}
-                        className="bg-blue-100 dark:bg-blue-900/40 text-blue-800 dark:text-blue-200 text-xs px-3 py-1 rounded-full flex items-center gap-1.5 font-medium"
-                      >
-                        {m.name}
-                        <X
-                          size={14}
-                          className="cursor-pointer hover:text-red-500"
-                          onClick={() =>
-                            setSelectedMembers((prev) =>
-                              prev.filter((u) => u.id !== m.id),
-                            )
-                          }
-                        />
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                <div className="space-y-1">
-                  {results.map((u) => {
-                    const isSelected = !!selectedMembers.find(
-                      (m) => m.id === u.id,
-                    );
-                    return (
-                      <div
-                        key={u.id}
-                        onClick={() => {
-                          if (isSelected) {
-                            setSelectedMembers((prev) =>
-                              prev.filter((m) => m.id !== u.id),
+        {/* CHAT PANEL */}
+        <div
+          className={`absolute inset-0 flex flex-col transition-all duration-300 z-20 bg-white dark:bg-[#262626] ${!targetUser ? "translate-x-full opacity-0 invisible pointer-events-none" : isSettingsOpen ? "-translate-x-full opacity-0 invisible pointer-events-none" : "translate-x-0 opacity-100 visible pointer-events-auto"}`}
+        >
+          <div
+            ref={scrollRef}
+            className="flex-1 overflow-y-auto p-3 space-y-2"
+            onClick={() => setOpenMessageMenuId(null)}
+          >
+            {messages.map((m, index) => {
+              const isLastMessage = index === messages.length - 1;
+              return (
+                <div key={m.id} className="flex flex-col">
+                  <div
+                    className={`flex ${m.sender_id === userId ? "justify-end" : "justify-start"} group relative items-center`}
+                  >
+                    {m.sender_id === userId && (
+                      <div className="opacity-0 group-hover:opacity-100 transition-opacity flex items-center pr-2 relative">
+                        <MoreHorizontal
+                          size={16}
+                          className="cursor-pointer text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setOpenMessageMenuId(
+                              openMessageMenuId === m.id ? null : m.id,
                             );
-                          } else {
-                            setSelectedMembers((prev) => [...prev, u]);
-                          }
-                          setSearch("");
-                        }}
-                        className="flex items-center justify-between p-2 hover:bg-secondary rounded-xl cursor-pointer transition-colors"
-                      >
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={u.avatar_url}
-                            className="w-10 h-10 rounded-full"
-                          />
-                          <span className="text-sm font-semibold">
-                            {u.name}
-                          </span>
-                        </div>
-                        <div
-                          className={`w-5 h-5 rounded-full border flex items-center justify-center transition-colors ${
-                            isSelected
-                              ? "bg-blue-500 border-blue-500"
-                              : "border-gray-300 dark:border-gray-600"
-                          }`}
-                        >
-                          {isSelected && <X size={12} className="text-white" />}
-                        </div>
+                          }}
+                        />
+                        {openMessageMenuId === m.id && (
+                          <div className="absolute right-0 bottom-full mb-1 w-28 bg-white dark:bg-[#333333] border border-gray-200 dark:border-neutral-700 rounded-lg shadow-lg z-50 overflow-hidden">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDeleteMessage(m.id);
+                              }}
+                              className="w-full text-left px-3 py-2 text-[14px] text-red-500 hover:bg-secondary font-medium transition-colors"
+                            >
+                              Thu hồi
+                            </button>
+                          </div>
+                        )}
                       </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : (
-              <>
-                <div className="flex justify-between items-center px-1 mb-2">
-                  <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">
-                    Gần đây
-                  </span>
-                  <button
-                    onClick={() => setIsCreatingGroup(true)}
-                    className="text-xs text-blue-500 font-bold hover:underline flex items-center gap-1 bg-blue-50 dark:bg-blue-500/10 px-2 py-1 rounded-lg transition-colors"
-                  >
-                    <Users size={14} /> Tạo nhóm mới
-                  </button>
-                </div>
-
-                <div className="flex items-center gap-2 border border-gray-200 dark:border-neutral-700 shadow-inner bg-gray-50 dark:bg-[#333333] focus-within:bg-white dark:focus-within:bg-[#262626] focus-within:ring-1 focus-within:ring-blue-500 transition-all p-2 rounded-xl mb-3">
-                  <Search size={16} />
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="flex-1 outline-none text-sm bg-transparent placeholder:text-gray-500 dark:placeholder:text-gray-400"
-                    placeholder="Tìm người dùng..."
-                  />
-                </div>
-
-                {results.map((u) => (
-                  <div
-                    key={u.id}
-                    onClick={() => handleOpenChat(u)}
-                    className="flex items-center gap-2 p-2 hover:bg-secondary rounded cursor-pointer transition-colors"
-                  >
-                    <div className="relative">
-                      <img
-                        src={u.avatar_url}
-                        className="w-8 h-8 rounded-full"
-                      />
-                      {onlineUsers.has(u.id) && (
-                        <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full"></span>
-                      )}
-                    </div>
-                    <span>{u.name}</span>
-                  </div>
-                ))}
-
-                {conversations.map((c) => (
-                  <div
-                    key={c.id}
-                    onClick={() => handleOpenExisting(c)}
-                    className="flex items-center gap-2 p-2 hover:bg-secondary rounded cursor-pointer transition-colors"
-                  >
-                    <div className="relative flex-shrink-0">
-                      <img
-                        src={c.otherUser?.avatar_url}
-                        className="w-10 h-10 rounded-full"
-                      />
-                      {!c.is_group && onlineUsers.has(c.otherUser?.id) && (
-                        <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full"></span>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-semibold truncate">
-                        {c.otherUser?.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {c.display_last_message || "Bắt đầu chat"}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </>
-            )
-          ) : (
-            <>
-              {messages.map((m, index) => {
-                const isLastMessage = index === messages.length - 1;
-                return (
-                  <div key={m.id} className="flex flex-col">
-                    <div
-                      className={`flex ${m.sender_id === userId ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`px-3 py-2 rounded-2xl text-sm max-w-[75%] break-words
-                ${m.sender_id === userId ? "bg-blue-500 text-white shadow-sm" : "bg-gray-100 dark:bg-[#333333] border border-transparent dark:border-neutral-700 text-gray-900 dark:text-gray-100 shadow-sm"}
-              `}
-                      >
-                        {m.content}
-                      </div>
-                    </div>
-                    {m.sender_id === userId && m.is_read && isLastMessage && (
-                      <span className="text-[10px] text-muted-foreground text-right mt-1 pr-1">
-                        Đã xem
-                      </span>
                     )}
+                    <div
+                      className={`px-3 py-2 rounded-2xl text-sm max-w-[75%] break-words
+              ${m.sender_id === userId ? "bg-blue-500 text-white shadow-sm" : "bg-gray-100 dark:bg-[#333333] border border-transparent dark:border-neutral-700 text-gray-900 dark:text-gray-100 shadow-sm"}
+            `}
+                    >
+                      {m.content}
+                    </div>
                   </div>
-                );
-              })}
-              {isTyping && (
-                <div className="text-xs text-muted-foreground italic ml-2 mt-1">
-                  {targetUser?.name} đang soạn tin...
+                  {m.sender_id === userId && m.is_read && isLastMessage && (
+                    <span className="text-[10px] text-muted-foreground text-right mt-1 pr-1">
+                      Đã xem
+                    </span>
+                  )}
                 </div>
-              )}
-            </>
-          )}
-        </div>
-      )}
+              );
+            })}
+            {isTyping && (
+              <div className="text-xs text-muted-foreground italic ml-2 mt-1">
+                {targetUser?.name} đang soạn tin...
+              </div>
+            )}
+          </div>
 
-      {/* INPUT */}
-      {targetUser &&
-        !isSettingsOpen &&
-        (targetUser.is_group || followedIds.has(targetUser.id) ? (
-          <div className="p-3 border-t border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#262626] flex gap-2 transition-colors duration-500 shadow-[0_-2px_10px_rgba(0,0,0,0.02)] dark:shadow-black/20">
-            <input
-              value={text}
-              onChange={(e) => {
-                setText(e.target.value);
-                // Bắn sự kiện đang gõ phím
-                if (typingChannelRef.current) {
-                  if (e.target.value === "") {
-                    if (typingTimeoutRef.current)
-                      clearTimeout(typingTimeoutRef.current);
-                    typingChannelRef.current.send({
-                      type: "broadcast",
-                      event: "typing",
-                      payload: { isTyping: false, senderId: userId },
-                    });
-                    lastTypingTimeRef.current = 0;
-                  } else {
-                    const now = Date.now();
-                    if (now - lastTypingTimeRef.current > 1000) {
+          {/* INPUT */}
+          {targetUser?.is_group ||
+          (targetUser && followedIds.has(targetUser.id)) ||
+          messages.length > 0 ? (
+            <div className="p-3 border-t border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#262626] flex gap-2 transition-colors duration-500 shadow-[0_-2px_10px_rgba(0,0,0,0.02)] dark:shadow-black/20">
+              <input
+                value={text}
+                onChange={(e) => {
+                  setText(e.target.value);
+                  // Bắn sự kiện đang gõ phím
+                  if (typingChannelRef.current) {
+                    if (e.target.value === "") {
+                      if (typingTimeoutRef.current)
+                        clearTimeout(typingTimeoutRef.current);
                       typingChannelRef.current.send({
-                        type: "broadcast",
-                        event: "typing",
-                        payload: { isTyping: true, senderId: userId },
-                      });
-                      lastTypingTimeRef.current = now;
-                    }
-                    if (typingTimeoutRef.current)
-                      clearTimeout(typingTimeoutRef.current);
-                    typingTimeoutRef.current = setTimeout(() => {
-                      typingChannelRef.current?.send({
                         type: "broadcast",
                         event: "typing",
                         payload: { isTyping: false, senderId: userId },
                       });
                       lastTypingTimeRef.current = 0;
-                    }, 2000);
+                    } else {
+                      const now = Date.now();
+                      if (now - lastTypingTimeRef.current > 1000) {
+                        typingChannelRef.current.send({
+                          type: "broadcast",
+                          event: "typing",
+                          payload: { isTyping: true, senderId: userId },
+                        });
+                        lastTypingTimeRef.current = now;
+                      }
+                      if (typingTimeoutRef.current)
+                        clearTimeout(typingTimeoutRef.current);
+                      typingTimeoutRef.current = setTimeout(() => {
+                        typingChannelRef.current?.send({
+                          type: "broadcast",
+                          event: "typing",
+                          payload: { isTyping: false, senderId: userId },
+                        });
+                        lastTypingTimeRef.current = 0;
+                      }, 2000);
+                    }
                   }
-                }
-              }}
-              onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              className="flex-1 border border-gray-200 dark:border-neutral-700 shadow-inner bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] text-gray-900 dark:text-gray-100 transition-colors outline-none rounded-xl px-3 py-2 text-sm placeholder:text-gray-500 dark:placeholder:text-gray-400"
-              placeholder="Nhập tin nhắn..."
-            />
-            <button
-              onClick={handleSend}
-              className="bg-blue-500 hover:bg-blue-600 transition-colors text-white px-3 rounded-xl"
-            >
-              <Send size={18} />
-            </button>
-          </div>
-        ) : (
-          <div className="p-4 border-t border-gray-200 dark:border-neutral-800 text-center bg-gray-50 dark:bg-[#333333]">
-            <p className="text-sm text-muted-foreground font-medium">
-              Bạn cần theo dõi người dùng này để tiếp tục trò chuyện.
-            </p>
-          </div>
-        ))}
+                }}
+                onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                className="flex-1 border border-gray-200 dark:border-neutral-700 shadow-inner bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] text-gray-900 dark:text-gray-100 transition-colors outline-none rounded-xl px-3 py-2 text-sm placeholder:text-gray-500 dark:placeholder:text-gray-400"
+                placeholder="Nhập tin nhắn..."
+              />
+              <button
+                onClick={handleSend}
+                className="bg-blue-500 hover:bg-blue-600 transition-colors text-white px-3 rounded-xl"
+              >
+                <Send size={18} />
+              </button>
+            </div>
+          ) : (
+            <div className="p-4 border-t border-gray-200 dark:border-neutral-800 text-center bg-gray-50 dark:bg-[#333333]">
+              <p className="text-sm text-muted-foreground font-medium">
+                Bạn cần theo dõi người dùng này để bắt đầu trò chuyện.
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
 
       {loading && (
         <div className="absolute inset-0 bg-background/60 backdrop-blur-sm flex items-center justify-center z-50">
           <Loader2 className="animate-spin text-primary" />
         </div>
       )}
+
+      {/* ================= CALL OVERLAYS (RENDER FULL SCREEN BẰNG PORTAL) ================= */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <>
+            {callState === "ringing" && (
+              <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+                <div className="bg-white dark:bg-[#262626] rounded-3xl p-8 flex flex-col items-center gap-6 text-center max-w-sm w-full shadow-2xl">
+                  <img
+                    src={
+                      callUserInfo?.avatar_url ||
+                      `https://api.dicebear.com/7.x/identicon/svg?seed=${callUserInfo?.id}`
+                    }
+                    className="w-28 h-28 rounded-full border-4 border-blue-500 animate-bounce object-cover shadow-lg"
+                  />
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                      {callUserInfo?.name}
+                    </h3>
+                    <p className="text-muted-foreground mt-2 text-lg">
+                      Đang gọi {callType === "video" ? "video" : "thoại"} cho
+                      bạn...
+                    </p>
+                  </div>
+                  <div className="flex gap-4 w-full mt-4">
+                    <button
+                      onClick={rejectCall}
+                      className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3.5 rounded-xl font-bold transition-all active:scale-95"
+                    >
+                      Từ chối
+                    </button>
+                    <button
+                      onClick={acceptCall}
+                      className="flex-1 bg-green-500 hover:bg-green-600 text-white py-3.5 rounded-xl font-bold transition-all active:scale-95 shadow-[0_0_15px_rgba(34,197,94,0.5)]"
+                    >
+                      Nghe máy
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {callState === "calling" && (
+              <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+                <div className="bg-white dark:bg-[#262626] rounded-3xl p-8 flex flex-col items-center gap-6 text-center max-w-sm w-full shadow-2xl">
+                  <img
+                    src={
+                      callUserInfo?.avatar_url ||
+                      `https://api.dicebear.com/7.x/identicon/svg?seed=${callUserInfo?.id}`
+                    }
+                    className="w-28 h-28 rounded-full border-4 border-gray-200 dark:border-neutral-700 animate-pulse object-cover shadow-lg"
+                  />
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                      {callUserInfo?.name}
+                    </h3>
+                    <p className="text-muted-foreground mt-2 text-lg">
+                      Đang đổ chuông...
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleLeaveCall}
+                    className="w-full bg-red-500 hover:bg-red-600 text-white py-3.5 rounded-xl font-bold mt-4 transition-all active:scale-95"
+                  >
+                    Hủy cuộc gọi
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isInCall && (
+              <VideoCall
+                roomID={callRoomId}
+                userID={currentUser?.id || userId}
+                userName={currentUser?.name || "User"}
+                onLeave={handleLeaveCall}
+                callType={callType}
+              />
+            )}
+          </>,
+          document.body,
+        )}
     </div>
   );
 }

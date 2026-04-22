@@ -146,8 +146,12 @@ export default function HomePage() {
 
     // Gọi tuần tự để tránh lỗi kẹt (deadlock) của Supabase khi tải lại trang
     const init = async () => {
-      await loadUser();
-      await loadFeed();
+      try {
+        await loadUser();
+        await loadFeed();
+      } catch (err) {
+        console.error("Lỗi khởi tạo trang chủ:", err);
+      }
     };
     init();
 
@@ -360,6 +364,8 @@ export default function HomePage() {
       );
 
       setPosts(enrichedData);
+    } catch (err) {
+      console.error("Lỗi tải bảng tin:", err);
     } finally {
       setLoading(false);
     }

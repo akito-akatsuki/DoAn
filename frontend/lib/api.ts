@@ -334,14 +334,14 @@ export const toggleSavePost = async (postId: string) => {
       .from("saved_posts")
       .delete()
       .eq("id", existing.id);
-    if (error) throw error;
+    if (error) throw new Error(error.message || "Toggle save failed");
     return { is_saved: false };
   } else {
     const { error } = await supabase.from("saved_posts").insert({
       user_id: user.id,
       post_id: postId,
     });
-    if (error) throw error;
+    if (error) throw new Error(error.message || "Toggle save failed");
     return { is_saved: true };
   }
 };
@@ -359,7 +359,7 @@ export const reportPost = async (postId: string, reason: string = "spam") => {
     reason,
   });
 
-  if (error) throw error;
+  if (error) throw new Error(error.message || "Report post failed");
   return data;
 };
 

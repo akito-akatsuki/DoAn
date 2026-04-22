@@ -33,7 +33,7 @@ export const getOrCreateConversation = async (user1: string, user2: string) => {
 
   if (createError) {
     console.error("Create conversation error:", createError);
-    throw createError;
+    throw new Error(createError.message || "Create conversation error");
   }
 
   // Thêm cả 2 vào bảng thành viên để đồng bộ với cơ chế tải danh sách mới
@@ -167,7 +167,7 @@ export const getConversationMembers = async (conversationId: string) => {
     )
     .eq("conversation_id", conversationId);
 
-  if (error) throw error;
+  if (error) throw new Error(error.message || "Get members failed");
   return data.map((d: any) => d.users);
 };
 
@@ -189,7 +189,7 @@ export const updateGroupName = async (
     .select()
     .single();
 
-  if (error) throw error;
+  if (error) throw new Error(error.message || "Update group name failed");
   return data;
 };
 
@@ -202,6 +202,88 @@ export const deleteConversation = async (conversationId: string) => {
     .from("conversations")
     .delete()
     .eq("id", conversationId);
-  if (error) throw error;
+  if (error) throw new Error(error.message || "Delete conversation failed");
+  return true;
+};
+
+/* ======================================
+   DELETE MESSAGE (THU HỒI TIN NHẮN)
+====================================== */
+export const deleteMessage = async (messageId: string) => {
+  const { error } = await supabase
+    .from("messages")
+    .delete()
+    .eq("id", messageId);
+  if (error) throw new Error(error.message || "Delete message failed");
+  return true;
+};
+
+/* ======================================
+   SET NICKNAME (ĐỔI TÊN GỢI NHỚ)
+====================================== */
+export const setNickname = async (
+  conversationId: string,
+  userId: string,
+  targetId: string,
+  nickname: string,
+) => {
+  // Xóa tên cũ (nếu có) trước để tránh lỗi unique constraint nhiều cột
+  await supabase.from("nicknames").delete().match({
+    conversation_id: conversationId,
+    user_id: userId,
+    target_id: targetId,
+  });
+
+  // Thêm tên mới
+  const { data, error } = await supabase.from("nicknames").insert({
+    conversation_id: conversationId,
+    user_id: userId,
+    target_id: targetId,
+    nickname,
+  });
+  if (error) throw new Error(error.message || "Set nickname failed");
+  return data;
+};
+
+/* ======================================
+   BLOCK USER (CHẶN NGƯỜI DÙNG)
+====================================== */
+export const blockUser = async (blockerId: string, blockedId: string) => {
+  const { error } = await supabase
+    .from("blocked_users")
+    .insert({ blocker_id: blockerId, blocked_id: blockedId });
+  if (error) throw new Error(error.message || "Block user failed");
+  return true;
+};
+
+/* ======================================
+   GET BLOCKED USERS (LẤY DANH SÁCH CHẶN)
+====================================== */
+export const getBlockedUsers = async (userId: string) => {
+  const { data, error } = await supabase
+    .from("blocked_users")
+    .select("blocked_id")
+    .eq("blocker_id", userId);
+  if (error) throw new Error(error.message || "Get blocked users failed");
+  if (!data || data.length === 0) return [];
+
+  const ids = data.map((d) => d.blocked_id);
+  const { data: users, error: usersError } = await supabase
+    .from("users")
+    .select("id, name, avatar_url")
+    .in("id", ids);
+  if (usersError) throw new Error(usersError.message || "Get users failed");
+  return users || [];
+};
+
+/* ======================================
+   UNBLOCK USER (BỎ CHẶN)
+====================================== */
+export const unblockUser = async (blockerId: string, blockedId: string) => {
+  const { error } = await supabase
+    .from("blocked_users")
+    .delete()
+    .match({ blocker_id: blockerId, blocked_id: blockedId });
+  if (error) throw new Error(error.message || "Unblock user failed");
   return true;
 };

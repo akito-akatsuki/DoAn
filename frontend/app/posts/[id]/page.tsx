@@ -57,84 +57,93 @@ export default function PostDetailPage() {
 
   // ================= LOAD COMMENTS =================
   const loadComments = async () => {
-    const { data } = await supabase
-      .from("comments")
-      .select(
-        `
-        *,
-        users:user_id (
-          id,
-          name,
-          avatar_url
+    try {
+      const { data, error } = await supabase
+        .from("comments")
+        .select(
+          `
+          *,
+          users:user_id (
+            id,
+            name,
+            avatar_url
+          )
+        `,
         )
-      `,
-      )
-      .eq("post_id", id)
-      .order("created_at", { ascending: true });
-
-    setComments(data || []);
+        .eq("post_id", id)
+        .order("created_at", { ascending: true });
+      if (error) throw error;
+      setComments(data || []);
+    } catch (err) {
+      console.error("Error loading comments:", err);
+    }
   };
 
   // ================= LOAD POST =================
   const loadPost = async () => {
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    const { data, error } = await supabase
-      .from("posts")
-      .select(
-        `
-        *,
-        users:user_id (
-          id,
-          name,
-          avatar_url
+      const { data, error } = await supabase
+        .from("posts")
+        .select(
+          `
+          *,
+          users:user_id (
+            id,
+            name,
+            avatar_url
+          )
+        `,
         )
-      `,
-      )
-      .eq("id", id)
-      .single();
+        .eq("id", id)
+        .single();
 
-    if (error) {
-      console.error(error);
-      setLoading(false);
-      return;
-    }
+      if (error) {
+        console.error(error);
+        setLoading(false);
+        return;
+      }
 
-    // count likes
-    const { count: likeCount } = await supabase
-      .from("likes")
-      .select("*", { count: "exact", head: true })
-      .eq("post_id", id);
-
-    // count comments
-    const { count: commentCount } = await supabase
-      .from("comments")
-      .select("*", { count: "exact", head: true })
-      .eq("post_id", id);
-
-    const currentUser = user || (await supabase.auth.getUser()).data?.user;
-
-    // check user liked
-    let liked = false;
-    if (currentUser?.id) {
-      const { data: likeData } = await supabase
+      // count likes
+      const { count: likeCount } = await supabase
         .from("likes")
-        .select("*")
-        .eq("post_id", id)
-        .eq("user_id", currentUser.id)
-        .maybeSingle();
+        .select("*", { count: "exact", head: true })
+        .eq("post_id", id);
 
-      liked = !!likeData;
+      // count comments
+      const { count: commentCount } = await supabase
+        .from("comments")
+        .select("*", { count: "exact", head: true })
+        .eq("post_id", id);
+
+      const currentUser = user || (await supabase.auth.getUser()).data?.user;
+
+      // check user liked
+      let liked = false;
+      if (currentUser?.id) {
+        const { data: likeData } = await supabase
+          .from("likes")
+          .select("*")
+          .eq("post_id", id)
+          .eq("user_id", currentUser.id)
+          .maybeSingle();
+
+        liked = !!likeData;
+      }
+
+      setPost({
+        ...data,
+        likes_count: likeCount || 0,
+        comments_count: commentCount || 0,
+      });
+
+      setIsLiked(liked);
+    } catch (err) {
+      console.error("Error loading post:", err);
+    } finally {
+      setLoading(false);
     }
-
-    setPost({
-      ...data,
-      likes_count: likeCount || 0,
-      comments_count: commentCount || 0,
-    });
-
-    setIsLiked(liked);
-    setLoading(false);
   };
 
   // ================= DOUBLE CLICK LIKE =================
