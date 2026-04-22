@@ -37,8 +37,7 @@ export default function AuthPage() {
         toast.error(error.message || "Email hoặc mật khẩu không đúng.");
       } else {
         toast.success("Đăng nhập thành công!");
-        router.push("/");
-        router.refresh(); // Tải lại trang để cập nhật trạng thái user
+        window.location.href = "/"; // Force reload để mount lại toàn bộ app và xóa Next.js Cache
       }
     } else if (view === "register") {
       // === SIGN UP LOGIC ===
@@ -55,8 +54,7 @@ export default function AuthPage() {
         if (data.session) {
           // Đăng ký thành công và Confirm Email đã tắt -> tự động đăng nhập luôn
           toast.success("Đăng ký thành công!");
-          router.push("/");
-          router.refresh();
+          window.location.href = "/";
         } else {
           // Đăng ký thành công nhưng Confirm Email vẫn bật -> Báo người dùng check email
           toast.success(
@@ -85,8 +83,7 @@ export default function AuthPage() {
         toast.error(error.message || "Không thể cập nhật mật khẩu.");
       } else {
         toast.success("Cập nhật mật khẩu thành công!");
-        router.push("/");
-        router.refresh();
+        window.location.href = "/";
       }
     }
     setLoading(false);
