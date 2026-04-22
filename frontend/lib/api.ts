@@ -5,7 +5,7 @@ import { supabase } from "./supabaseClient";
 ========================= */
 const handleError = (error: any, label: string) => {
   console.error(`${label} error:`, JSON.stringify(error, null, 2));
-  throw new Error(error?.message || `${label} failed`);
+  throw new Error(error?.message || `${label} thất bại`);
 };
 
 /* =========================
@@ -129,7 +129,7 @@ export const createPost = async (payload: {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
 
-  if (!user) throw new Error("Not authenticated");
+  if (!user) throw new Error("Chưa đăng nhập");
 
   const { data, error } = await supabase
     .from("posts")
@@ -165,7 +165,7 @@ export const toggleLike = async (postId: string) => {
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData.user?.id;
 
-  if (!userId) throw new Error("Not logged in");
+  if (!userId) throw new Error("Chưa đăng nhập");
 
   const { data: existing, error: findError } = await supabase
     .from("likes")
@@ -248,7 +248,7 @@ export const createComment = async (postId: string, content: string) => {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
 
-  if (!user) throw new Error("Not authenticated");
+  if (!user) throw new Error("Chưa đăng nhập");
 
   const { data, error } = await supabase
     .from("comments")
@@ -281,7 +281,7 @@ export const deleteComment = async (commentId: string) => {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
 
-  if (!user) throw new Error("Not authenticated");
+  if (!user) throw new Error("Chưa đăng nhập");
 
   const { error } = await supabase
     .from("comments")
@@ -300,7 +300,7 @@ export const updateComment = async (commentId: string, content: string) => {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
 
-  if (!user) throw new Error("Not authenticated");
+  if (!user) throw new Error("Chưa đăng nhập");
 
   const { data, error } = await supabase
     .from("comments")
@@ -319,7 +319,7 @@ export const toggleSavePost = async (postId: string) => {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
 
-  if (!user) throw new Error("Not authenticated");
+  if (!user) throw new Error("Chưa đăng nhập");
 
   // Kiểm tra xem đã lưu chưa
   const { data: existing } = await supabase
@@ -334,14 +334,14 @@ export const toggleSavePost = async (postId: string) => {
       .from("saved_posts")
       .delete()
       .eq("id", existing.id);
-    if (error) throw new Error(error.message || "Toggle save failed");
+    if (error) throw new Error(error.message || "Lỗi lưu/bỏ lưu bài viết");
     return { is_saved: false };
   } else {
     const { error } = await supabase.from("saved_posts").insert({
       user_id: user.id,
       post_id: postId,
     });
-    if (error) throw new Error(error.message || "Toggle save failed");
+    if (error) throw new Error(error.message || "Lỗi lưu/bỏ lưu bài viết");
     return { is_saved: true };
   }
 };
@@ -359,7 +359,7 @@ export const reportPost = async (postId: string, reason: string = "spam") => {
     reason,
   });
 
-  if (error) throw new Error(error.message || "Report post failed");
+  if (error) throw new Error(error.message || "Lỗi báo cáo bài viết");
   return data;
 };
 
@@ -374,7 +374,7 @@ export const createPage = async (payload: {
 }) => {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
-  if (!user) throw new Error("Not authenticated");
+  if (!user) throw new Error("Chưa đăng nhập");
 
   const { data, error } = await supabase
     .from("pages")

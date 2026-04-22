@@ -4,7 +4,7 @@ import { supabase } from "./supabaseClient";
    GET OR CREATE CONVERSATION (OPTIMIZED)
 ====================================== */
 export const getOrCreateConversation = async (user1: string, user2: string) => {
-  if (!user1 || !user2) throw new Error("Missing users");
+  if (!user1 || !user2) throw new Error("Thiếu thông tin người dùng");
 
   // 1. tìm conversation tồn tại
   const { data: existing, error: findError } = await supabase
@@ -33,7 +33,7 @@ export const getOrCreateConversation = async (user1: string, user2: string) => {
 
   if (createError) {
     console.error("Create conversation error:", createError);
-    throw new Error(createError.message || "Create conversation error");
+    throw new Error(createError.message || "Lỗi tạo cuộc trò chuyện");
   }
 
   // Thêm cả 2 vào bảng thành viên để đồng bộ với cơ chế tải danh sách mới
@@ -86,7 +86,7 @@ export const sendMessage = async (
   content: string,
 ) => {
   if (!conversationId || !senderId || !content) {
-    throw new Error("Missing fields");
+    throw new Error("Thiếu thông tin");
   }
 
   const { data, error } = await supabase
@@ -167,7 +167,7 @@ export const getConversationMembers = async (conversationId: string) => {
     )
     .eq("conversation_id", conversationId);
 
-  if (error) throw new Error(error.message || "Get members failed");
+  if (error) throw new Error(error.message || "Lỗi tải danh sách thành viên");
   return data.map((d: any) => d.users);
 };
 
@@ -189,7 +189,7 @@ export const updateGroupName = async (
     .select()
     .single();
 
-  if (error) throw new Error(error.message || "Update group name failed");
+  if (error) throw new Error(error.message || "Lỗi cập nhật tên nhóm");
   return data;
 };
 
@@ -202,7 +202,7 @@ export const deleteConversation = async (conversationId: string) => {
     .from("conversations")
     .delete()
     .eq("id", conversationId);
-  if (error) throw new Error(error.message || "Delete conversation failed");
+  if (error) throw new Error(error.message || "Lỗi xóa cuộc trò chuyện");
   return true;
 };
 
@@ -214,7 +214,7 @@ export const deleteMessage = async (messageId: string) => {
     .from("messages")
     .delete()
     .eq("id", messageId);
-  if (error) throw new Error(error.message || "Delete message failed");
+  if (error) throw new Error(error.message || "Lỗi thu hồi tin nhắn");
   return true;
 };
 
@@ -241,7 +241,7 @@ export const setNickname = async (
     target_id: targetId,
     nickname,
   });
-  if (error) throw new Error(error.message || "Set nickname failed");
+  if (error) throw new Error(error.message || "Lỗi đổi tên gợi nhớ");
   return data;
 };
 
@@ -252,7 +252,7 @@ export const blockUser = async (blockerId: string, blockedId: string) => {
   const { error } = await supabase
     .from("blocked_users")
     .insert({ blocker_id: blockerId, blocked_id: blockedId });
-  if (error) throw new Error(error.message || "Block user failed");
+  if (error) throw new Error(error.message || "Lỗi chặn người dùng");
   return true;
 };
 
@@ -264,7 +264,7 @@ export const getBlockedUsers = async (userId: string) => {
     .from("blocked_users")
     .select("blocked_id")
     .eq("blocker_id", userId);
-  if (error) throw new Error(error.message || "Get blocked users failed");
+  if (error) throw new Error(error.message || "Lỗi tải danh sách chặn");
   if (!data || data.length === 0) return [];
 
   const ids = data.map((d) => d.blocked_id);
@@ -272,7 +272,7 @@ export const getBlockedUsers = async (userId: string) => {
     .from("users")
     .select("id, name, avatar_url")
     .in("id", ids);
-  if (usersError) throw new Error(usersError.message || "Get users failed");
+  if (usersError) throw new Error(usersError.message || "Lỗi tải người dùng");
   return users || [];
 };
 
@@ -284,6 +284,6 @@ export const unblockUser = async (blockerId: string, blockedId: string) => {
     .from("blocked_users")
     .delete()
     .match({ blocker_id: blockerId, blocked_id: blockedId });
-  if (error) throw new Error(error.message || "Unblock user failed");
+  if (error) throw new Error(error.message || "Lỗi bỏ chặn");
   return true;
 };

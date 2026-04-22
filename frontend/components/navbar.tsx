@@ -108,7 +108,11 @@ export default function Navbar({ user: propUser }: any) {
       });
       setLoginLoading(false);
       if (error) {
-        toast.error(error.message || "Đăng nhập thất bại");
+        toast.error(
+          error.message === "Invalid login credentials"
+            ? "Email hoặc mật khẩu không đúng."
+            : error.message || "Đăng nhập thất bại.",
+        );
       } else {
         toast.success("Đăng nhập thành công!");
         setShowLoginPopup(false);

@@ -445,55 +445,56 @@ export default function FanpageProfile({
       toast.error("Không thể xóa người tạo trang.");
       return;
     }
-    if (
-      !window.confirm(
-        `Bạn có chắc muốn xóa ${userToRemove.name} khỏi vai trò quản trị viên?`,
-      )
-    )
-      return;
-    try {
-      await removePageAdmin(id, userToRemove.id);
-      setPageAdmins((prev) =>
-        prev.filter((admin) => admin.users.id !== userToRemove.id),
-      );
-      toast.success(`Đã xóa ${userToRemove.name} khỏi vai trò quản trị viên.`);
-    } catch (err) {
-      toast.error("Lỗi xóa quản trị viên.");
-    }
+    showConfirm(
+      `Bạn có chắc muốn xóa ${userToRemove.name} khỏi vai trò quản trị viên?`,
+      async () => {
+        try {
+          await removePageAdmin(id, userToRemove.id);
+          setPageAdmins((prev) =>
+            prev.filter((admin) => admin.users.id !== userToRemove.id),
+          );
+          toast.success(
+            `Đã xóa ${userToRemove.name} khỏi vai trò quản trị viên.`,
+          );
+        } catch (err) {
+          toast.error("Lỗi xóa quản trị viên.");
+        }
+      },
+    );
   };
 
   const handleRemoveMember = async (userToRemove: any) => {
-    if (
-      !window.confirm(
-        `Bạn có chắc muốn xóa ${userToRemove.name} khỏi danh sách thành viên?`,
-      )
-    )
-      return;
-    try {
-      await removePageMember(id, userToRemove.id);
-      setPageMembers((prev) =>
-        prev.filter((member) => member.users?.id !== userToRemove.id),
-      );
-      toast.success(`Đã xóa ${userToRemove.name} khỏi danh sách thành viên.`);
-    } catch (err) {
-      toast.error("Lỗi xóa thành viên.");
-    }
+    showConfirm(
+      `Bạn có chắc muốn xóa ${userToRemove.name} khỏi danh sách thành viên?`,
+      async () => {
+        try {
+          await removePageMember(id, userToRemove.id);
+          setPageMembers((prev) =>
+            prev.filter((member) => member.users?.id !== userToRemove.id),
+          );
+          toast.success(
+            `Đã xóa ${userToRemove.name} khỏi danh sách thành viên.`,
+          );
+        } catch (err) {
+          toast.error("Lỗi xóa thành viên.");
+        }
+      },
+    );
   };
 
   const handleDeletePage = async () => {
-    if (
-      !window.confirm(
-        "Hành động này không thể hoàn tác! Bạn có chắc chắn muốn xóa vĩnh viễn trang này không?",
-      )
-    )
-      return;
-    try {
-      await deletePage(id);
-      toast.success("Đã xóa trang thành công.");
-      router.push("/");
-    } catch (err) {
-      toast.error("Lỗi xóa trang.");
-    }
+    showConfirm(
+      "Hành động này không thể hoàn tác! Bạn có chắc chắn muốn xóa vĩnh viễn trang này không?",
+      async () => {
+        try {
+          await deletePage(id);
+          toast.success("Đã xóa trang thành công.");
+          router.push("/");
+        } catch (err) {
+          toast.error("Lỗi xóa trang.");
+        }
+      },
+    );
   };
 
   // ================= FOLLOW HANDLERS =================

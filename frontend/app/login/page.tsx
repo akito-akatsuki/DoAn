@@ -34,7 +34,11 @@ export default function AuthPage() {
         password,
       });
       if (error) {
-        toast.error(error.message || "Email hoặc mật khẩu không đúng.");
+        toast.error(
+          error.message === "Invalid login credentials"
+            ? "Email hoặc mật khẩu không đúng."
+            : error.message || "Đăng nhập thất bại.",
+        );
       } else {
         toast.success("Đăng nhập thành công!");
         window.location.href = "/"; // Force reload để mount lại toàn bộ app và xóa Next.js Cache
@@ -49,7 +53,11 @@ export default function AuthPage() {
         },
       });
       if (error) {
-        toast.error(error.message || "Không thể tạo tài khoản.");
+        toast.error(
+          error.message === "User already registered"
+            ? "Email này đã được đăng ký."
+            : error.message || "Không thể tạo tài khoản.",
+        );
       } else {
         if (data.session) {
           // Đăng ký thành công và Confirm Email đã tắt -> tự động đăng nhập luôn

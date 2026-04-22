@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
+import { showConfirm } from "@/components/GlobalConfirm";
 import {
   getOrCreateConversation,
   getMessages,
@@ -385,7 +386,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
 
       setConversations(enriched.filter(Boolean));
     } catch (err) {
-      console.error("Error loading conversations:", err);
+      console.error("Lỗi tải danh sách trò chuyện:", err);
     }
   }, [userId]);
 
@@ -556,7 +557,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
       const msgs = await getMessages(id);
       setMessages(msgs || []);
     } catch (err) {
-      console.error("open chat error:", err);
+      console.error("Lỗi mở cuộc trò chuyện:", err);
     } finally {
       setLoading(false);
     }
@@ -750,39 +751,39 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
 
   const handleDeleteChat = async () => {
     if (!conversationId) return;
-    if (
-      !window.confirm(
-        "Bạn có chắc chắn muốn xóa/rời khỏi cuộc trò chuyện này? Hành động này không thể hoàn tác.",
-      )
-    )
-      return;
-    try {
-      setLoading(true);
-      await deleteConversation(conversationId);
-      setTargetUser(null);
-      setConversationId(null);
-      setMessages([]);
-      setIsSettingsOpen(false);
-      loadConversations();
-      toast.success("Đã xóa cuộc trò chuyện");
-    } catch (e) {
-      toast.error("Lỗi xóa cuộc trò chuyện");
-    } finally {
-      setLoading(false);
-    }
+    showConfirm(
+      "Bạn có chắc chắn muốn xóa/rời khỏi cuộc trò chuyện này? Hành động này không thể hoàn tác.",
+      async () => {
+        try {
+          setLoading(true);
+          await deleteConversation(conversationId);
+          setTargetUser(null);
+          setConversationId(null);
+          setMessages([]);
+          setIsSettingsOpen(false);
+          loadConversations();
+          toast.success("Đã xóa cuộc trò chuyện");
+        } catch (e) {
+          toast.error("Lỗi xóa cuộc trò chuyện");
+        } finally {
+          setLoading(false);
+        }
+      },
+    );
   };
 
   // ================= THU HỒI TIN NHẮN =================
   const handleDeleteMessage = async (msgId: string) => {
-    if (!window.confirm("Bạn có chắc chắn muốn thu hồi tin nhắn này?")) return;
-    try {
-      await deleteMessage(msgId);
-      setMessages((prev) => prev.filter((m) => m.id !== msgId));
-      setOpenMessageMenuId(null);
-      toast.success("Đã thu hồi tin nhắn");
-    } catch (err) {
-      toast.error("Lỗi thu hồi tin nhắn");
-    }
+    showConfirm("Bạn có chắc chắn muốn thu hồi tin nhắn này?", async () => {
+      try {
+        await deleteMessage(msgId);
+        setMessages((prev) => prev.filter((m) => m.id !== msgId));
+        setOpenMessageMenuId(null);
+        toast.success("Đã thu hồi tin nhắn");
+      } catch (err) {
+        toast.error("Lỗi thu hồi tin nhắn");
+      }
+    });
   };
 
   return (
@@ -1257,23 +1258,21 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                       </button>
                       <button
                         onClick={() => {
-                          if (
-                            window.confirm(
-                              "Bạn có chắc chắn muốn chặn người dùng này? Hai người sẽ không thể thấy tin nhắn của nhau.",
-                            )
-                          ) {
-                            try {
-                              blockUser(userId, targetUser!.id).then(() => {
+                          showConfirm(
+                            "Bạn có chắc chắn muốn chặn người dùng này? Hai người sẽ không thể thấy tin nhắn của nhau.",
+                            async () => {
+                              try {
+                                await blockUser(userId, targetUser!.id);
                                 toast.success("Đã chặn người dùng");
                                 setTargetUser(null);
                                 setConversationId(null);
                                 setIsSettingsOpen(false);
                                 loadConversations();
-                              });
-                            } catch (e) {
-                              toast.error("Lỗi khi chặn người dùng");
-                            }
-                          }
+                              } catch (e) {
+                                toast.error("Lỗi khi chặn người dùng");
+                              }
+                            },
+                          );
                         }}
                         className="w-full flex items-center gap-3 p-3.5 hover:bg-red-50 dark:hover:bg-red-900/20 text-red-500 transition-colors text-[15px] font-semibold border-b border-gray-200 dark:border-neutral-800"
                       >
@@ -1690,7 +1689,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
               <VideoCall
                 roomID={callRoomId}
                 userID={currentUser?.id || userId}
-                userName={currentUser?.name || "User"}
+                userName={currentUser?.name || "Người dùng"}
                 onLeave={handleLeaveCall}
                 callType={callType}
               />

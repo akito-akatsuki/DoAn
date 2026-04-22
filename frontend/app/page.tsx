@@ -107,7 +107,11 @@ export default function HomePage() {
       });
       setLoginLoading(false);
       if (error) {
-        toast.error(error.message || "Đăng nhập thất bại");
+        toast.error(
+          error.message === "Invalid login credentials"
+            ? "Email hoặc mật khẩu không đúng."
+            : error.message || "Đăng nhập thất bại.",
+        );
       } else {
         toast.success("Đăng nhập thành công!");
         setShowLoginPopup(false);
@@ -664,7 +668,7 @@ export default function HomePage() {
         setPosts((prev) => prev.filter((p) => p.id !== postId));
         setOpenMenuId(null);
       } catch (err) {
-        console.error("DELETE ERROR:", err);
+        console.error("LỖI XÓA BÀI VIẾT:", err);
         toast.error("Xóa bài viết thất bại.");
       }
     });
@@ -689,7 +693,7 @@ export default function HomePage() {
       setOpenMenuId(null);
       setOpenPostMenu(false);
     } catch (err) {
-      console.error("SAVE POST ERROR:", err);
+      console.error("LỖI LƯU BÀI VIẾT:", err);
       toast.error("Đã xảy ra lỗi khi lưu bài viết.");
     }
   };
@@ -711,7 +715,7 @@ export default function HomePage() {
       setReportPostId(null);
       setReportReason("");
     } catch (err) {
-      console.error("REPORT POST ERROR:", err);
+      console.error("LỖI BÁO CÁO BÀI VIẾT:", err);
       toast.error("Đã xảy ra lỗi khi báo cáo bài viết.");
     }
   };
@@ -949,7 +953,7 @@ export default function HomePage() {
                           });
 
                           if (!newPost) {
-                            console.error("CREATE POST FAILED");
+                            console.error("TẠO BÀI VIẾT THẤT BẠI");
                             return;
                           }
 
@@ -961,7 +965,7 @@ export default function HomePage() {
                           setFile(null);
                           setSelectedPageId(null);
                         } catch (err) {
-                          console.error("POST ERROR:", err);
+                          console.error("LỖI ĐĂNG BÀI:", err);
                         }
                       }}
                       disabled={!content && !file}

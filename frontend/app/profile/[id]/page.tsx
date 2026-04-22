@@ -383,7 +383,7 @@ export default function ProfilePage({
       setReportPostId(null);
       setReportReason("");
     } catch (err) {
-      console.error("REPORT POST ERROR:", err);
+      console.error("LỖI BÁO CÁO BÀI VIẾT:", err);
       toast.error("Đã xảy ra lỗi khi báo cáo bài viết.");
     }
   };
@@ -415,7 +415,7 @@ export default function ProfilePage({
         setPosts((prev) => prev.filter((p) => p.id !== postId));
         closeModal();
       } catch (err) {
-        console.error("DELETE ERROR:", err);
+        console.error("LỖI XÓA BÀI:", err);
         toast.error("Xóa bài viết thất bại.");
       }
     });

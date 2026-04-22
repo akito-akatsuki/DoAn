@@ -12,6 +12,7 @@ import {
   Ban,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { showConfirm } from "@/components/GlobalConfirm";
 import {
   getOrCreateConversation,
   getMessages,
@@ -151,7 +152,7 @@ export default function MessagesPage() {
 
       setConversations(enriched.filter(Boolean));
     } catch (err) {
-      console.error("Error loading conversations:", err);
+      console.error("Lỗi tải danh sách trò chuyện:", err);
     }
   }, [user?.id]);
 
@@ -385,15 +386,16 @@ export default function MessagesPage() {
 
   // ================= THU HỒI TIN NHẮN =================
   const handleDeleteMessage = async (msgId: string) => {
-    if (!window.confirm("Bạn có chắc chắn muốn thu hồi tin nhắn này?")) return;
-    try {
-      await deleteMessage(msgId);
-      setMessages((prev) => prev.filter((m) => m.id !== msgId));
-      setOpenMessageMenuId(null);
-      toast.success("Đã thu hồi tin nhắn");
-    } catch (err) {
-      toast.error("Lỗi thu hồi tin nhắn");
-    }
+    showConfirm("Bạn có chắc chắn muốn thu hồi tin nhắn này?", async () => {
+      try {
+        await deleteMessage(msgId);
+        setMessages((prev) => prev.filter((m) => m.id !== msgId));
+        setOpenMessageMenuId(null);
+        toast.success("Đã thu hồi tin nhắn");
+      } catch (err) {
+        toast.error("Lỗi thu hồi tin nhắn");
+      }
+    });
   };
 
   // ================= BLOCKED CONTROL HANDLERS =================
