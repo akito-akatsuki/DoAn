@@ -18,6 +18,7 @@ import {
   Phone,
   MoreHorizontal,
   Ban,
+  Image as ImageIcon,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
@@ -51,6 +52,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [search, setSearch] = useState("");
@@ -576,27 +578,58 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
 
   // ================= SEND MESSAGE (FIX LAG + OPTIMISTIC UI) =================
   const handleSend = async () => {
-    if (!text.trim() || !conversationId || !userId) return;
+    if ((!text.trim() && !imageFile) || !conversationId || !userId) return;
 
     const msgText = text.trim();
     setText("");
+    const currentImage = imageFile;
+    setImageFile(null);
 
     // 🔥 OPTIMISTIC UPDATE (GIÚP MƯỢT)
     const tempMsg = {
       id: crypto.randomUUID(),
       sender_id: userId,
       content: msgText,
+      image_url: currentImage ? URL.createObjectURL(currentImage) : null,
     };
 
     setMessages((prev) => [...prev, tempMsg]);
 
     try {
-      const msg = await sendMessage(conversationId, userId, msgText);
+      let uploadedImageUrl = null;
+      if (currentImage) {
+        const cleanName = currentImage.name.replace(/[^a-zA-Z0-9.]/g, "_");
+        const fileName = `chat_${Date.now()}_${cleanName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("chat_images") // Đảm bảo bạn đã tạo bucket này trên Supabase
+          .upload(fileName, currentImage);
+
+        if (uploadError) {
+          throw new Error(
+            "Không thể tải ảnh lên. Hãy kiểm tra Storage Bucket 'chat_images'.",
+          );
+        }
+
+        const { data } = supabase.storage
+          .from("chat_images")
+          .getPublicUrl(fileName);
+        uploadedImageUrl = data.publicUrl;
+      }
+
+      // Lưu ý: Nhớ update hàm sendMessage trong lib/chatApi để nó nhận thêm tham số uploadedImageUrl nhé!
+      const msg = await sendMessage(
+        conversationId,
+        userId,
+        msgText,
+        uploadedImageUrl,
+      );
 
       // replace temp
       setMessages((prev) => prev.map((m) => (m.id === tempMsg.id ? msg : m)));
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      toast.error(err.message || "Gửi tin nhắn thất bại");
+      setMessages((prev) => prev.filter((m) => m.id !== tempMsg.id));
     }
 
     // Tắt trạng thái typing ngay khi vừa gửi tin nhắn
@@ -1528,6 +1561,13 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
               ${m.sender_id === userId ? "bg-blue-500 text-white shadow-sm" : "bg-gray-100 dark:bg-[#333333] border border-transparent dark:border-neutral-700 text-gray-900 dark:text-gray-100 shadow-sm"}
             `}
                     >
+                      {m.image_url && (
+                        <img
+                          src={m.image_url}
+                          alt="chat-img"
+                          className="max-w-full rounded-lg mb-1 object-cover"
+                        />
+                      )}
                       {m.content}
                     </div>
                   </div>
@@ -1550,55 +1590,84 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
           {targetUser?.is_group ||
           (targetUser && followedIds.has(targetUser.id)) ||
           messages.length > 0 ? (
-            <div className="p-3 border-t border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#262626] flex gap-2 transition-colors duration-500 shadow-[0_-2px_10px_rgba(0,0,0,0.02)] dark:shadow-black/20">
-              <input
-                value={text}
-                onChange={(e) => {
-                  setText(e.target.value);
-                  // Bắn sự kiện đang gõ phím
-                  if (typingChannelRef.current) {
-                    if (e.target.value === "") {
-                      if (typingTimeoutRef.current)
-                        clearTimeout(typingTimeoutRef.current);
-                      typingChannelRef.current.send({
-                        type: "broadcast",
-                        event: "typing",
-                        payload: { isTyping: false, senderId: userId },
-                      });
-                      lastTypingTimeRef.current = 0;
-                    } else {
-                      const now = Date.now();
-                      if (now - lastTypingTimeRef.current > 1000) {
+            <div className="flex flex-col bg-white dark:bg-[#262626] border-t border-gray-200 dark:border-neutral-800 transition-colors duration-500 shadow-[0_-2px_10px_rgba(0,0,0,0.02)] dark:shadow-black/20">
+              {imageFile && (
+                <div className="p-3 pb-0 relative inline-block">
+                  <div className="relative inline-block">
+                    <img
+                      src={URL.createObjectURL(imageFile)}
+                      alt="preview"
+                      className="h-16 rounded-lg object-cover border border-gray-200 dark:border-neutral-700"
+                    />
+                    <button
+                      onClick={() => setImageFile(null)}
+                      className="absolute -top-2 -right-2 bg-gray-800 text-white rounded-full p-1 hover:bg-gray-700 shadow-sm"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+                </div>
+              )}
+              <div className="p-3 flex gap-2 items-center">
+                <label className="cursor-pointer text-gray-500 hover:text-blue-500 transition-colors p-1">
+                  <ImageIcon size={22} />
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={(e) => setImageFile(e.target.files?.[0] || null)}
+                  />
+                </label>
+                <input
+                  value={text}
+                  onChange={(e) => {
+                    setText(e.target.value);
+                    // Bắn sự kiện đang gõ phím
+                    if (typingChannelRef.current) {
+                      if (e.target.value === "") {
+                        if (typingTimeoutRef.current)
+                          clearTimeout(typingTimeoutRef.current);
                         typingChannelRef.current.send({
-                          type: "broadcast",
-                          event: "typing",
-                          payload: { isTyping: true, senderId: userId },
-                        });
-                        lastTypingTimeRef.current = now;
-                      }
-                      if (typingTimeoutRef.current)
-                        clearTimeout(typingTimeoutRef.current);
-                      typingTimeoutRef.current = setTimeout(() => {
-                        typingChannelRef.current?.send({
                           type: "broadcast",
                           event: "typing",
                           payload: { isTyping: false, senderId: userId },
                         });
                         lastTypingTimeRef.current = 0;
-                      }, 2000);
+                      } else {
+                        const now = Date.now();
+                        if (now - lastTypingTimeRef.current > 1000) {
+                          typingChannelRef.current.send({
+                            type: "broadcast",
+                            event: "typing",
+                            payload: { isTyping: true, senderId: userId },
+                          });
+                          lastTypingTimeRef.current = now;
+                        }
+                        if (typingTimeoutRef.current)
+                          clearTimeout(typingTimeoutRef.current);
+                        typingTimeoutRef.current = setTimeout(() => {
+                          typingChannelRef.current?.send({
+                            type: "broadcast",
+                            event: "typing",
+                            payload: { isTyping: false, senderId: userId },
+                          });
+                          lastTypingTimeRef.current = 0;
+                        }, 2000);
+                      }
                     }
-                  }
-                }}
-                onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                className="flex-1 border border-gray-200 dark:border-neutral-700 shadow-inner bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] text-gray-900 dark:text-gray-100 transition-colors outline-none rounded-xl px-3 py-2 text-sm placeholder:text-gray-500 dark:placeholder:text-gray-400"
-                placeholder="Nhập tin nhắn..."
-              />
-              <button
-                onClick={handleSend}
-                className="bg-blue-500 hover:bg-blue-600 transition-colors text-white px-3 rounded-xl"
-              >
-                <Send size={18} />
-              </button>
+                  }}
+                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                  className="flex-1 border border-gray-200 dark:border-neutral-700 shadow-inner bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] text-gray-900 dark:text-gray-100 transition-colors outline-none rounded-xl px-3 py-2 text-sm placeholder:text-gray-500 dark:placeholder:text-gray-400"
+                  placeholder="Nhập tin nhắn..."
+                />
+                <button
+                  onClick={handleSend}
+                  disabled={!text.trim() && !imageFile}
+                  className="bg-blue-500 hover:bg-blue-600 transition-colors text-white px-3 py-2 rounded-xl disabled:opacity-50 flex items-center justify-center"
+                >
+                  <Send size={18} />
+                </button>
+              </div>
             </div>
           ) : (
             <div className="p-4 border-t border-gray-200 dark:border-neutral-800 text-center bg-gray-50 dark:bg-[#333333]">

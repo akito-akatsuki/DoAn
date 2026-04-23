@@ -3,7 +3,13 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useParams } from "next/navigation";
-import { Heart, MessageCircle, MoreHorizontal } from "lucide-react";
+import {
+  Heart,
+  MessageCircle,
+  MoreHorizontal,
+  Image as ImageIcon,
+  X,
+} from "lucide-react";
 import Navbar from "@/components/navbar";
 import toast from "react-hot-toast";
 import { useRef } from "react";
@@ -23,6 +29,7 @@ export default function PostDetailPage() {
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
   const [comment, setComment] = useState("");
+  const [commentFile, setCommentFile] = useState<File | null>(null);
   const [isLiked, setIsLiked] = useState(false);
   const [isImageModalOpen, setIsImageModalOpen] = useState(false);
   const [showHeart, setShowHeart] = useState(false);
@@ -47,7 +54,7 @@ export default function PostDetailPage() {
           .select("*")
           .eq("id", data.user.id)
           .single();
-        setUser({ ...data.user, ...dbUser });
+        setUser({ ...data.user, ...(dbUser || {}) });
       }
     });
     const handleClickOutside = () => setOpenCommentMenuId(null);
@@ -198,16 +205,19 @@ export default function PostDetailPage() {
 
   // ================= COMMENT =================
   const handleComment = async () => {
-    if (!user || !comment.trim()) return;
+    if (!user || (!comment.trim() && !commentFile)) return;
 
     const text = comment;
     setComment(""); // Clear immediately
+    const currentFile = commentFile;
+    setCommentFile(null);
 
     // 🔥 OPTIMISTIC UPDATE
     const tempId = `temp-${Date.now()}`;
     const tempComment = {
       id: tempId,
       content: text,
+      image_url: currentFile ? URL.createObjectURL(currentFile) : null,
       user_id: user.id,
       users: {
         id: user.id,
@@ -227,7 +237,22 @@ export default function PostDetailPage() {
     }));
 
     try {
-      const newCmt = await apiCreateComment(id as string, text);
+      let imageUrl = null;
+      if (currentFile) {
+        const cleanName = currentFile.name.replace(/[^a-zA-Z0-9.]/g, "_");
+        const fileName = `comment_${Date.now()}_${cleanName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("comment_images")
+          .upload(fileName, currentFile);
+
+        if (!uploadError) {
+          const { data } = supabase.storage
+            .from("comment_images")
+            .getPublicUrl(fileName);
+          imageUrl = data.publicUrl;
+        }
+      }
+      const newCmt = await apiCreateComment(id as string, text, imageUrl);
       setComments((prev) => prev.map((c) => (c.id === tempId ? newCmt : c)));
     } catch (err) {
       console.error(err);
@@ -383,9 +408,33 @@ export default function PostDetailPage() {
             placeholder="Viết bình luận..."
             className="flex-1 border border-gray-200 dark:border-neutral-700 shadow-inner p-2 rounded-xl outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400 transition-colors"
           />
+          {commentFile && (
+            <div className="relative">
+              <img
+                src={URL.createObjectURL(commentFile)}
+                className="h-10 w-10 object-cover rounded border border-gray-200 dark:border-neutral-700"
+              />
+              <button
+                onClick={() => setCommentFile(null)}
+                className="absolute -top-1 -right-1 bg-gray-800 text-white rounded-full p-0.5 shadow-sm"
+              >
+                <X size={10} />
+              </button>
+            </div>
+          )}
+          <label className="cursor-pointer text-gray-500 hover:text-blue-500 p-2 flex items-center justify-center bg-gray-100 dark:bg-[#333333] rounded-xl hover:bg-gray-200 dark:hover:bg-neutral-800 transition-colors">
+            <ImageIcon size={20} />
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => setCommentFile(e.target.files?.[0] || null)}
+            />
+          </label>
           <button
             onClick={handleComment}
-            className="bg-blue-500 text-white px-4 rounded"
+            disabled={!comment.trim() && !commentFile}
+            className="bg-blue-500 text-white px-4 rounded disabled:opacity-50"
           >
             Gửi
           </button>
@@ -464,15 +513,24 @@ export default function PostDetailPage() {
                       </div>
                     </div>
                   ) : (
-                    <p
-                      className={`mt-0.5 whitespace-pre-wrap ${
-                        isReply
-                          ? "text-[13px] text-muted-foreground"
-                          : "text-sm"
-                      }`}
-                    >
-                      {c.content}
-                    </p>
+                    <div className="flex flex-col mt-0.5">
+                      <p
+                        className={`whitespace-pre-wrap ${
+                          isReply
+                            ? "text-[13px] text-muted-foreground"
+                            : "text-sm"
+                        }`}
+                      >
+                        {c.content}
+                      </p>
+                      {c.image_url && (
+                        <img
+                          src={c.image_url}
+                          alt="comment-img"
+                          className="mt-1 max-h-32 rounded-lg object-contain border border-gray-200 dark:border-neutral-700"
+                        />
+                      )}
+                    </div>
                   )}
                 </div>
 

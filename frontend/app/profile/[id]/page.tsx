@@ -3,7 +3,15 @@
 import { use, useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import toast from "react-hot-toast";
-import { Heart, MoreHorizontal, X, Trash2, Smile, Camera } from "lucide-react";
+import {
+  Heart,
+  MoreHorizontal,
+  X,
+  Trash2,
+  Smile,
+  Camera,
+  Image as ImageIcon,
+} from "lucide-react";
 import { useRef } from "react";
 import {
   getComments,
@@ -54,6 +62,7 @@ export default function ProfilePage({
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
   const [modalComments, setModalComments] = useState<any[]>([]);
   const [modalCommentText, setModalCommentText] = useState("");
+  const [modalCommentFile, setModalCommentFile] = useState<File | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [openCommentMenuId, setOpenCommentMenuId] = useState<string | null>(
     null,
@@ -111,7 +120,8 @@ export default function ProfilePage({
           .select("*")
           .eq("id", data.user.id)
           .single();
-        setCurrentUser({ ...data.user, ...dbUser });
+
+        setCurrentUser({ ...data.user, ...(dbUser || {}) });
       }
     };
 
@@ -861,7 +871,16 @@ export default function ProfilePage({
                                 : "text-sm"
                             }`}
                           >
-                            {c.content}
+                            <div className="flex flex-col">
+                              <span>{c.content}</span>
+                              {c.image_url && (
+                                <img
+                                  src={c.image_url}
+                                  alt="comment-img"
+                                  className="mt-1 max-h-32 rounded-lg object-contain border border-gray-200 dark:border-neutral-700"
+                                />
+                              )}
+                            </div>
                           </span>
                         )}
                       </div>
@@ -1011,9 +1030,34 @@ export default function ProfilePage({
                     placeholder="Thêm bình luận..."
                     onKeyDown={(e) => e.key === "Enter" && handleModalComment()}
                   />
+                  {modalCommentFile && (
+                    <div className="relative">
+                      <img
+                        src={URL.createObjectURL(modalCommentFile)}
+                        className="h-8 w-8 object-cover rounded border border-gray-200 dark:border-neutral-700"
+                      />
+                      <button
+                        onClick={() => setModalCommentFile(null)}
+                        className="absolute -top-1 -right-1 bg-gray-800 text-white rounded-full p-0.5"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  )}
+                  <label className="cursor-pointer text-gray-500 hover:text-blue-500 p-1">
+                    <ImageIcon size={18} />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) =>
+                        setModalCommentFile(e.target.files?.[0] || null)
+                      }
+                    />
+                  </label>
                   <button
                     onClick={handleModalComment}
-                    disabled={!modalCommentText.trim()}
+                    disabled={!modalCommentText.trim() && !modalCommentFile}
                     className="text-blue-500 font-semibold text-sm disabled:opacity-50 px-2"
                   >
                     Đăng

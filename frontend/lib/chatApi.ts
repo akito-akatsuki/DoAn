@@ -84,8 +84,9 @@ export const sendMessage = async (
   conversationId: string,
   senderId: string,
   content: string,
+  imageUrl?: string | null,
 ) => {
-  if (!conversationId || !senderId || !content) {
+  if (!conversationId || !senderId || (!content && !imageUrl)) {
     throw new Error("Thiếu thông tin");
   }
 
@@ -95,6 +96,7 @@ export const sendMessage = async (
       conversation_id: conversationId,
       sender_id: senderId,
       content,
+      image_url: imageUrl || null,
     })
     .select("*")
     .single();

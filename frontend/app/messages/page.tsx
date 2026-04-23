@@ -10,6 +10,8 @@ import {
   Loader2,
   MoreHorizontal,
   Ban,
+  Image as ImageIcon,
+  X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { showConfirm } from "@/components/GlobalConfirm";
@@ -28,6 +30,7 @@ export default function MessagesPage() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState("");
+  const [imageFile, setImageFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
 
   const [search, setSearch] = useState("");
@@ -60,7 +63,7 @@ export default function MessagesPage() {
             .select("*")
             .eq("id", data.user.id)
             .single();
-          setUser({ ...data.user, ...dbUser });
+          setUser({ ...data.user, ...(dbUser || {}) });
         }
       } catch (err) {
         console.error("Lỗi lấy thông tin user ở Messages:", err);
@@ -351,25 +354,55 @@ export default function MessagesPage() {
 
   // ================= GỬI TIN NHẮN =================
   const handleSend = async () => {
-    if (!text.trim() || !conversationId || !user?.id) return;
+    if ((!text.trim() && !imageFile) || !conversationId || !user?.id) return;
 
     const msgText = text.trim();
     setText(""); // Xóa input ngay lập tức
+    const currentImage = imageFile;
+    setImageFile(null);
 
     const tempMsg = {
       id: crypto.randomUUID(),
       sender_id: user.id,
       content: msgText,
+      image_url: currentImage ? URL.createObjectURL(currentImage) : null,
     };
 
     // Cập nhật UI tạm thời cho mượt
     setMessages((prev) => [...prev, tempMsg]);
 
     try {
-      const msg = await sendMessage(conversationId, user.id, msgText);
+      let uploadedImageUrl = null;
+      if (currentImage) {
+        const cleanName = currentImage.name.replace(/[^a-zA-Z0-9.]/g, "_");
+        const fileName = `chat_${Date.now()}_${cleanName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("chat_images")
+          .upload(fileName, currentImage);
+
+        if (uploadError) {
+          throw new Error(
+            "Không thể tải ảnh lên. Hãy kiểm tra Storage Bucket 'chat_images'.",
+          );
+        }
+
+        const { data } = supabase.storage
+          .from("chat_images")
+          .getPublicUrl(fileName);
+        uploadedImageUrl = data.publicUrl;
+      }
+
+      const msg = await sendMessage(
+        conversationId,
+        user.id,
+        msgText,
+        uploadedImageUrl,
+      );
       setMessages((prev) => prev.map((m) => (m.id === tempMsg.id ? msg : m)));
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
+      toast.error(err.message || "Gửi tin nhắn thất bại");
+      setMessages((prev) => prev.filter((m) => m.id !== tempMsg.id));
     }
 
     // Tắt trạng thái typing ngay khi vừa gửi tin nhắn
@@ -657,6 +690,13 @@ export default function MessagesPage() {
                               : "rounded-2xl rounded-bl-sm border bg-gray-100 dark:bg-[#333333] text-gray-900 dark:text-gray-100 border-transparent dark:border-neutral-700 shadow-sm"
                           }`}
                         >
+                          {m.image_url && (
+                            <img
+                              src={m.image_url}
+                              alt="chat-img"
+                              className="max-w-full rounded-lg mb-1 object-cover"
+                            />
+                          )}
                           {m.content}
                         </div>
                       </div>
@@ -678,55 +718,85 @@ export default function MessagesPage() {
               </div>
 
               {/* INPUT CHAT */}
-              <div className="p-4 border-t border-gray-200 dark:border-neutral-800 rounded-b-xl flex gap-3 shrink-0 transition-colors duration-500 bg-white dark:bg-[#262626] shadow-[0_-2px_10px_rgba(0,0,0,0.02)] dark:shadow-black/20">
-                <input
-                  value={text}
-                  onChange={(e) => {
-                    setText(e.target.value);
-                    if (typingChannelRef.current) {
-                      if (e.target.value === "") {
-                        if (typingTimeoutRef.current)
-                          clearTimeout(typingTimeoutRef.current);
-                        typingChannelRef.current.send({
-                          type: "broadcast",
-                          event: "typing",
-                          payload: { isTyping: false, senderId: user?.id },
-                        });
-                        lastTypingTimeRef.current = 0;
-                      } else {
-                        const now = Date.now();
-                        if (now - lastTypingTimeRef.current > 1000) {
+              <div className="flex flex-col border-t border-gray-200 dark:border-neutral-800 rounded-b-xl shrink-0 transition-colors duration-500 bg-white dark:bg-[#262626] shadow-[0_-2px_10px_rgba(0,0,0,0.02)] dark:shadow-black/20">
+                {imageFile && (
+                  <div className="p-4 pb-0 relative inline-block">
+                    <div className="relative inline-block">
+                      <img
+                        src={URL.createObjectURL(imageFile)}
+                        alt="preview"
+                        className="h-20 rounded-lg object-cover border border-gray-200 dark:border-neutral-700"
+                      />
+                      <button
+                        onClick={() => setImageFile(null)}
+                        className="absolute -top-2 -right-2 bg-gray-800 text-white rounded-full p-1 hover:bg-gray-700 shadow-sm"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  </div>
+                )}
+                <div className="p-4 flex gap-3 items-center">
+                  <label className="cursor-pointer text-gray-500 hover:text-blue-500 transition-colors flex items-center justify-center">
+                    <ImageIcon size={26} />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) =>
+                        setImageFile(e.target.files?.[0] || null)
+                      }
+                    />
+                  </label>
+                  <input
+                    value={text}
+                    onChange={(e) => {
+                      setText(e.target.value);
+                      if (typingChannelRef.current) {
+                        if (e.target.value === "") {
+                          if (typingTimeoutRef.current)
+                            clearTimeout(typingTimeoutRef.current);
                           typingChannelRef.current.send({
-                            type: "broadcast",
-                            event: "typing",
-                            payload: { isTyping: true, senderId: user?.id },
-                          });
-                          lastTypingTimeRef.current = now;
-                        }
-                        if (typingTimeoutRef.current)
-                          clearTimeout(typingTimeoutRef.current);
-                        typingTimeoutRef.current = setTimeout(() => {
-                          typingChannelRef.current?.send({
                             type: "broadcast",
                             event: "typing",
                             payload: { isTyping: false, senderId: user?.id },
                           });
                           lastTypingTimeRef.current = 0;
-                        }, 2000);
+                        } else {
+                          const now = Date.now();
+                          if (now - lastTypingTimeRef.current > 1000) {
+                            typingChannelRef.current.send({
+                              type: "broadcast",
+                              event: "typing",
+                              payload: { isTyping: true, senderId: user?.id },
+                            });
+                            lastTypingTimeRef.current = now;
+                          }
+                          if (typingTimeoutRef.current)
+                            clearTimeout(typingTimeoutRef.current);
+                          typingTimeoutRef.current = setTimeout(() => {
+                            typingChannelRef.current?.send({
+                              type: "broadcast",
+                              event: "typing",
+                              payload: { isTyping: false, senderId: user?.id },
+                            });
+                            lastTypingTimeRef.current = 0;
+                          }, 2000);
+                        }
                       }
-                    }
-                  }}
-                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                  className="flex-1 border border-gray-200 dark:border-neutral-700 shadow-inner transition-colors outline-none rounded-full px-4 py-2.5 text-[15px] bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400"
-                  placeholder="Nhắn tin..."
-                />
-                <button
-                  onClick={handleSend}
-                  disabled={!text.trim()}
-                  className="bg-[#0095F6] hover:bg-blue-600 disabled:opacity-50 transition-colors text-white px-5 rounded-full flex items-center justify-center font-semibold text-[15px]"
-                >
-                  Gửi
-                </button>
+                    }}
+                    onKeyDown={(e) => e.key === "Enter" && handleSend()}
+                    className="flex-1 border border-gray-200 dark:border-neutral-700 shadow-inner transition-colors outline-none rounded-full px-4 py-2.5 text-[15px] bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] text-gray-900 dark:text-gray-100 placeholder:text-gray-500 dark:placeholder:text-gray-400"
+                    placeholder="Nhắn tin..."
+                  />
+                  <button
+                    onClick={handleSend}
+                    disabled={!text.trim() && !imageFile}
+                    className="bg-[#0095F6] hover:bg-blue-600 disabled:opacity-50 transition-colors text-white px-5 rounded-full flex items-center justify-center font-semibold text-[15px]"
+                  >
+                    Gửi
+                  </button>
+                </div>
               </div>
 
               {/* LOADING OVERLAY */}

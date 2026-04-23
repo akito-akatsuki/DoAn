@@ -12,6 +12,7 @@ import {
   UserPlus,
   MoreHorizontal,
   Smile,
+  Image as ImageIcon,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
@@ -31,6 +32,7 @@ export default function NotificationsPage() {
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
   const [modalComments, setModalComments] = useState<any[]>([]);
   const [modalCommentText, setModalCommentText] = useState("");
+  const [modalCommentFile, setModalCommentFile] = useState<File | null>(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [openCommentMenuId, setOpenCommentMenuId] = useState<string | null>(
     null,
@@ -95,7 +97,7 @@ export default function NotificationsPage() {
           .select("*")
           .eq("id", currentUser.id)
           .single();
-        setUser({ ...currentUser, ...dbUser });
+        setUser({ ...currentUser, ...(dbUser || {}) });
         await loadNotifications(currentUser.id);
       }
     } catch (err) {
@@ -227,6 +229,7 @@ export default function NotificationsPage() {
     setSelectedPost(null);
     setModalComments([]);
     setModalCommentText("");
+    setModalCommentFile(null);
     setOpenCommentMenuId(null);
     setEditingCommentId(null);
     setShowEmojiPicker(false);
@@ -261,13 +264,16 @@ export default function NotificationsPage() {
   };
 
   const handleModalComment = async () => {
-    if (!user || !modalCommentText.trim() || !selectedPost) return;
     const text = modalCommentText;
+    const file = modalCommentFile;
+    if (!user || (!text.trim() && !file) || !selectedPost) return;
     setModalCommentText("");
+    setModalCommentFile(null);
     const tempId = `temp-${Date.now()}`;
     const tempComment = {
       id: tempId,
       content: text,
+      image_url: file ? URL.createObjectURL(file) : null,
       user_id: user.id,
       users: {
         id: user.id,
@@ -281,7 +287,22 @@ export default function NotificationsPage() {
     };
     setModalComments((prev) => [...prev, tempComment]);
     try {
-      const newCmt = await createComment(selectedPost.id, text);
+      let imageUrl = null;
+      if (file) {
+        const cleanName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
+        const fileName = `comment_${Date.now()}_${cleanName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("comment_images")
+          .upload(fileName, file);
+
+        if (!uploadError) {
+          const { data } = supabase.storage
+            .from("comment_images")
+            .getPublicUrl(fileName);
+          imageUrl = data.publicUrl;
+        }
+      }
+      const newCmt = await createComment(selectedPost.id, text, imageUrl);
       setModalComments((prev) =>
         prev.map((c) => (c.id === tempId ? newCmt : c)),
       );
@@ -571,15 +592,24 @@ export default function NotificationsPage() {
                             </div>
                           </div>
                         ) : (
-                          <span
-                            className={`whitespace-pre-wrap ${
-                              isReply
-                                ? "text-[13px] text-muted-foreground"
-                                : "text-sm"
-                            }`}
-                          >
-                            {c.content}
-                          </span>
+                          <div className="flex flex-col">
+                            <span
+                              className={`whitespace-pre-wrap ${
+                                isReply
+                                  ? "text-[13px] text-muted-foreground"
+                                  : "text-sm"
+                              }`}
+                            >
+                              {c.content}
+                            </span>
+                            {c.image_url && (
+                              <img
+                                src={c.image_url}
+                                alt="comment-img"
+                                className="mt-1 max-h-32 rounded-lg object-contain border border-gray-200 dark:border-neutral-700"
+                              />
+                            )}
+                          </div>
                         )}
                       </div>
 
@@ -731,9 +761,34 @@ export default function NotificationsPage() {
                     placeholder="Thêm bình luận..."
                     onKeyDown={(e) => e.key === "Enter" && handleModalComment()}
                   />
+                  {modalCommentFile && (
+                    <div className="relative">
+                      <img
+                        src={URL.createObjectURL(modalCommentFile)}
+                        className="h-8 w-8 object-cover rounded border border-gray-200 dark:border-neutral-700"
+                      />
+                      <button
+                        onClick={() => setModalCommentFile(null)}
+                        className="absolute -top-1 -right-1 bg-gray-800 text-white rounded-full p-0.5"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  )}
+                  <label className="cursor-pointer text-gray-500 hover:text-blue-500 p-1">
+                    <ImageIcon size={18} />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) =>
+                        setModalCommentFile(e.target.files?.[0] || null)
+                      }
+                    />
+                  </label>
                   <button
                     onClick={handleModalComment}
-                    disabled={!modalCommentText.trim()}
+                    disabled={!modalCommentText.trim() && !modalCommentFile}
                     className="text-blue-500 font-semibold text-sm disabled:opacity-50 px-2"
                   >
                     Đăng

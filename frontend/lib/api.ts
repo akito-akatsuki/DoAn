@@ -15,65 +15,75 @@ export const getFeed = async () => {
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData.user?.id || null;
 
-  // 1. Gọi RPC tính điểm Hot Score (Thuật toán gợi ý)
-  const { data, error } = await supabase.rpc("get_hot_feed", {
-    current_user_id: userId,
-  });
-
-  let enrichedData: any[] = [];
-
-  // 2. Xử lý dữ liệu từ Hot Feed (nếu có)
-  if (data && data.length > 0) {
-    const postIds = data.map((p: any) => p.id);
-
-    const { data: fullPosts, error: fullError } = await supabase
-      .from("posts")
-      .select("*, users (id, name, avatar_url), pages (id, name, avatar_url)")
-      .in("id", postIds);
-
-    if (fullError) handleError(fullError, "getFeed fullPosts");
-
-    const fullPostsMap = new Map((fullPosts || []).map((p: any) => [p.id, p]));
-
-    enrichedData = data
-      .map((rpcPost: any) => {
-        const fullPost = fullPostsMap.get(rpcPost.id);
-        if (!fullPost) return null;
-        return { ...fullPost, ...rpcPost };
-      })
-      .filter(Boolean);
+  // 1. Get hot post IDs from RPC
+  const { data: rpcData, error: rpcError } = await supabase.rpc(
+    "get_hot_feed",
+    {
+      current_user_id: userId,
+    },
+  );
+  if (rpcError) {
+    console.warn("getFeed RPC Error, falling back to recent posts:", rpcError);
   }
 
-  // 3. Bù thêm bài viết mới nhất nếu Feed quá ít bài (vd: < 10 bài)
-  if (enrichedData.length < 10) {
-    const { data: fallbackData } = await supabase
-      .from("posts")
-      .select("*, users (id, name, avatar_url), pages (id, name, avatar_url)")
-      .order("created_at", { ascending: false })
-      .limit(20);
+  const postIdsFromRpc = (rpcData || []).map((p: any) => p.id);
 
-    if (fallbackData) {
-      const existingIds = new Set(enrichedData.map((p) => p.id));
-      // Bỏ qua những bài đã có trong Hot Feed để tránh bị lặp lại
-      const newPosts = fallbackData.filter((p) => !existingIds.has(p.id));
-      enrichedData = [...enrichedData, ...newPosts];
+  // 2. Fetch fallback post IDs if needed
+  let fallbackPostIds: string[] = [];
+  if (postIdsFromRpc.length < 10) {
+    const { data: fallbackPosts, error: fallbackError } = await supabase
+      .from("posts")
+      .select("id")
+      .order("created_at", { ascending: false })
+      .limit(30);
+
+    if (fallbackError) {
+      console.warn("getFeed fallback error:", fallbackError);
+    }
+    if (fallbackPosts) {
+      fallbackPostIds = fallbackPosts
+        .map((p) => p.id)
+        .filter((id) => !postIdsFromRpc.includes(id));
     }
   }
 
-  // 4. Lấy trạng thái is_saved cho tất cả bài viết
-  if (userId && enrichedData.length > 0) {
-    const { data: savedPosts } = await supabase
-      .from("saved_posts")
-      .select("post_id")
-      .eq("user_id", userId);
-    const savedSet = new Set(savedPosts?.map((s) => s.post_id) || []);
-    enrichedData = enrichedData.map((post) => ({
-      ...post,
-      is_saved: savedSet.has(post.id),
-    }));
-  }
+  const allPostIds = [...new Set([...postIdsFromRpc, ...fallbackPostIds])];
 
-  // 5. Sắp xếp theo thứ tự ưu tiên
+  if (allPostIds.length === 0) return [];
+
+  // 3. Fetch all data in parallel
+  const [postsRes, savedRes] = await Promise.all([
+    supabase
+      .from("posts")
+      .select("*, users (id, name, avatar_url), pages (id, name, avatar_url)")
+      .in("id", allPostIds),
+    userId
+      ? supabase
+          .from("saved_posts")
+          .select("post_id")
+          .eq("user_id", userId)
+          .in("post_id", allPostIds)
+      : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  if (postsRes.error) handleError(postsRes.error, "getFeed posts");
+  if (savedRes.error) handleError(savedRes.error, "getFeed saved");
+
+  const allPosts = postsRes.data || [];
+  const savedSet = new Set((savedRes.data || []).map((s: any) => s.post_id));
+  const rpcDataMap = new Map((rpcData || []).map((p: any) => [p.id, p]));
+
+  // 4. Enrich and sort
+  let enrichedData = allPosts.map((post) => {
+    const rpcInfo = rpcDataMap.get(post.id);
+    return {
+      ...post,
+      ...(rpcInfo || {}), // Add score etc. from RPC
+      is_saved: savedSet.has(post.id),
+    };
+  });
+
+  // 5. Sắp xếp lại theo thứ tự ưu tiên
   const now = Date.now();
   const NEW_THRESHOLD = 2 * 60 * 60 * 1000; // 2 tiếng (được coi là bài mới đăng)
 
@@ -244,7 +254,11 @@ export const getComments = async (postId: string) => {
 /* =========================
    CREATE COMMENT
 ========================= */
-export const createComment = async (postId: string, content: string) => {
+export const createComment = async (
+  postId: string,
+  content: string,
+  imageUrl?: string | null,
+) => {
   const { data: userData } = await supabase.auth.getUser();
   const user = userData.user;
 
@@ -255,6 +269,7 @@ export const createComment = async (postId: string, content: string) => {
     .insert({
       post_id: postId,
       content,
+      image_url: imageUrl || null,
       user_id: user.id,
     })
     .select(

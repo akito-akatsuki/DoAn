@@ -100,6 +100,10 @@ export default function FanpageProfile({
   // ================= POST INTERACTIONS STATES =================
   const [commentsMap, setCommentsMap] = useState<Record<string, any[]>>({});
   const [commentInput, setCommentInput] = useState<Record<string, string>>({});
+  const [commentFileMap, setCommentFileMap] = useState<
+    Record<string, File | null>
+  >({});
+  const [modalCommentFile, setModalCommentFile] = useState<File | null>(null);
   const commentInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
@@ -198,7 +202,7 @@ export default function FanpageProfile({
             .select("*")
             .eq("id", user.id)
             .single();
-          setCurrentUser({ ...user, ...dbUser });
+          setCurrentUser({ ...user, ...(dbUser || {}) });
         }
 
         // 1. Lấy thông tin Fanpage
@@ -263,46 +267,59 @@ export default function FanpageProfile({
           .eq("page_id", id)
           .order("created_at", { ascending: false });
 
-        const enrichedData = await Promise.all(
-          (postsData || []).map(async (post: any) => {
-            loadCommentsList(post.id);
+        const postIds = (postsData || []).map((p: any) => p.id);
 
-            const { count: likesCount } = await supabase
+        if (postIds.length > 0) {
+          const [commentsRes, likesRes, savedRes] = await Promise.all([
+            supabase
+              .from("comments")
+              .select("*, users (id, name, avatar_url)")
+              .in("post_id", postIds)
+              .order("created_at", { ascending: true }),
+            supabase
               .from("likes")
-              .select("*", { count: "exact", head: true })
-              .eq("post_id", post.id);
+              .select("post_id, user_id")
+              .in("post_id", postIds),
+            user
+              ? supabase
+                  .from("saved_posts")
+                  .select("post_id")
+                  .eq("user_id", user.id)
+                  .in("post_id", postIds)
+              : Promise.resolve({ data: [] }),
+          ]);
 
-            let isLiked = false;
-            let isSaved = false;
-            if (user) {
-              const { data: likeData } = await supabase
-                .from("likes")
-                .select("id")
-                .eq("post_id", post.id)
-                .eq("user_id", user.id)
-                .maybeSingle();
-              if (likeData) isLiked = true;
+          const commentsByPost: Record<string, any[]> = {};
+          commentsRes.data?.forEach((c) => {
+            if (!commentsByPost[c.post_id]) commentsByPost[c.post_id] = [];
+            commentsByPost[c.post_id].push(c);
+          });
+          setCommentsMap((prev) => ({ ...prev, ...commentsByPost }));
 
-              const { data: savedData } = await supabase
-                .from("saved_posts")
-                .select("id")
-                .eq("post_id", post.id)
-                .eq("user_id", user.id)
-                .maybeSingle();
-              if (savedData) isSaved = true;
-            }
+          const likesCountByPost: Record<string, number> = {};
+          const userLikedPosts = new Set<string>();
+          likesRes.data?.forEach((l) => {
+            likesCountByPost[l.post_id] =
+              (likesCountByPost[l.post_id] || 0) + 1;
+            if (user && l.user_id === user.id) userLikedPosts.add(l.post_id);
+          });
 
-            return {
-              ...post,
-              pages: pageData, // Đóng giả Fanpage như một user object để UI dễ render
-              likes_count: likesCount || 0,
-              is_liked: isLiked,
-              is_saved: isSaved,
-            };
-          }),
-        );
+          const userSavedPosts = new Set<string>(
+            (savedRes.data || []).map((s: any) => s.post_id),
+          );
 
-        setPosts(enrichedData);
+          const enrichedData = postsData!.map((post: any) => ({
+            ...post,
+            pages: pageData,
+            likes_count: likesCountByPost[post.id] || 0,
+            is_liked: userLikedPosts.has(post.id),
+            is_saved: userSavedPosts.has(post.id),
+          }));
+
+          setPosts(enrichedData);
+        } else {
+          setPosts([]);
+        }
       } catch (error) {
         console.error("Lỗi tải trang Fanpage:", error);
       } finally {
@@ -703,14 +720,18 @@ export default function FanpageProfile({
   };
 
   const handleComment = async (postId: string) => {
-    const text = commentInput[postId];
-    if (!text || !currentUser) return;
+    const text = commentInput[postId] || "";
+    const file = commentFileMap[postId] || null;
+    if (!currentUser || (!text && !file)) return;
+
     setCommentInput((prev) => ({ ...prev, [postId]: "" }));
+    setCommentFileMap((prev) => ({ ...prev, [postId]: null }));
 
     const tempId = `temp-${Date.now()}`;
     const tempComment = {
       id: tempId,
       content: text,
+      image_url: file ? URL.createObjectURL(file) : null,
       user_id: currentUser.id,
       users: {
         id: currentUser.id,
@@ -725,7 +746,22 @@ export default function FanpageProfile({
       [postId]: [...(prev[postId] || []), tempComment],
     }));
     try {
-      const newComment = await createComment(postId, text);
+      let imageUrl = null;
+      if (file) {
+        const cleanName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
+        const fileName = `comment_${Date.now()}_${cleanName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("comment_images")
+          .upload(fileName, file);
+
+        if (!uploadError) {
+          const { data } = supabase.storage
+            .from("comment_images")
+            .getPublicUrl(fileName);
+          imageUrl = data.publicUrl;
+        }
+      }
+      const newComment = await createComment(postId, text, imageUrl);
       setCommentsMap((prev) => ({
         ...prev,
         [postId]: (prev[postId] || []).map((c) =>
@@ -763,20 +799,24 @@ export default function FanpageProfile({
     setSelectedPost(null);
     setModalComments([]);
     setModalCommentText("");
+    setModalCommentFile(null);
     setShowEmojiPicker(false);
     setOpenPostMenu(false);
     setExpandedReplies({});
   };
 
   const handleModalComment = async () => {
-    if (!currentUser || !modalCommentText.trim() || !selectedPost) return;
     const text = modalCommentText;
+    const file = modalCommentFile;
+    if (!currentUser || (!text.trim() && !file) || !selectedPost) return;
     setModalCommentText("");
+    setModalCommentFile(null);
 
     const tempId = `temp-${Date.now()}`;
     const tempComment = {
       id: tempId,
       content: text,
+      image_url: file ? URL.createObjectURL(file) : null,
       user_id: currentUser.id,
       users: {
         id: currentUser.id,
@@ -792,7 +832,22 @@ export default function FanpageProfile({
       [selectedPost.id]: [...(prev[selectedPost.id] || []), tempComment],
     }));
     try {
-      const newCmt = await createComment(selectedPost.id, text);
+      let imageUrl = null;
+      if (file) {
+        const cleanName = file.name.replace(/[^a-zA-Z0-9.]/g, "_");
+        const fileName = `comment_${Date.now()}_${cleanName}`;
+        const { error: uploadError } = await supabase.storage
+          .from("comment_images")
+          .upload(fileName, file);
+
+        if (!uploadError) {
+          const { data } = supabase.storage
+            .from("comment_images")
+            .getPublicUrl(fileName);
+          imageUrl = data.publicUrl;
+        }
+      }
+      const newCmt = await createComment(selectedPost.id, text, imageUrl);
       setModalComments((prev) =>
         prev.map((c) => (c.id === tempId ? newCmt : c)),
       );
@@ -1409,7 +1464,16 @@ export default function FanpageProfile({
                                   </div>
                                 </div>
                               ) : (
-                                <span>{c.content}</span>
+                                <div className="flex flex-col">
+                                  <span>{c.content}</span>
+                                  {c.image_url && (
+                                    <img
+                                      src={c.image_url}
+                                      alt="comment-img"
+                                      className="mt-1 max-h-32 rounded-lg object-contain border border-gray-200 dark:border-neutral-700"
+                                    />
+                                  )}
+                                </div>
                               )}
                             </div>
                             {(currentUser?.id === c.user_id || isAdmin) &&
@@ -1486,7 +1550,40 @@ export default function FanpageProfile({
                       className="flex-1 text-sm outline-none bg-transparent placeholder:text-gray-500 dark:placeholder:text-gray-400"
                       placeholder="Thêm bình luận..."
                     />
-                    {commentInput[post.id] && (
+                    {commentFileMap[post.id] && (
+                      <div className="relative">
+                        <img
+                          src={URL.createObjectURL(commentFileMap[post.id]!)}
+                          className="h-8 w-8 object-cover rounded border border-gray-200 dark:border-neutral-700"
+                        />
+                        <button
+                          onClick={() =>
+                            setCommentFileMap((prev) => ({
+                              ...prev,
+                              [post.id]: null,
+                            }))
+                          }
+                          className="absolute -top-1 -right-1 bg-gray-800 text-white rounded-full p-0.5"
+                        >
+                          <X size={10} />
+                        </button>
+                      </div>
+                    )}
+                    <label className="cursor-pointer text-gray-500 hover:text-blue-500 p-1">
+                      <ImageIcon size={18} />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) =>
+                          setCommentFileMap((prev) => ({
+                            ...prev,
+                            [post.id]: e.target.files?.[0] || null,
+                          }))
+                        }
+                      />
+                    </label>
+                    {(commentInput[post.id] || commentFileMap[post.id]) && (
                       <button
                         onClick={() => handleComment(post.id)}
                         className="text-primary font-semibold text-sm"
@@ -1850,9 +1947,34 @@ export default function FanpageProfile({
                     placeholder="Thêm bình luận..."
                     onKeyDown={(e) => e.key === "Enter" && handleModalComment()}
                   />
+                  {modalCommentFile && (
+                    <div className="relative">
+                      <img
+                        src={URL.createObjectURL(modalCommentFile)}
+                        className="h-8 w-8 object-cover rounded border border-gray-200 dark:border-neutral-700"
+                      />
+                      <button
+                        onClick={() => setModalCommentFile(null)}
+                        className="absolute -top-1 -right-1 bg-gray-800 text-white rounded-full p-0.5"
+                      >
+                        <X size={10} />
+                      </button>
+                    </div>
+                  )}
+                  <label className="cursor-pointer text-gray-500 hover:text-blue-500 p-1">
+                    <ImageIcon size={18} />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) =>
+                        setModalCommentFile(e.target.files?.[0] || null)
+                      }
+                    />
+                  </label>
                   <button
                     onClick={handleModalComment}
-                    disabled={!modalCommentText.trim()}
+                    disabled={!modalCommentText.trim() && !modalCommentFile}
                     className="text-blue-500 font-semibold text-sm disabled:opacity-50 px-2"
                   >
                     Đăng
