@@ -88,6 +88,8 @@ export default function MessagesPage() {
   const [newGroupAvatar, setNewGroupAvatar] = useState<File | null>(null);
   const [newNickname, setNewNickname] = useState("");
 
+  const [onlineUsers, setOnlineUsers] = useState<Set<string>>(new Set());
+
   // ================= BLOCKED USERS STATES =================
   const [isBlockedListOpen, setIsBlockedListOpen] = useState(false);
   const [blockedUsersList, setBlockedUsersList] = useState<any[]>([]);
@@ -121,6 +123,29 @@ export default function MessagesPage() {
       }
     };
     loadUser();
+  }, []);
+
+  // ================= ONLINE STATUS (PRESENCE) =================
+  useEffect(() => {
+    if ((window as any).currentOnlineUsers) {
+      setOnlineUsers((window as any).currentOnlineUsers);
+    }
+
+    const handlePresenceSync = (e: any) => {
+      setOnlineUsers(e.detail);
+    };
+
+    window.addEventListener(
+      "presence_sync",
+      handlePresenceSync as EventListener,
+    );
+
+    return () => {
+      window.removeEventListener(
+        "presence_sync",
+        handlePresenceSync as EventListener,
+      );
+    };
   }, []);
 
   // ================= SMOOTH SCROLL =================
@@ -883,13 +908,18 @@ export default function MessagesPage() {
                     onClick={() => handleOpenChat(u)}
                     className="flex items-center gap-3 p-3 rounded-xl cursor-pointer transition-colors hover:bg-gray-100 dark:hover:bg-[#333333]"
                   >
-                    <img
-                      src={
-                        u.avatar_url ||
-                        `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
-                      }
-                      className="w-12 h-12 rounded-full border border-gray-200 dark:border-neutral-700 shadow-sm object-cover"
-                    />
+                    <div className="relative flex-shrink-0">
+                      <img
+                        src={
+                          u.avatar_url ||
+                          `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
+                        }
+                        className="w-12 h-12 rounded-full border border-gray-200 dark:border-neutral-700 shadow-sm object-cover"
+                      />
+                      {onlineUsers.has(u.id) && (
+                        <span className="absolute bottom-0 right-0 w-3.5 h-3.5 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full"></span>
+                      )}
+                    </div>
                     <span className="font-medium text-[15px]">{u.name}</span>
                   </div>
                 ))}
@@ -913,13 +943,18 @@ export default function MessagesPage() {
                           : ""
                       }`}
                     >
-                      <img
-                        src={
-                          c.otherUser?.avatar_url ||
-                          `https://api.dicebear.com/7.x/identicon/svg?seed=${c.otherUser?.id}`
-                        }
-                        className="w-14 h-14 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shadow-sm flex-shrink-0"
-                      />
+                      <div className="relative flex-shrink-0">
+                        <img
+                          src={
+                            c.otherUser?.avatar_url ||
+                            `https://api.dicebear.com/7.x/identicon/svg?seed=${c.otherUser?.id}`
+                          }
+                          className="w-14 h-14 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shadow-sm flex-shrink-0"
+                        />
+                        {!c.is_group && onlineUsers.has(c.otherUser?.id) && (
+                          <span className="absolute bottom-0 right-0 w-4 h-4 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full"></span>
+                        )}
+                      </div>
                       <div className="flex-1 min-w-0">
                         <p
                           className={`text-[15px] truncate ${c.has_unread ? "font-bold text-gray-900 dark:text-gray-100" : "font-semibold"}`}
@@ -974,20 +1009,35 @@ export default function MessagesPage() {
                   >
                     <ChevronLeft size={28} />
                   </button>
-                  <img
-                    src={
-                      targetUser?.avatar_url ||
-                      `https://api.dicebear.com/7.x/identicon/svg?seed=${targetUser.id}`
-                    }
-                    className="w-11 h-11 rounded-full border border-gray-200 dark:border-neutral-700 shadow-sm object-cover flex-shrink-0"
-                  />
+                  <div className="relative flex-shrink-0">
+                    <img
+                      src={
+                        targetUser?.avatar_url ||
+                        `https://api.dicebear.com/7.x/identicon/svg?seed=${targetUser.id}`
+                      }
+                      className="w-11 h-11 rounded-full border border-gray-200 dark:border-neutral-700 shadow-sm object-cover flex-shrink-0"
+                    />
+                    {!targetUser?.is_group &&
+                      targetUser &&
+                      onlineUsers.has(targetUser.id) && (
+                        <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full"></span>
+                      )}
+                  </div>
                   <div className="flex flex-col min-w-0">
                     <span className="font-bold text-[16px] truncate">
                       {targetUser?.name}
                     </span>
-                    {targetUser?.is_group && (
-                      <span className="text-[11px] text-muted-foreground">
+                    {targetUser?.is_group ? (
+                      <span className="text-[11px] text-muted-foreground mt-0.5">
                         Nhóm chat
+                      </span>
+                    ) : targetUser && onlineUsers.has(targetUser.id) ? (
+                      <span className="text-[11px] text-green-500 font-medium mt-0.5">
+                        Đang hoạt động
+                      </span>
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground mt-0.5">
+                        Ngoại tuyến
                       </span>
                     )}
                   </div>
