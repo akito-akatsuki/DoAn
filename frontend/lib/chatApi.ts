@@ -259,20 +259,20 @@ export const setNickname = async (
   targetId: string,
   nickname: string,
 ) => {
-  // Xóa tên cũ (nếu có) trước để tránh lỗi unique constraint nhiều cột
-  await supabase.from("nicknames").delete().match({
-    conversation_id: conversationId,
-    user_id: userId,
-    target_id: targetId,
-  });
+  // Dùng upsert: Cập nhật nếu đã có, thêm mới nếu chưa có (Tránh lỗi Duplicate Unique)
+  const { data, error } = await supabase
+    .from("nicknames")
+    .upsert(
+      {
+        conversation_id: conversationId,
+        user_id: userId,
+        target_id: targetId,
+        nickname: nickname.trim(),
+      },
+      { onConflict: "conversation_id,user_id,target_id" },
+    )
+    .select();
 
-  // Thêm tên mới
-  const { data, error } = await supabase.from("nicknames").insert({
-    conversation_id: conversationId,
-    user_id: userId,
-    target_id: targetId,
-    nickname,
-  });
   if (error) throw new Error(error.message || "Lỗi đổi tên gợi nhớ");
   return data;
 };
