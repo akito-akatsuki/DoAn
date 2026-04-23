@@ -1,5 +1,7 @@
 "use client";
 
+import { createPortal } from "react-dom";
+import dynamic from "next/dynamic";
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Navbar from "@/components/navbar";
@@ -42,6 +44,10 @@ import {
   blockUser,
 } from "@/lib/chatApi";
 
+const VideoCall = dynamic(() => import("@/components/VideoCall"), {
+  ssr: false,
+});
+
 export default function MessagesPage() {
   const [user, setUser] = useState<any>(null);
   const [targetUser, setTargetUser] = useState<any>(null);
@@ -83,6 +89,16 @@ export default function MessagesPage() {
   // ================= BLOCKED USERS STATES =================
   const [isBlockedListOpen, setIsBlockedListOpen] = useState(false);
   const [blockedUsersList, setBlockedUsersList] = useState<any[]>([]);
+
+  // ================= VIDEO CALL STATES =================
+  const [callState, setCallState] = useState<"idle" | "calling" | "ringing">(
+    "idle",
+  );
+  const [callType, setCallType] = useState<"video" | "voice">("video");
+  const [callRoomId, setCallRoomId] = useState("");
+  const [callUserInfo, setCallUserInfo] = useState<any>(null);
+  const [isInCall, setIsInCall] = useState(false);
+  const globalCallChannelRef = useRef<any>(null);
 
   // ================= LOAD USER =================
   useEffect(() => {
@@ -299,6 +315,49 @@ export default function MessagesPage() {
     }
   }, [messages, conversationId, user?.id]);
 
+  // ================= VIDEO CALL REALTIME (SIGNALING) =================
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel("global_call")
+      .on("broadcast", { event: "call_signal" }, (payload) => {
+        const {
+          type,
+          roomId,
+          caller,
+          targetUserId,
+          callType: incomingCallType,
+        } = payload.payload;
+        if (targetUserId === user.id) {
+          if (type === "OFFER") {
+            setCallRoomId(roomId);
+            setCallUserInfo(caller);
+            setCallType(incomingCallType || "video");
+            setCallState("ringing");
+          } else if (type === "ACCEPT") {
+            setIsInCall(true);
+            setCallState("idle");
+          } else if (type === "REJECT") {
+            setCallState("idle");
+            toast.error(`${caller.name} đã từ chối cuộc gọi.`);
+            setCallUserInfo(null);
+          } else if (type === "END") {
+            setIsInCall(false);
+            setCallState("idle");
+            setCallUserInfo(null);
+          }
+        }
+      })
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") globalCallChannelRef.current = channel;
+      });
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
   // ================= REALTIME CONVERSATIONS (Bên menu trái) =================
   useEffect(() => {
     if (!user?.id) return;
@@ -477,6 +536,59 @@ export default function MessagesPage() {
         }
       },
     );
+  };
+
+  // ================= CALL CONTROL HANDLERS =================
+  const startCall = (type: "video" | "voice") => {
+    if (!targetUser || targetUser.is_group) return;
+    const roomId = `room_${Date.now()}_${user?.id}`;
+    setCallRoomId(roomId);
+    setCallUserInfo(targetUser);
+    setCallType(type);
+    setCallState("calling");
+
+    globalCallChannelRef.current?.send({
+      type: "broadcast",
+      event: "call_signal",
+      payload: {
+        type: "OFFER",
+        callType: type,
+        roomId,
+        caller: user,
+        targetUserId: targetUser.id,
+      },
+    });
+  };
+
+  const acceptCall = () => {
+    setIsInCall(true);
+    setCallState("idle");
+    globalCallChannelRef.current?.send({
+      type: "broadcast",
+      event: "call_signal",
+      payload: { type: "ACCEPT", targetUserId: callUserInfo?.id, caller: user },
+    });
+  };
+
+  const rejectCall = () => {
+    setCallState("idle");
+    globalCallChannelRef.current?.send({
+      type: "broadcast",
+      event: "call_signal",
+      payload: { type: "REJECT", targetUserId: callUserInfo?.id, caller: user },
+    });
+    setCallUserInfo(null);
+  };
+
+  const handleLeaveCall = () => {
+    setIsInCall(false);
+    setCallState("idle");
+    globalCallChannelRef.current?.send({
+      type: "broadcast",
+      event: "call_signal",
+      payload: { type: "END", targetUserId: callUserInfo?.id },
+    });
+    setCallUserInfo(null);
   };
 
   // ================= GỬI TIN NHẮN =================
@@ -876,17 +988,13 @@ export default function MessagesPage() {
                   {!targetUser?.is_group && (
                     <>
                       <button
-                        onClick={() =>
-                          toast("Tính năng gọi đang được phát triển")
-                        }
+                        onClick={() => startCall("voice")}
                         className="p-2 hover:bg-secondary rounded-full transition-colors text-blue-500"
                       >
                         <Phone size={20} />
                       </button>
                       <button
-                        onClick={() =>
-                          toast("Tính năng gọi đang được phát triển")
-                        }
+                        onClick={() => startCall("video")}
                         className="p-2 hover:bg-secondary rounded-full transition-colors text-blue-500"
                       >
                         <Video size={20} />
@@ -1599,6 +1707,87 @@ export default function MessagesPage() {
           )}
         </div>
       </main>
+      {/* ================= CALL OVERLAYS (RENDER FULL SCREEN BẰNG PORTAL) ================= */}
+      {typeof document !== "undefined" &&
+        createPortal(
+          <>
+            {callState === "ringing" && (
+              <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+                <div className="bg-white dark:bg-[#262626] rounded-3xl p-8 flex flex-col items-center gap-6 text-center max-w-sm w-full shadow-2xl">
+                  <img
+                    src={
+                      callUserInfo?.avatar_url ||
+                      `https://api.dicebear.com/7.x/identicon/svg?seed=${callUserInfo?.id}`
+                    }
+                    className="w-28 h-28 rounded-full border-4 border-blue-500 animate-bounce object-cover shadow-lg"
+                  />
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                      {callUserInfo?.name}
+                    </h3>
+                    <p className="text-muted-foreground mt-2 text-lg">
+                      Đang gọi {callType === "video" ? "video" : "thoại"} cho
+                      bạn...
+                    </p>
+                  </div>
+                  <div className="flex gap-4 w-full mt-4">
+                    <button
+                      onClick={rejectCall}
+                      className="flex-1 bg-red-500 hover:bg-red-600 text-white py-3.5 rounded-xl font-bold transition-all active:scale-95"
+                    >
+                      Từ chối
+                    </button>
+                    <button
+                      onClick={acceptCall}
+                      className="flex-1 bg-green-500 hover:bg-green-600 text-white py-3.5 rounded-xl font-bold transition-all active:scale-95 shadow-[0_0_15px_rgba(34,197,94,0.5)]"
+                    >
+                      Nghe máy
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {callState === "calling" && (
+              <div className="fixed inset-0 z-[999999] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-300">
+                <div className="bg-white dark:bg-[#262626] rounded-3xl p-8 flex flex-col items-center gap-6 text-center max-w-sm w-full shadow-2xl">
+                  <img
+                    src={
+                      callUserInfo?.avatar_url ||
+                      `https://api.dicebear.com/7.x/identicon/svg?seed=${callUserInfo?.id}`
+                    }
+                    className="w-28 h-28 rounded-full border-4 border-gray-200 dark:border-neutral-700 animate-pulse object-cover shadow-lg"
+                  />
+                  <div>
+                    <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+                      {callUserInfo?.name}
+                    </h3>
+                    <p className="text-muted-foreground mt-2 text-lg">
+                      Đang đổ chuông...
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleLeaveCall}
+                    className="w-full bg-red-500 hover:bg-red-600 text-white py-3.5 rounded-xl font-bold mt-4 transition-all active:scale-95"
+                  >
+                    Hủy cuộc gọi
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {isInCall && (
+              <VideoCall
+                roomID={callRoomId}
+                userID={user?.id}
+                userName={user?.name || "Người dùng"}
+                onLeave={handleLeaveCall}
+                callType={callType}
+              />
+            )}
+          </>,
+          document.body,
+        )}
     </div>
   );
 }

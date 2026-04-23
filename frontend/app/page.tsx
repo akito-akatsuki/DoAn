@@ -2035,7 +2035,7 @@ export default function HomePage() {
         </div>
       )}
       {/* FIXED CHAT UI */}
-      <div className="fixed bottom-6 right-6 z-[999] flex flex-col items-end gap-4">
+      <div className="hidden md:flex fixed bottom-6 right-6 z-[999] flex-col items-end gap-4">
         {/* Khung ChatBox hiện lên khi nhấn nút */}
         {isChatOpen && user && (
           <div className="w-[380px] h-[550px] bg-white dark:bg-[#262626] text-gray-900 dark:text-gray-100 rounded-2xl shadow-2xl dark:shadow-black/50 border border-gray-200 dark:border-neutral-800 overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 transition-colors duration-500">
