@@ -819,11 +819,12 @@ export default function MessagesPage() {
 
   return (
     <div className="h-screen flex flex-col text-gray-900 dark:text-gray-100 transition-colors duration-500 overflow-hidden bg-gray-50 dark:bg-neutral-900">
-      <main className="max-w-[935px] w-full mx-auto flex-1 pt-[76px] px-4 pb-24 md:pb-6 flex gap-4 overflow-hidden">
-        {/* CỘT TRÁI: DANH SÁCH CHAT */}
-        <div
-          className={`w-full md:w-[350px] border border-gray-200 dark:border-neutral-800 shadow-sm dark:shadow-black/30 rounded-xl flex flex-col h-full transition-all duration-500 bg-white dark:bg-[#262626] ${targetUser ? "hidden md:flex" : "flex"}`}
-        >
+      <main className="max-w-[935px] w-full mx-auto flex-1 pt-[76px] px-4 pb-24 md:pb-6 flex flex-col overflow-hidden">
+        <div className="flex-1 w-full h-full relative flex gap-4">
+          {/* CỘT TRÁI: DANH SÁCH CHAT */}
+          <div
+            className={`w-full md:w-[350px] border border-gray-200 dark:border-neutral-800 shadow-sm dark:shadow-black/30 rounded-xl flex flex-col h-full bg-white dark:bg-[#262626] z-10 ${targetUser ? "hidden md:flex" : "flex"}`}
+          >
           <div className="p-4 border-b border-gray-200 dark:border-neutral-800 font-bold text-lg flex items-center justify-between">
             <span>{user?.name || user?.user_metadata?.name || "Tin nhắn"}</span>
             <button
@@ -979,10 +980,10 @@ export default function MessagesPage() {
           </div>
         </div>
 
-        {/* CỘT PHẢI: KHUNG CHAT CHI TIẾT */}
-        <div
-          className={`flex-1 border border-gray-200 dark:border-neutral-800 shadow-sm dark:shadow-black/30 rounded-xl flex flex-col h-full relative transition-all duration-500 bg-white dark:bg-[#262626] ${!targetUser ? "hidden md:flex" : "flex"}`}
-        >
+          {/* CỘT PHẢI: KHUNG CHAT CHI TIẾT */}
+          <div
+            className={`w-full md:w-auto md:flex-1 border border-gray-200 dark:border-neutral-800 shadow-sm dark:shadow-black/30 rounded-xl flex flex-col h-full bg-white dark:bg-[#262626] z-20 ${!targetUser ? "hidden md:flex" : "flex"}`}
+          >
           {!targetUser ? (
             <div className="flex-1 flex items-center justify-center text-muted-foreground flex-col gap-3">
               <div className="w-24 h-24 border-2 border-muted-foreground rounded-full flex items-center justify-center">
