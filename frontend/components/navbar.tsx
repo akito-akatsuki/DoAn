@@ -26,6 +26,7 @@ export default function Navbar({ user: propUser }: any) {
   const [open, setOpen] = useState(false);
   const [isDark, setIsDark] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [unreadMsgCount, setUnreadMsgCount] = useState(0);
 
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
@@ -243,10 +244,54 @@ export default function Navbar({ user: propUser }: any) {
     };
   }, [user?.id]);
 
+  // ================= LẮNG NGHE TIN NHẮN CHƯA ĐỌC =================
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchUnreadMessages = async () => {
+      const { data: parts } = await supabase
+        .from("conversation_participants")
+        .select("conversation_id")
+        .eq("user_id", user.id);
+
+      if (!parts || parts.length === 0) return;
+      const convIds = parts.map((p) => p.conversation_id);
+
+      const { count } = await supabase
+        .from("messages")
+        .select("*", { count: "exact", head: true })
+        .in("conversation_id", convIds)
+        .neq("sender_id", user.id)
+        .eq("is_read", false);
+
+      setUnreadMsgCount(count || 0);
+    };
+
+    fetchUnreadMessages();
+
+    const channel = supabase
+      .channel("nav_messages")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "messages" },
+        () => {
+          fetchUnreadMessages();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
   // ================= XÓA SỐ THÔNG BÁO KHI VÀO TRANG THÔNG BÁO =================
   useEffect(() => {
     if (pathname === "/notifications") {
       setUnreadCount(0);
+    }
+    if (pathname === "/messages") {
+      setUnreadMsgCount(0);
     }
   }, [pathname]);
 
@@ -511,6 +556,13 @@ export default function Navbar({ user: propUser }: any) {
                           {unreadCount > 99 ? "99+" : unreadCount}
                         </span>
                       )}
+                    {tab.path === "/messages" &&
+                      unreadMsgCount > 0 &&
+                      pathname !== "/messages" && (
+                        <span className="absolute top-1 right-1 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full pointer-events-none shadow-sm">
+                          {unreadMsgCount > 99 ? "99+" : unreadMsgCount}
+                        </span>
+                      )}
                   </button>
                 );
               })}
@@ -692,6 +744,13 @@ export default function Navbar({ user: propUser }: any) {
                     pathname !== "/notifications" && (
                       <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-white dark:border-[#262626] pointer-events-none shadow-sm">
                         {unreadCount > 99 ? "99+" : unreadCount}
+                      </span>
+                    )}
+                  {tab.path === "/messages" &&
+                    unreadMsgCount > 0 &&
+                    pathname !== "/messages" && (
+                      <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-white dark:border-[#262626] pointer-events-none shadow-sm">
+                        {unreadMsgCount > 99 ? "99+" : unreadMsgCount}
                       </span>
                     )}
                 </div>

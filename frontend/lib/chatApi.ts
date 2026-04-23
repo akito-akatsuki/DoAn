@@ -59,6 +59,13 @@ export const getMessages = async (conversationId: string) => {
       content,
       created_at,
       sender_id,
+      is_read,
+      image_url,
+      file_url,
+      file_name,
+      file_type,
+      file_size,
+      reply_to_id,
       users:sender_id (
         id,
         name,
@@ -70,7 +77,7 @@ export const getMessages = async (conversationId: string) => {
     .order("created_at", { ascending: true });
 
   if (error) {
-    console.error("getMessages error:", error);
+    console.error("getMessages error:", error.message || error);
     return [];
   }
 
@@ -84,27 +91,50 @@ export const sendMessage = async (
   conversationId: string,
   senderId: string,
   content: string,
-  imageUrl?: string | null,
+  imageUrl: string | null = null,
+  fileUrl: string | null = null,
+  fileName: string | null = null,
+  fileType: string | null = null,
+  fileSize: number | null = null,
+  replyToId: string | null = null,
 ) => {
-  if (!conversationId || !senderId || (!content && !imageUrl)) {
+  if (!conversationId || !senderId || (!content && !imageUrl && !fileUrl)) {
     throw new Error("Thiếu thông tin");
   }
 
   const { data, error } = await supabase
     .from("messages")
-    .insert({
-      conversation_id: conversationId,
-      sender_id: senderId,
-      content,
-      image_url: imageUrl || null,
-    })
-    .select("*")
+    .insert([
+      {
+        conversation_id: conversationId,
+        sender_id: senderId,
+        content: content,
+        image_url: imageUrl,
+        file_url: fileUrl,
+        file_name: fileName,
+        file_type: fileType,
+        file_size: fileSize,
+        reply_to_id: replyToId,
+      },
+    ])
+    .select("*, users!messages_sender_id_fkey(id, name, avatar_url)")
     .single();
 
   if (error) {
     console.error("sendMessage SUPABASE ERROR:", error);
     throw error;
   }
+
+  // Update last_message
+  await supabase
+    .from("conversations")
+    .update({
+      last_message:
+        content ||
+        (imageUrl ? "Đã gửi một ảnh" : fileUrl ? "Đã gửi một tệp" : ""),
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", conversationId);
 
   return data;
 };

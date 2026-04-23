@@ -64,6 +64,7 @@ export default function HomePage() {
   // State cho hiệu ứng tim bay khi double click
   const [showHeartId, setShowHeartId] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [unreadMsgCount, setUnreadMsgCount] = useState(0);
 
   // ================= MODAL POST =================
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
@@ -195,6 +196,47 @@ export default function HomePage() {
       subscription.unsubscribe();
     };
   }, []);
+
+  // ================= LẮNG NGHE TIN NHẮN CHƯA ĐỌC =================
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const fetchUnreadMessages = async () => {
+      const { data: parts } = await supabase
+        .from("conversation_participants")
+        .select("conversation_id")
+        .eq("user_id", user.id);
+
+      if (!parts || parts.length === 0) return;
+      const convIds = parts.map((p) => p.conversation_id);
+
+      const { count } = await supabase
+        .from("messages")
+        .select("*", { count: "exact", head: true })
+        .in("conversation_id", convIds)
+        .neq("sender_id", user.id)
+        .eq("is_read", false);
+
+      setUnreadMsgCount(count || 0);
+    };
+
+    fetchUnreadMessages();
+
+    const channel = supabase
+      .channel("home_messages")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "messages" },
+        () => {
+          fetchUnreadMessages();
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
 
   // ================= TỰ ĐỘNG TẢI LẠI KHI ẤN NÚT QUAY LẠI (MOUSE 4) =================
   useEffect(() => {
@@ -2007,13 +2049,18 @@ export default function HomePage() {
             if (!checkLogin()) return;
             setIsChatOpen(!isChatOpen);
           }}
-          className={`shadow-2xl transition-all active:scale-90 p-4 rounded-full flex items-center justify-center ${
+          className={`relative shadow-2xl transition-all active:scale-90 p-4 rounded-full flex items-center justify-center ${
             isChatOpen
               ? "bg-white dark:bg-[#262626] text-gray-900 dark:text-gray-100 border border-gray-200 dark:border-neutral-800"
               : "bg-[#0095F6] text-white hover:bg-blue-600"
           }`}
         >
           {isChatOpen ? <X size={28} /> : <MessageSquare size={28} />}
+          {!isChatOpen && unreadMsgCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs font-bold w-5 h-5 flex items-center justify-center rounded-full shadow-sm">
+              {unreadMsgCount > 99 ? "99+" : unreadMsgCount}
+            </span>
+          )}
         </button>
       </div>
       {/* ================= MODAL REPORT POST ================= */}
