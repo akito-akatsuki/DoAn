@@ -98,7 +98,6 @@ export default function MessagesPage() {
   const [callRoomId, setCallRoomId] = useState("");
   const [callUserInfo, setCallUserInfo] = useState<any>(null);
   const [isInCall, setIsInCall] = useState(false);
-  const globalCallChannelRef = useRef<any>(null);
 
   // ================= LOAD USER =================
   useEffect(() => {
@@ -320,43 +319,53 @@ export default function MessagesPage() {
     if (!user?.id) return;
 
     const channel = supabase
-      .channel("global_call")
+      .channel(`user_call_${user.id}`)
       .on("broadcast", { event: "call_signal" }, (payload) => {
         const {
           type,
           roomId,
           caller,
-          targetUserId,
           callType: incomingCallType,
         } = payload.payload;
-        if (targetUserId === user.id) {
-          if (type === "OFFER") {
-            setCallRoomId(roomId);
-            setCallUserInfo(caller);
-            setCallType(incomingCallType || "video");
-            setCallState("ringing");
-          } else if (type === "ACCEPT") {
-            setIsInCall(true);
-            setCallState("idle");
-          } else if (type === "REJECT") {
-            setCallState("idle");
-            toast.error(`${caller.name} đã từ chối cuộc gọi.`);
-            setCallUserInfo(null);
-          } else if (type === "END") {
-            setIsInCall(false);
-            setCallState("idle");
-            setCallUserInfo(null);
-          }
+        if (type === "OFFER") {
+          setCallRoomId(roomId);
+          setCallUserInfo(caller);
+          setCallType(incomingCallType || "video");
+          setCallState("ringing");
+        } else if (type === "ACCEPT") {
+          setIsInCall(true);
+          setCallState("idle");
+        } else if (type === "REJECT") {
+          setCallState("idle");
+          toast.error(`${caller?.name || "Người dùng"} đã từ chối cuộc gọi.`);
+          setCallUserInfo(null);
+        } else if (type === "END") {
+          setIsInCall(false);
+          setCallState("idle");
+          setCallUserInfo(null);
         }
       })
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") globalCallChannelRef.current = channel;
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [user?.id]);
+
+  const sendCallSignalToUser = (targetId: string, payload: any) => {
+    if (!targetId) return;
+    const channel = supabase.channel(`user_call_${targetId}`);
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        channel.send({
+          type: "broadcast",
+          event: "call_signal",
+          payload,
+        });
+        setTimeout(() => supabase.removeChannel(channel), 1000);
+      }
+    });
+  };
 
   // ================= REALTIME CONVERSATIONS (Bên menu trái) =================
   useEffect(() => {
@@ -547,35 +556,28 @@ export default function MessagesPage() {
     setCallType(type);
     setCallState("calling");
 
-    globalCallChannelRef.current?.send({
-      type: "broadcast",
-      event: "call_signal",
-      payload: {
-        type: "OFFER",
-        callType: type,
-        roomId,
-        caller: user,
-        targetUserId: targetUser.id,
-      },
+    sendCallSignalToUser(targetUser.id, {
+      type: "OFFER",
+      callType: type,
+      roomId,
+      caller: user,
     });
   };
 
   const acceptCall = () => {
     setIsInCall(true);
     setCallState("idle");
-    globalCallChannelRef.current?.send({
-      type: "broadcast",
-      event: "call_signal",
-      payload: { type: "ACCEPT", targetUserId: callUserInfo?.id, caller: user },
+    sendCallSignalToUser(callUserInfo?.id, {
+      type: "ACCEPT",
+      caller: user,
     });
   };
 
   const rejectCall = () => {
     setCallState("idle");
-    globalCallChannelRef.current?.send({
-      type: "broadcast",
-      event: "call_signal",
-      payload: { type: "REJECT", targetUserId: callUserInfo?.id, caller: user },
+    sendCallSignalToUser(callUserInfo?.id, {
+      type: "REJECT",
+      caller: user,
     });
     setCallUserInfo(null);
   };
@@ -583,11 +585,7 @@ export default function MessagesPage() {
   const handleLeaveCall = () => {
     setIsInCall(false);
     setCallState("idle");
-    globalCallChannelRef.current?.send({
-      type: "broadcast",
-      event: "call_signal",
-      payload: { type: "END", targetUserId: callUserInfo?.id },
-    });
+    sendCallSignalToUser(callUserInfo?.id, { type: "END" });
     setCallUserInfo(null);
   };
 

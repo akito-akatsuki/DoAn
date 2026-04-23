@@ -111,7 +111,6 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
   const [callRoomId, setCallRoomId] = useState("");
   const [callUserInfo, setCallUserInfo] = useState<any>(null); // Lưu thông tin người gọi/người nhận
   const [isInCall, setIsInCall] = useState(false);
-  const globalCallChannelRef = useRef<any>(null);
 
   // ================= LOAD CURRENT USER =================
   useEffect(() => {
@@ -242,43 +241,53 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
     if (!userId) return;
 
     const channel = supabase
-      .channel("global_call")
+      .channel(`user_call_${userId}`)
       .on("broadcast", { event: "call_signal" }, (payload) => {
         const {
           type,
           roomId,
           caller,
-          targetUserId,
           callType: incomingCallType,
         } = payload.payload;
-        if (targetUserId === userId) {
-          if (type === "OFFER") {
-            setCallRoomId(roomId);
-            setCallUserInfo(caller);
-            setCallType(incomingCallType || "video");
-            setCallState("ringing");
-          } else if (type === "ACCEPT") {
-            setIsInCall(true);
-            setCallState("idle");
-          } else if (type === "REJECT") {
-            setCallState("idle");
-            toast.error(`${caller.name} đã từ chối cuộc gọi.`);
-            setCallUserInfo(null);
-          } else if (type === "END") {
-            setIsInCall(false);
-            setCallState("idle");
-            setCallUserInfo(null);
-          }
+        if (type === "OFFER") {
+          setCallRoomId(roomId);
+          setCallUserInfo(caller);
+          setCallType(incomingCallType || "video");
+          setCallState("ringing");
+        } else if (type === "ACCEPT") {
+          setIsInCall(true);
+          setCallState("idle");
+        } else if (type === "REJECT") {
+          setCallState("idle");
+          toast.error(`${caller?.name || "Người dùng"} đã từ chối cuộc gọi.`);
+          setCallUserInfo(null);
+        } else if (type === "END") {
+          setIsInCall(false);
+          setCallState("idle");
+          setCallUserInfo(null);
         }
       })
-      .subscribe((status) => {
-        if (status === "SUBSCRIBED") globalCallChannelRef.current = channel;
-      });
+      .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
   }, [userId]);
+
+  const sendCallSignalToUser = (targetId: string, payload: any) => {
+    if (!targetId) return;
+    const channel = supabase.channel(`user_call_${targetId}`);
+    channel.subscribe((status) => {
+      if (status === "SUBSCRIBED") {
+        channel.send({
+          type: "broadcast",
+          event: "call_signal",
+          payload,
+        });
+        setTimeout(() => supabase.removeChannel(channel), 1000);
+      }
+    });
+  };
 
   // ================= READ RECEIPTS (ĐÃ XEM) =================
   useEffect(() => {
@@ -729,43 +738,28 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
     setCallType(type);
     setCallState("calling");
 
-    globalCallChannelRef.current?.send({
-      type: "broadcast",
-      event: "call_signal",
-      payload: {
-        type: "OFFER",
-        callType: type,
-        roomId,
-        caller: currentUser,
-        targetUserId: targetUser.id,
-      },
+    sendCallSignalToUser(targetUser.id, {
+      type: "OFFER",
+      callType: type,
+      roomId,
+      caller: currentUser,
     });
   };
 
   const acceptCall = () => {
     setIsInCall(true);
     setCallState("idle");
-    globalCallChannelRef.current?.send({
-      type: "broadcast",
-      event: "call_signal",
-      payload: {
-        type: "ACCEPT",
-        targetUserId: callUserInfo?.id,
-        caller: currentUser,
-      },
+    sendCallSignalToUser(callUserInfo?.id, {
+      type: "ACCEPT",
+      caller: currentUser,
     });
   };
 
   const rejectCall = () => {
     setCallState("idle");
-    globalCallChannelRef.current?.send({
-      type: "broadcast",
-      event: "call_signal",
-      payload: {
-        type: "REJECT",
-        targetUserId: callUserInfo?.id,
-        caller: currentUser,
-      },
+    sendCallSignalToUser(callUserInfo?.id, {
+      type: "REJECT",
+      caller: currentUser,
     });
     setCallUserInfo(null);
   };
@@ -773,11 +767,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
   const handleLeaveCall = () => {
     setIsInCall(false);
     setCallState("idle");
-    globalCallChannelRef.current?.send({
-      type: "broadcast",
-      event: "call_signal",
-      payload: { type: "END", targetUserId: callUserInfo?.id },
-    });
+    sendCallSignalToUser(callUserInfo?.id, { type: "END" });
     setCallUserInfo(null);
   };
 
