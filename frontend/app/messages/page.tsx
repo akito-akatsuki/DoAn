@@ -820,10 +820,14 @@ export default function MessagesPage() {
   return (
     <div className="h-screen flex flex-col text-gray-900 dark:text-gray-100 transition-colors duration-500 overflow-hidden bg-gray-50 dark:bg-neutral-900">
       <main className="max-w-[935px] w-full mx-auto flex-1 pt-[76px] px-4 pb-24 md:pb-6 flex flex-col overflow-hidden">
-        <div className="flex-1 w-full h-full relative flex gap-4">
+        <div className="flex-1 w-full h-full relative flex md:gap-4 bg-white dark:bg-[#262626] md:bg-transparent md:dark:bg-transparent rounded-xl md:rounded-none border border-gray-200 dark:border-neutral-800 md:border-0 shadow-sm md:shadow-none overflow-hidden md:overflow-visible">
           {/* CỘT TRÁI: DANH SÁCH CHAT */}
           <div
-            className={`w-full md:w-[350px] border border-gray-200 dark:border-neutral-800 shadow-sm dark:shadow-black/30 rounded-xl flex flex-col h-full bg-white dark:bg-[#262626] z-10 ${targetUser ? "hidden md:flex" : "flex"}`}
+            className={`absolute md:relative inset-0 md:inset-auto w-full md:w-[350px] border-0 md:border border-gray-200 dark:border-neutral-800 shadow-none md:shadow-sm dark:shadow-black/30 rounded-none md:rounded-xl flex flex-col h-full transition-all duration-300 bg-white dark:bg-[#262626] z-10 ${
+              targetUser
+                ? "-translate-x-full opacity-0 invisible pointer-events-none md:translate-x-0 md:opacity-100 md:visible md:pointer-events-auto"
+                : "translate-x-0 opacity-100 visible pointer-events-auto"
+            }`}
           >
             <div className="p-4 border-b border-gray-200 dark:border-neutral-800 font-bold text-lg flex items-center justify-between">
               <span>
@@ -984,7 +988,11 @@ export default function MessagesPage() {
 
           {/* CỘT PHẢI: KHUNG CHAT CHI TIẾT */}
           <div
-            className={`w-full md:w-auto md:flex-1 border border-gray-200 dark:border-neutral-800 shadow-sm dark:shadow-black/30 rounded-xl flex flex-col h-full bg-white dark:bg-[#262626] z-20 ${!targetUser ? "hidden md:flex" : "flex"}`}
+            className={`absolute md:relative inset-0 md:inset-auto w-full md:w-auto md:flex-1 border-0 md:border border-gray-200 dark:border-neutral-800 shadow-none md:shadow-sm dark:shadow-black/30 rounded-none md:rounded-xl flex flex-col h-full transition-all duration-300 bg-white dark:bg-[#262626] z-20 ${
+              !targetUser
+                ? "translate-x-full opacity-0 invisible pointer-events-none md:translate-x-0 md:opacity-100 md:visible md:pointer-events-auto"
+                : "translate-x-0 opacity-100 visible pointer-events-auto"
+            }`}
           >
             {!targetUser ? (
               <div className="flex-1 flex items-center justify-center text-muted-foreground flex-col gap-3">
