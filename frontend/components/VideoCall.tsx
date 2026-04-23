@@ -33,61 +33,68 @@ export default function VideoCall({
   useEffect(() => {
     if (!containerRef.current) return;
 
-    let zp: any = null;
+    let isMounted = true;
+    const appID = Number(process.env.NEXT_PUBLIC_ZEGO_APP_ID);
+    const serverSecret = process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET as string;
 
-    // Timeout prevents Zego instance from crashing during React 18 Strict Mode double-invocation
-    const initTimer = setTimeout(() => {
-      const appID = Number(process.env.NEXT_PUBLIC_ZEGO_APP_ID);
-      const serverSecret = process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET as string;
+    if (!appID || !serverSecret) {
+      setErrorMsg(
+        "Thiếu thông tin NEXT_PUBLIC_ZEGO_APP_ID hoặc NEXT_PUBLIC_ZEGO_SERVER_SECRET trong file .env.local",
+      );
+      return;
+    }
 
-      if (!appID || !serverSecret) {
-        setErrorMsg(
-          "Thiếu thông tin NEXT_PUBLIC_ZEGO_APP_ID hoặc NEXT_PUBLIC_ZEGO_SERVER_SECRET trong file .env.local",
-        );
-        return;
-      }
-
+    const initZego = async () => {
       try {
-        // Sinh ra Token bảo mật để vào phòng (Lưu ý: Dùng hàm ForTest cho frontend khi làm đồ án)
+        // TẠO USERID ĐỘC NHẤT ĐỂ TRÁNH LỖI TRÙNG ID KHI TEST LOCAL CÙNG TRÌNH DUYỆT
+        const uniqueUserID = userID
+          ? `${userID}_${Math.floor(Math.random() * 10000)}`
+          : `user_${Date.now()}`;
+
         const kitToken = ZegoUIKitPrebuilt.generateKitTokenForTest(
           appID,
           serverSecret,
           roomID,
-          userID || `user_${Date.now()}`,
+          uniqueUserID,
           userName || "Người dùng",
         );
 
-        zp = ZegoUIKitPrebuilt.create(kitToken);
+        const zp = ZegoUIKitPrebuilt.create(kitToken);
         zpRef.current = zp;
 
-        zp.joinRoom({
+        // await joinRoom để bắt lỗi nếu Zego từ chối kết nối
+        await zp.joinRoom({
           container: containerRef.current,
           scenario: {
-            mode: ZegoUIKitPrebuilt.OneONoneCall, // Chế độ gọi 1-1
+            mode: ZegoUIKitPrebuilt.OneONoneCall,
           },
-          turnOnCameraWhenJoining: callType === "video", // Mặc định tắt cam nếu là gọi thoại
-          showMyCameraToggleButton: callType === "video", // Ẩn luôn nút bật/tắt cam nếu là gọi thoại
-          showPreJoinView: false, // Bỏ qua màn hình test camera lúc mới vào phòng
+          turnOnCameraWhenJoining: callType === "video",
+          showMyCameraToggleButton: callType === "video",
+          showPreJoinView: false,
           onLeaveRoom: () => {
-            isDestroyedRef.current = true; // Đánh dấu là Zego đã tự hủy
+            isDestroyedRef.current = true;
             if (onLeaveRef.current) {
-              onLeaveRef.current(); // Gọi hàm này để đóng giao diện call
+              onLeaveRef.current();
             }
           },
         });
       } catch (error: any) {
-        setErrorMsg(
-          error.message ||
-            "Lỗi khởi tạo ZegoCloud. Hãy kiểm tra lại cấu hình kết nối.",
-        );
+        if (isMounted) {
+          setErrorMsg(
+            error.message ||
+              "Lỗi khi tham gia phòng (Có thể do thiết bị chặn Camera/Mic).",
+          );
+        }
       }
-    }, 100);
+    };
+
+    initZego();
 
     return () => {
-      clearTimeout(initTimer);
-      if (zp && !isDestroyedRef.current) {
+      isMounted = false;
+      if (zpRef.current && !isDestroyedRef.current) {
         isDestroyedRef.current = true;
-        zp.destroy();
+        zpRef.current.destroy();
       }
     };
   }, [roomID, userID, userName, callType]); // Removed onLeave from dependencies

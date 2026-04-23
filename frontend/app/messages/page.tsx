@@ -42,6 +42,8 @@ import {
   deleteConversation,
   setNickname,
   blockUser,
+  createCallRecord,
+  updateCallRecord,
 } from "@/lib/chatApi";
 
 const VideoCall = dynamic(() => import("@/components/VideoCall"), {
@@ -98,6 +100,8 @@ export default function MessagesPage() {
   const [callRoomId, setCallRoomId] = useState("");
   const [callUserInfo, setCallUserInfo] = useState<any>(null);
   const [isInCall, setIsInCall] = useState(false);
+  const [currentCallId, setCurrentCallId] = useState<string | null>(null);
+  const [callStartTime, setCallStartTime] = useState<number | null>(null);
 
   // ================= LOAD USER =================
   useEffect(() => {
@@ -326,23 +330,29 @@ export default function MessagesPage() {
           roomId,
           caller,
           callType: incomingCallType,
+          callId,
         } = payload.payload;
         if (type === "OFFER") {
           setCallRoomId(roomId);
           setCallUserInfo(caller);
           setCallType(incomingCallType || "video");
+          setCurrentCallId(callId);
           setCallState("ringing");
         } else if (type === "ACCEPT") {
           setIsInCall(true);
           setCallState("idle");
+          setCallStartTime(Date.now());
         } else if (type === "REJECT") {
           setCallState("idle");
           toast.error(`${caller?.name || "Người dùng"} đã từ chối cuộc gọi.`);
           setCallUserInfo(null);
+          setCurrentCallId(null);
         } else if (type === "END") {
           setIsInCall(false);
           setCallState("idle");
           setCallUserInfo(null);
+          setCurrentCallId(null);
+          setCallStartTime(null);
         }
       })
       .subscribe();

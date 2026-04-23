@@ -319,3 +319,43 @@ export const unblockUser = async (blockerId: string, blockedId: string) => {
   if (error) throw new Error(error.message || "Lỗi bỏ chặn");
   return true;
 };
+
+/* ======================================
+   CALL RECORDS
+====================================== */
+export const createCallRecord = async (
+  callerId: string,
+  receiverId: string,
+  roomId: string,
+) => {
+  const { data, error } = await supabase
+    .from("calls")
+    .insert({
+      caller_id: callerId,
+      receiver_id: receiverId,
+      room_id: roomId,
+      status: "ringing",
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+};
+
+export const updateCallRecord = async (callId: string, status: string) => {
+  const updates: any = { status };
+  if (status === "accepted") updates.started_at = new Date().toISOString();
+  if (status === "ended" || status === "rejected")
+    updates.ended_at = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from("calls")
+    .update(updates)
+    .eq("id", callId)
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  return data;
+};

@@ -43,6 +43,8 @@ import {
   blockUser,
   getBlockedUsers,
   unblockUser,
+  createCallRecord,
+  updateCallRecord,
 } from "@/lib/chatApi";
 import dynamic from "next/dynamic";
 
@@ -111,6 +113,8 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
   const [callRoomId, setCallRoomId] = useState("");
   const [callUserInfo, setCallUserInfo] = useState<any>(null); // Lưu thông tin người gọi/người nhận
   const [isInCall, setIsInCall] = useState(false);
+  const [currentCallId, setCurrentCallId] = useState<string | null>(null);
+  const [callStartTime, setCallStartTime] = useState<number | null>(null);
 
   // ================= LOAD CURRENT USER =================
   useEffect(() => {
@@ -248,23 +252,29 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
           roomId,
           caller,
           callType: incomingCallType,
+          callId,
         } = payload.payload;
         if (type === "OFFER") {
           setCallRoomId(roomId);
           setCallUserInfo(caller);
           setCallType(incomingCallType || "video");
+          setCurrentCallId(callId);
           setCallState("ringing");
         } else if (type === "ACCEPT") {
           setIsInCall(true);
           setCallState("idle");
+          setCallStartTime(Date.now());
         } else if (type === "REJECT") {
           setCallState("idle");
           toast.error(`${caller?.name || "Người dùng"} đã từ chối cuộc gọi.`);
           setCallUserInfo(null);
+          setCurrentCallId(null);
         } else if (type === "END") {
           setIsInCall(false);
           setCallState("idle");
           setCallUserInfo(null);
+          setCurrentCallId(null);
+          setCallStartTime(null);
         }
       })
       .subscribe();
