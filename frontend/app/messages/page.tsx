@@ -56,7 +56,7 @@ export default function MessagesPage() {
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [text, setText] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [fileAttachment, setFileAttachment] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -211,7 +211,9 @@ export default function MessagesPage() {
           // Lấy trực tiếp tin nhắn mới nhất từ bảng messages
           const { data: lastMsg } = await supabase
             .from("messages")
-            .select("content, sender_id, is_read, image_url, file_url")
+            .select(
+              "content, sender_id, is_read, image_url, image_urls, file_url",
+            )
             .eq("conversation_id", c.id)
             .order("created_at", { ascending: false })
             .limit(1)
@@ -222,13 +224,15 @@ export default function MessagesPage() {
           if (lastMsg) {
             displayTxt =
               lastMsg.sender_id === user.id
-                ? `Bạn: ${lastMsg.content || (lastMsg.image_url ? "Đã gửi một ảnh" : lastMsg.file_url ? "Đã gửi một tệp" : "")}`
+                ? `Bạn: ${lastMsg.content || (lastMsg.image_urls?.length > 1 ? `Đã gửi ${lastMsg.image_urls.length} ảnh` : lastMsg.image_url ? "Đã gửi một ảnh" : lastMsg.file_url ? "Đã gửi một tệp" : "")}`
                 : lastMsg.content ||
-                  (lastMsg.image_url
-                    ? "Đã gửi một ảnh"
-                    : lastMsg.file_url
-                      ? "Đã gửi một tệp"
-                      : "");
+                  (lastMsg.image_urls?.length > 1
+                    ? `Đã gửi ${lastMsg.image_urls.length} ảnh`
+                    : lastMsg.image_url
+                      ? "Đã gửi một ảnh"
+                      : lastMsg.file_url
+                        ? "Đã gửi một tệp"
+                        : "");
             hasUnread = lastMsg.sender_id !== user.id && !lastMsg.is_read;
           }
 
@@ -627,7 +631,7 @@ export default function MessagesPage() {
   // ================= GỬI TIN NHẮN =================
   const handleSend = async () => {
     if (
-      (!text.trim() && !imageFile && !fileAttachment) ||
+      (!text.trim() && imageFiles.length === 0 && !fileAttachment) ||
       !conversationId ||
       !user?.id
     )
@@ -635,8 +639,8 @@ export default function MessagesPage() {
 
     const msgText = text.trim();
     setText(""); // Xóa input ngay lập tức
-    const currentImage = imageFile;
-    setImageFile(null);
+    const currentImages = [...imageFiles];
+    setImageFiles([]);
     const currentFile = fileAttachment;
     setFileAttachment(null);
     const currentReply = replyingTo;
@@ -646,7 +650,12 @@ export default function MessagesPage() {
       id: crypto.randomUUID(),
       sender_id: user.id,
       content: msgText,
-      image_url: currentImage ? URL.createObjectURL(currentImage) : null,
+      image_url:
+        currentImages.length > 0 ? URL.createObjectURL(currentImages[0]) : null,
+      image_urls:
+        currentImages.length > 0
+          ? currentImages.map((f) => URL.createObjectURL(f))
+          : null,
       file_url: currentFile ? "#" : null,
       file_name: currentFile ? currentFile.name : null,
       file_type: currentFile ? currentFile.type : null,
@@ -660,24 +669,24 @@ export default function MessagesPage() {
     setMessages((prev) => [...prev, tempMsg]);
 
     try {
-      let uploadedImageUrl = null;
-      if (currentImage) {
-        const cleanName = currentImage.name.replace(/[^a-zA-Z0-9.]/g, "_");
-        const fileName = `chat_${Date.now()}_${cleanName}`;
-        const { error: uploadError } = await supabase.storage
-          .from("chat_images")
-          .upload(fileName, currentImage);
-
-        if (uploadError) {
-          throw new Error(
-            "Không thể tải ảnh lên. Hãy kiểm tra Storage Bucket 'chat_images'.",
-          );
+      let uploadedImageUrls: string[] = [];
+      if (currentImages.length > 0) {
+        for (const f of currentImages) {
+          const cleanName = f.name.replace(/[^a-zA-Z0-9.]/g, "_");
+          const fileName = `chat_${Date.now()}_${cleanName}`;
+          const { error: uploadError } = await supabase.storage
+            .from("chat_images")
+            .upload(fileName, f);
+          if (uploadError) {
+            throw new Error(
+              "Không thể tải ảnh lên. Hãy kiểm tra Storage Bucket 'chat_images'.",
+            );
+          }
+          const { data } = supabase.storage
+            .from("chat_images")
+            .getPublicUrl(fileName);
+          uploadedImageUrls.push(data.publicUrl);
         }
-
-        const { data } = supabase.storage
-          .from("chat_images")
-          .getPublicUrl(fileName);
-        uploadedImageUrl = data.publicUrl;
       }
 
       let uploadedFileUrl = null;
@@ -710,7 +719,8 @@ export default function MessagesPage() {
         conversationId,
         user.id,
         msgText,
-        uploadedImageUrl,
+        uploadedImageUrls.length > 0 ? uploadedImageUrls[0] : null,
+        uploadedImageUrls.length > 0 ? uploadedImageUrls : null,
         uploadedFileUrl,
         uploadedFileName,
         uploadedFileType,
@@ -1219,24 +1229,39 @@ export default function MessagesPage() {
                                         </span>
                                         <span className="truncate line-clamp-1">
                                           {repliedMsg.content ||
-                                            (repliedMsg.image_url
-                                              ? "Hình ảnh"
-                                              : repliedMsg.file_url
-                                                ? "Tệp đính kèm"
-                                                : "")}
+                                            (repliedMsg.image_urls?.length > 1
+                                              ? `Đã gửi ${repliedMsg.image_urls.length} ảnh`
+                                              : repliedMsg.image_url
+                                                ? "Hình ảnh"
+                                                : repliedMsg.file_url
+                                                  ? "Tệp đính kèm"
+                                                  : "")}
                                         </span>
                                       </div>
                                     );
                                   })()}
                                 </div>
                               )}
-                              {m.image_url && (
+                              {m.image_urls?.length > 1 ? (
+                                <div className="flex flex-wrap gap-1 mb-1">
+                                  {m.image_urls.map(
+                                    (url: string, idx: number) => (
+                                      <img
+                                        key={idx}
+                                        src={url}
+                                        alt="chat-img"
+                                        className="max-h-32 w-auto rounded-lg object-cover cursor-pointer"
+                                      />
+                                    ),
+                                  )}
+                                </div>
+                              ) : m.image_urls?.[0] || m.image_url ? (
                                 <img
-                                  src={m.image_url}
+                                  src={m.image_urls?.[0] || m.image_url}
                                   alt="chat-img"
                                   className="max-w-full rounded-lg mb-1 object-cover"
                                 />
-                              )}
+                              ) : null}
                               {m.content}
                               {m.file_url && (
                                 <a
@@ -1327,11 +1352,13 @@ export default function MessagesPage() {
                             </span>
                             <span className="text-xs text-muted-foreground truncate line-clamp-1">
                               {replyingTo.content ||
-                                (replyingTo.image_url
-                                  ? "Hình ảnh"
-                                  : replyingTo.file_name
-                                    ? "Tệp đính kèm"
-                                    : "")}
+                                (replyingTo.image_urls?.length > 1
+                                  ? `Đã gửi ${replyingTo.image_urls.length} ảnh`
+                                  : replyingTo.image_url
+                                    ? "Hình ảnh"
+                                    : replyingTo.file_name
+                                      ? "Tệp đính kèm"
+                                      : "")}
                             </span>
                           </div>
                           <button
@@ -1343,21 +1370,30 @@ export default function MessagesPage() {
                         </div>
                       </div>
                     )}
-                    {imageFile && (
-                      <div className="p-4 pb-0 relative inline-block">
-                        <div className="relative inline-block">
-                          <img
-                            src={URL.createObjectURL(imageFile)}
-                            alt="preview"
-                            className="h-20 rounded-lg object-cover border border-gray-200 dark:border-neutral-700"
-                          />
-                          <button
-                            onClick={() => setImageFile(null)}
-                            className="absolute -top-2 -right-2 bg-gray-800 text-white rounded-full p-1 hover:bg-gray-700 shadow-sm"
+                    {imageFiles.length > 0 && (
+                      <div className="p-4 pb-0 flex gap-2 overflow-x-auto snap-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                        {imageFiles.map((f, i) => (
+                          <div
+                            key={i}
+                            className="relative inline-block shrink-0 snap-center"
                           >
-                            <X size={12} />
-                          </button>
-                        </div>
+                            <img
+                              src={URL.createObjectURL(f)}
+                              alt="preview"
+                              className="h-20 w-auto rounded-lg object-contain border border-gray-200 dark:border-neutral-700 shadow-sm"
+                            />
+                            <button
+                              onClick={() =>
+                                setImageFiles((prev) =>
+                                  prev.filter((_, index) => index !== i),
+                                )
+                              }
+                              className="absolute -top-2 -right-2 bg-gray-800 text-white rounded-full p-1 hover:bg-gray-700 shadow-sm"
+                            >
+                              <X size={12} />
+                            </button>
+                          </div>
+                        ))}
                       </div>
                     )}
                     {fileAttachment && (
@@ -1400,10 +1436,16 @@ export default function MessagesPage() {
                         <input
                           type="file"
                           accept="image/*"
+                          multiple
                           className="hidden"
-                          onChange={(e) =>
-                            setImageFile(e.target.files?.[0] || null)
-                          }
+                          onChange={(e) => {
+                            if (e.target.files) {
+                              setImageFiles((prev) => [
+                                ...prev,
+                                ...Array.from(e.target.files as FileList),
+                              ]);
+                            }
+                          }}
                         />
                       </label>
                       <input
@@ -1458,7 +1500,11 @@ export default function MessagesPage() {
                       />
                       <button
                         onClick={handleSend}
-                        disabled={!text.trim() && !imageFile && !fileAttachment}
+                        disabled={
+                          !text.trim() &&
+                          imageFiles.length === 0 &&
+                          !fileAttachment
+                        }
                         className="bg-[#0095F6] hover:bg-blue-600 disabled:opacity-50 transition-colors text-white px-5 rounded-full flex items-center justify-center font-semibold text-[15px]"
                       >
                         Gửi

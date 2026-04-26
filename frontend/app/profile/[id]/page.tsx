@@ -11,6 +11,8 @@ import {
   Smile,
   Camera,
   Image as ImageIcon,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { useRef } from "react";
 import {
@@ -84,6 +86,9 @@ export default function ProfilePage({
   const [editBio, setEditBio] = useState("");
   const [editAvatar, setEditAvatar] = useState<File | null>(null);
   const [editCover, setEditCover] = useState<File | null>(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState<
+    Record<string, number>
+  >({});
   const [isSavingProfile, setIsSavingProfile] = useState(false);
 
   const [editCoverPositionY, setEditCoverPositionY] = useState(50);
@@ -145,7 +150,7 @@ export default function ProfilePage({
 
       const { data: postsData } = await supabase
         .from("posts")
-        .select("id, content, image_url, created_at")
+        .select("id, content, image_url, image_urls, created_at")
         .eq("user_id", id)
         .order("created_at", { ascending: false });
 
@@ -323,6 +328,30 @@ export default function ProfilePage({
     } catch (error) {
       console.error(error);
     }
+  };
+
+  const handleNextImage = (
+    e: React.MouseEvent,
+    postId: string,
+    maxIndex: number,
+  ) => {
+    e.stopPropagation();
+    setCurrentImageIndex((prev) => ({
+      ...prev,
+      [postId]: (prev[postId] || 0) >= maxIndex ? 0 : (prev[postId] || 0) + 1,
+    }));
+  };
+
+  const handlePrevImage = (
+    e: React.MouseEvent,
+    postId: string,
+    maxIndex: number,
+  ) => {
+    e.stopPropagation();
+    setCurrentImageIndex((prev) => ({
+      ...prev,
+      [postId]: (prev[postId] || 0) <= 0 ? maxIndex : (prev[postId] || 0) - 1,
+    }));
   };
 
   const handleModalComment = async () => {
@@ -679,9 +708,9 @@ export default function ProfilePage({
                 onClick={() => openPostModal(post)}
                 className="aspect-square border border-gray-200 dark:border-neutral-800 shadow-sm hover:shadow-md dark:shadow-black/40 rounded-sm overflow-hidden relative group cursor-pointer transition-all bg-white dark:bg-[#262626]"
               >
-                {post.image_url ? (
+                {post.image_urls?.[0] || post.image_url ? (
                   <img
-                    src={post.image_url}
+                    src={post.image_urls?.[0] || post.image_url}
                     className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                   />
                 ) : (
@@ -716,19 +745,76 @@ export default function ProfilePage({
             onClick={(e) => e.stopPropagation()}
           >
             {/* Phần Ảnh */}
-            {selectedPost.image_url && (
-              <div className="flex-1 bg-[#1a1a1a] flex items-center justify-center min-h-[300px] md:min-h-[500px]">
-                <img
-                  src={selectedPost.image_url}
-                  className="w-full h-full object-cover object-center"
-                  alt="Post"
-                />
+            {(selectedPost.image_urls?.length > 0 ||
+              selectedPost.image_url) && (
+              <div
+                className={`flex-1 bg-[#1a1a1a] flex items-stretch justify-between relative ${selectedPost.image_urls?.length > 1 ? "h-[40vh] md:h-[85vh]" : "min-h-[300px] md:min-h-[500px]"}`}
+              >
+                {selectedPost.image_urls?.length > 1 && (
+                  <div
+                    className="w-[12%] md:w-16 shrink-0 flex items-center justify-center z-10 cursor-pointer hover:bg-black/20 transition-colors"
+                    onClick={(e) =>
+                      handlePrevImage(
+                        e,
+                        selectedPost.id,
+                        selectedPost.image_urls.length - 1,
+                      )
+                    }
+                    onDoubleClick={(e) => e.stopPropagation()}
+                  >
+                    <button className="p-2 bg-white/80 hover:bg-white dark:bg-black/50 dark:hover:bg-black/80 rounded-full shadow hover:scale-105 transition-transform">
+                      <ChevronLeft className="w-6 h-6 text-gray-900 dark:text-gray-100" />
+                    </button>
+                  </div>
+                )}
+                <div className="flex-1 overflow-hidden flex items-center justify-center h-full relative">
+                  <img
+                    src={
+                      selectedPost.image_urls?.[
+                        currentImageIndex[selectedPost.id] || 0
+                      ] || selectedPost.image_url
+                    }
+                    className="max-w-full max-h-full w-auto h-auto object-contain transition-all duration-300 select-none pointer-events-none"
+                    alt="Post"
+                  />
+                </div>
+                {selectedPost.image_urls?.length > 1 && (
+                  <div
+                    className="w-[12%] md:w-16 shrink-0 flex items-center justify-center z-10 cursor-pointer hover:bg-black/20 transition-colors"
+                    onClick={(e) =>
+                      handleNextImage(
+                        e,
+                        selectedPost.id,
+                        selectedPost.image_urls.length - 1,
+                      )
+                    }
+                    onDoubleClick={(e) => e.stopPropagation()}
+                  >
+                    <button className="p-2 bg-white/80 hover:bg-white dark:bg-black/50 dark:hover:bg-black/80 rounded-full shadow hover:scale-105 transition-transform">
+                      <ChevronRight className="w-6 h-6 text-gray-900 dark:text-gray-100" />
+                    </button>
+                  </div>
+                )}
+                {selectedPost.image_urls?.length > 1 && (
+                  <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5 z-20 pointer-events-none">
+                    {selectedPost.image_urls.map((_: any, idx: number) => (
+                      <div
+                        key={idx}
+                        className={`w-2 h-2 rounded-full shadow-sm transition-all duration-300 ${
+                          (currentImageIndex[selectedPost.id] || 0) === idx
+                            ? "bg-blue-500 scale-110"
+                            : "bg-white/60 dark:bg-black/60"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
             {/* Phần Thông tin / Bình luận */}
             <div
-              className={`w-full flex flex-col h-[50vh] md:h-auto transition-colors duration-500 bg-white dark:bg-[#262626] ${selectedPost.image_url ? "md:w-[400px] border-l border-gray-200 dark:border-neutral-800" : "md:min-h-[500px]"}`}
+              className={`w-full flex flex-col h-[50vh] md:h-auto transition-colors duration-500 bg-white dark:bg-[#262626] ${selectedPost.image_urls?.length > 0 || selectedPost.image_url ? "md:w-[400px] border-l border-gray-200 dark:border-neutral-800" : "md:min-h-[500px]"}`}
             >
               {/* Header & Content */}
               <div className="flex flex-col border-b border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-[#333333]">

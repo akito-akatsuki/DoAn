@@ -61,6 +61,7 @@ export const getMessages = async (conversationId: string) => {
       sender_id,
       is_read,
       image_url,
+      image_urls,
       file_url,
       file_name,
       file_type,
@@ -92,13 +93,18 @@ export const sendMessage = async (
   senderId: string,
   content: string,
   imageUrl: string | null = null,
+  imageUrls: string[] | null = null,
   fileUrl: string | null = null,
   fileName: string | null = null,
   fileType: string | null = null,
   fileSize: number | null = null,
   replyToId: string | null = null,
 ) => {
-  if (!conversationId || !senderId || (!content && !imageUrl && !fileUrl)) {
+  if (
+    !conversationId ||
+    !senderId ||
+    (!content && !imageUrl && !imageUrls && !fileUrl)
+  ) {
     throw new Error("Thiếu thông tin");
   }
 
@@ -110,6 +116,7 @@ export const sendMessage = async (
         sender_id: senderId,
         content: content,
         image_url: imageUrl,
+        image_urls: imageUrls,
         file_url: fileUrl,
         file_name: fileName,
         file_type: fileType,
@@ -131,7 +138,13 @@ export const sendMessage = async (
     .update({
       last_message:
         content ||
-        (imageUrl ? "Đã gửi một ảnh" : fileUrl ? "Đã gửi một tệp" : ""),
+        (imageUrls?.length && imageUrls.length > 1
+          ? `Đã gửi ${imageUrls.length} ảnh`
+          : imageUrl
+            ? "Đã gửi một ảnh"
+            : fileUrl
+              ? "Đã gửi một tệp"
+              : ""),
       updated_at: new Date().toISOString(),
     })
     .eq("id", conversationId);

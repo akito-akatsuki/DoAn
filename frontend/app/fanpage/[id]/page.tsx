@@ -29,6 +29,7 @@ import {
   Star,
   Check,
   UserMinus,
+  ChevronRight,
 } from "lucide-react";
 import {
   updatePageInfo,
@@ -109,6 +110,9 @@ export default function FanpageProfile({
   const menuRef = useRef<HTMLDivElement | null>(null);
   const [showHeartId, setShowHeartId] = useState<string | null>(null);
   const imageClickTimeout = useRef<NodeJS.Timeout | null>(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState<
+    Record<string, number>
+  >({});
 
   const [openCommentMenuId, setOpenCommentMenuId] = useState<string | null>(
     null,
@@ -121,7 +125,7 @@ export default function FanpageProfile({
 
   // ================= CREATE POST STATES =================
   const [postContent, setPostContent] = useState("");
-  const [postFile, setPostFile] = useState<File | null>(null);
+  const [postFiles, setPostFiles] = useState<File[]>([]);
   const [isPosting, setIsPosting] = useState(false);
 
   const [reportPostId, setReportPostId] = useState<string | null>(null);
@@ -262,7 +266,7 @@ export default function FanpageProfile({
         const { data: postsData } = await supabase
           .from("posts")
           .select(
-            "id, content, image_url, created_at, is_flagged, user_id, users (id, name, avatar_url)",
+            "id, content, image_url, image_urls, created_at, is_flagged, user_id, users (id, name, avatar_url)",
           )
           .eq("page_id", id)
           .order("created_at", { ascending: false });
@@ -605,23 +609,25 @@ export default function FanpageProfile({
       toast.error("Vui lòng đăng nhập để đăng bài!");
       return;
     }
-    if (!postContent && !postFile) return;
+    if (!postContent && postFiles.length === 0) return;
 
     setIsPosting(true);
     try {
-      let imageUrl = null;
+      let imageUrls: string[] = [];
 
-      if (postFile) {
-        const cleanName = postFile.name.replace(/[^a-zA-Z0-9.]/g, "_");
-        const fileName = `${Date.now()}_${cleanName}`;
-        const { error: uploadError } = await supabase.storage
-          .from("posts")
-          .upload(fileName, postFile);
-
-        if (uploadError) throw uploadError;
-
-        const { data } = supabase.storage.from("posts").getPublicUrl(fileName);
-        imageUrl = data.publicUrl;
+      if (postFiles.length > 0) {
+        for (const f of postFiles) {
+          const cleanName = f.name.replace(/[^a-zA-Z0-9.]/g, "_");
+          const fileName = `${Date.now()}_${cleanName}`;
+          const { error: uploadError } = await supabase.storage
+            .from("posts")
+            .upload(fileName, f);
+          if (uploadError) throw uploadError;
+          const { data } = supabase.storage
+            .from("posts")
+            .getPublicUrl(fileName);
+          imageUrls.push(data.publicUrl);
+        }
       }
 
       let is_flagged = false;
@@ -647,10 +653,12 @@ export default function FanpageProfile({
       }
 
       if (is_flagged) {
-        if (imageUrl) {
-          const uploadedFileName = imageUrl.split("/").pop();
-          if (uploadedFileName) {
-            await supabase.storage.from("posts").remove([uploadedFileName]);
+        if (imageUrls.length > 0) {
+          const uploadedFileNames = imageUrls
+            .map((url) => url.split("/").pop()!)
+            .filter(Boolean);
+          if (uploadedFileNames.length > 0) {
+            await supabase.storage.from("posts").remove(uploadedFileNames);
           }
         }
         return;
@@ -658,14 +666,15 @@ export default function FanpageProfile({
 
       const newPost = await createPost({
         content: postContent,
-        image_url: imageUrl,
+        image_url: imageUrls.length > 0 ? imageUrls[0] : null,
+        image_urls: imageUrls.length > 0 ? imageUrls : null,
         is_flagged,
         page_id: id,
       });
 
       setPosts((prev) => [newPost, ...prev]);
       setPostContent("");
-      setPostFile(null);
+      setPostFiles([]);
       toast.success("Đăng bài thành công!");
     } catch (error: any) {
       console.error("Lỗi đăng bài:", error);
@@ -915,6 +924,30 @@ export default function FanpageProfile({
     } catch (err) {
       toast.error("Sửa bình luận thất bại.");
     }
+  };
+
+  const handleNextImage = (
+    e: React.MouseEvent,
+    postId: string,
+    maxIndex: number,
+  ) => {
+    e.stopPropagation();
+    setCurrentImageIndex((prev) => ({
+      ...prev,
+      [postId]: (prev[postId] || 0) >= maxIndex ? 0 : (prev[postId] || 0) + 1,
+    }));
+  };
+
+  const handlePrevImage = (
+    e: React.MouseEvent,
+    postId: string,
+    maxIndex: number,
+  ) => {
+    e.stopPropagation();
+    setCurrentImageIndex((prev) => ({
+      ...prev,
+      [postId]: (prev[postId] || 0) <= 0 ? maxIndex : (prev[postId] || 0) - 1,
+    }));
   };
 
   const handleImageClick = (post: any) => {
@@ -1177,19 +1210,30 @@ export default function FanpageProfile({
                         rows={2}
                       />
 
-                      {postFile && (
-                        <div className="relative mb-3 inline-block mt-2">
-                          <img
-                            src={URL.createObjectURL(postFile)}
-                            alt="Preview"
-                            className="max-h-48 rounded-lg object-contain border border-border shadow-sm"
-                          />
-                          <button
-                            onClick={() => setPostFile(null)}
-                            className="absolute -top-2 -right-2 bg-white dark:bg-[#262626] border border-gray-200 dark:border-neutral-700 text-gray-900 dark:text-gray-100 rounded-full p-1 shadow-md hover:bg-secondary transition-colors z-10"
-                          >
-                            <X className="w-4 h-4" />
-                          </button>
+                      {postFiles.length > 0 && (
+                        <div className="flex gap-2 overflow-x-auto pb-2 mb-3 mt-2 snap-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                          {postFiles.map((f, i) => (
+                            <div
+                              key={i}
+                              className="relative inline-block shrink-0 snap-center"
+                            >
+                              <img
+                                src={URL.createObjectURL(f)}
+                                alt="Preview"
+                                className="h-32 w-auto rounded-lg object-contain border border-border shadow-sm"
+                              />
+                              <button
+                                onClick={() =>
+                                  setPostFiles((prev) =>
+                                    prev.filter((_, index) => index !== i),
+                                  )
+                                }
+                                className="absolute -top-2 -right-2 bg-white dark:bg-[#262626] border border-gray-200 dark:border-neutral-700 text-gray-900 dark:text-gray-100 rounded-full p-1 shadow-md hover:bg-secondary transition-colors z-10"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ))}
                         </div>
                       )}
                       <div className="flex items-center justify-between pt-1">
@@ -1197,16 +1241,25 @@ export default function FanpageProfile({
                           <ImageIcon size={16} /> Ảnh
                           <input
                             type="file"
-                            onChange={(e) =>
-                              setPostFile(e.target.files?.[0] || null)
-                            }
+                            onChange={(e) => {
+                              if (e.target.files) {
+                                setPostFiles((prev) => [
+                                  ...prev,
+                                  ...Array.from(e.target.files as FileList),
+                                ]);
+                              }
+                            }}
                             className="hidden"
                             accept="image/*"
+                            multiple
                           />
                         </label>
                         <button
                           onClick={handleCreatePost}
-                          disabled={isPosting || (!postContent && !postFile)}
+                          disabled={
+                            isPosting ||
+                            (!postContent && postFiles.length === 0)
+                          }
                           className="bg-blue-500 text-white px-5 py-1.5 rounded-full font-semibold text-sm shadow-sm hover:bg-blue-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {isPosting ? (
@@ -1362,12 +1415,75 @@ export default function FanpageProfile({
                 )}
 
                 {/* IMAGE */}
-                {post.image_url && (
-                  <div className="relative overflow-hidden bg-gray-100 dark:bg-[#1a1a1a]">
-                    <img
-                      src={post.image_url}
-                      className={`w-full h-auto max-h-[650px] object-cover object-center cursor-pointer hover:brightness-[0.98] transition-all duration-300 select-none pointer-events-none ${post.is_flagged ? "blur-xl scale-110" : ""}`}
-                    />
+                {(post.image_urls?.length > 0 || post.image_url) && (
+                  <div
+                    className={`relative flex items-stretch justify-between bg-gray-100 dark:bg-[#1a1a1a] w-full overflow-hidden ${post.image_urls?.length > 1 ? "h-[350px] sm:h-[450px] md:h-[550px]" : "min-h-[250px] max-h-[650px]"}`}
+                  >
+                    {post.image_urls?.length > 1 ? (
+                      <div
+                        className="w-[12%] md:w-12 shrink-0 flex items-center justify-center z-20 border-r border-gray-200/50 dark:border-neutral-800/50 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                        onClick={(e) =>
+                          handlePrevImage(
+                            e,
+                            post.id,
+                            post.image_urls.length - 1,
+                          )
+                        }
+                        onDoubleClick={(e) => e.stopPropagation()}
+                      >
+                        <button className="p-1.5 md:p-2 bg-white/90 hover:bg-white dark:bg-black/60 dark:hover:bg-black/80 rounded-full shadow-md hover:scale-105 transition-transform">
+                          <ChevronLeft className="w-5 h-5 text-gray-900 dark:text-gray-100" />
+                        </button>
+                      </div>
+                    ) : null}
+
+                    <div
+                      className="flex-1 overflow-hidden flex items-center justify-center relative cursor-pointer"
+                      onClick={() => handleImageClick(post)}
+                      onDoubleClick={(e) => handleImageDoubleClick(e, post)}
+                    >
+                      <img
+                        src={
+                          post.image_urls?.[currentImageIndex[post.id] || 0] ||
+                          post.image_url
+                        }
+                        className={`max-w-full max-h-[650px] w-auto h-auto object-contain transition-all duration-300 select-none pointer-events-none ${post.is_flagged ? "blur-xl scale-110" : ""}`}
+                        alt="Post content"
+                      />
+                    </div>
+
+                    {post.image_urls?.length > 1 ? (
+                      <div
+                        className="w-[12%] md:w-12 shrink-0 flex items-center justify-center z-20 border-l border-gray-200/50 dark:border-neutral-800/50 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                        onClick={(e) =>
+                          handleNextImage(
+                            e,
+                            post.id,
+                            post.image_urls.length - 1,
+                          )
+                        }
+                        onDoubleClick={(e) => e.stopPropagation()}
+                      >
+                        <button className="p-1.5 md:p-2 bg-white/90 hover:bg-white dark:bg-black/60 dark:hover:bg-black/80 rounded-full shadow-md hover:scale-105 transition-transform">
+                          <ChevronRight className="w-5 h-5 text-gray-900 dark:text-gray-100" />
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {post.image_urls?.length > 1 && (
+                      <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5 z-20 pointer-events-none">
+                        {post.image_urls.map((_: any, idx: number) => (
+                          <div
+                            key={idx}
+                            className={`w-2 h-2 rounded-full shadow-sm transition-all duration-300 ${
+                              (currentImageIndex[post.id] || 0) === idx
+                                ? "bg-blue-500 scale-110"
+                                : "bg-white/60 dark:bg-black/60"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    )}
                     {post.is_flagged && (
                       <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/30 z-20 pointer-events-none">
                         <Flag className="w-12 h-12 mb-2 text-red-500 drop-shadow-md" />
@@ -1376,11 +1492,6 @@ export default function FanpageProfile({
                         </span>
                       </div>
                     )}
-                    <div
-                      className="absolute inset-0 z-10 cursor-pointer"
-                      onClick={() => handleImageClick(post)}
-                      onDoubleClick={(e) => handleImageDoubleClick(e, post)}
-                    />
                   </div>
                 )}
 

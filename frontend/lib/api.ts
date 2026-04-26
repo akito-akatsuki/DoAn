@@ -133,6 +133,7 @@ export const getFeed = async () => {
 export const createPost = async (payload: {
   content: string;
   image_url?: string | null;
+  image_urls?: string[] | null;
   is_flagged?: boolean;
   page_id?: string | null;
 }) => {
@@ -146,6 +147,7 @@ export const createPost = async (payload: {
     .insert({
       content: payload.content,
       image_url: payload.image_url ?? null,
+      image_urls: payload.image_urls ?? null,
       user_id: user.id,
       is_flagged: payload.is_flagged ?? false,
       page_id: payload.page_id ?? null,

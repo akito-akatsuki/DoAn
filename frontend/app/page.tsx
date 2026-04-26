@@ -19,6 +19,8 @@ import {
   Flag, // Icon báo cáo
   Pencil, // Icon sửa
   Image as ImageIcon,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import {
   getFeed,
@@ -40,7 +42,7 @@ export default function HomePage() {
   const [user, setUser] = useState<any>(null);
   const [posts, setPosts] = useState<any[]>([]);
   const [content, setContent] = useState("");
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(true);
   const [placeholder, setPlaceholder] = useState("Bạn đang nghĩ gì?");
 
@@ -54,6 +56,9 @@ export default function HomePage() {
   const commentInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
   const modalInputRef = useRef<HTMLInputElement | null>(null);
   const imageClickTimeout = useRef<NodeJS.Timeout | null>(null);
+  const [currentImageIndex, setCurrentImageIndex] = useState<
+    Record<string, number>
+  >({});
 
   // Dropdown state & Ref
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -731,6 +736,30 @@ export default function HomePage() {
     }
   };
 
+  const handleNextImage = (
+    e: React.MouseEvent,
+    postId: string,
+    maxIndex: number,
+  ) => {
+    e.stopPropagation();
+    setCurrentImageIndex((prev) => ({
+      ...prev,
+      [postId]: (prev[postId] || 0) >= maxIndex ? 0 : (prev[postId] || 0) + 1,
+    }));
+  };
+
+  const handlePrevImage = (
+    e: React.MouseEvent,
+    postId: string,
+    maxIndex: number,
+  ) => {
+    e.stopPropagation();
+    setCurrentImageIndex((prev) => ({
+      ...prev,
+      [postId]: (prev[postId] || 0) <= 0 ? maxIndex : (prev[postId] || 0) - 1,
+    }));
+  };
+
   // ================= IMAGE CLICK HANDLERS =================
   const handleImageClick = (post: any) => {
     if (imageClickTimeout.current) {
@@ -942,20 +971,31 @@ export default function HomePage() {
                     rows={2}
                   />
 
-                  {/* IMAGE PREVIEW */}
-                  {file && (
-                    <div className="relative mb-3 inline-block mt-2">
-                      <img
-                        src={URL.createObjectURL(file)}
-                        alt="Preview"
-                        className="max-h-48 rounded-lg object-contain border border-border shadow-sm"
-                      />
-                      <button
-                        onClick={() => setFile(null)}
-                        className="absolute -top-2 -right-2 bg-white dark:bg-[#262626] border border-gray-200 dark:border-neutral-700 text-gray-900 dark:text-gray-100 rounded-full p-1 shadow-md hover:bg-secondary transition-colors z-10"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
+                  {/* IMAGES PREVIEW */}
+                  {files.length > 0 && (
+                    <div className="flex gap-2 overflow-x-auto pb-2 mb-3 mt-2 snap-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                      {files.map((f, i) => (
+                        <div
+                          key={i}
+                          className="relative inline-block shrink-0 snap-center"
+                        >
+                          <img
+                            src={URL.createObjectURL(f)}
+                            alt="Preview"
+                            className="h-32 w-auto rounded-lg object-contain border border-border shadow-sm"
+                          />
+                          <button
+                            onClick={() =>
+                              setFiles((prev) =>
+                                prev.filter((_, index) => index !== i),
+                              )
+                            }
+                            className="absolute -top-2 -right-2 bg-white dark:bg-[#262626] border border-gray-200 dark:border-neutral-700 text-gray-900 dark:text-gray-100 rounded-full p-1 shadow-md hover:bg-secondary transition-colors z-10"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                        </div>
+                      ))}
                     </div>
                   )}
                   <div className="flex items-center justify-between pt-1">
@@ -963,44 +1003,50 @@ export default function HomePage() {
                       📷 Ảnh
                       <input
                         type="file"
-                        onChange={(e) => setFile(e.target.files?.[0] || null)}
+                        onChange={(e) => {
+                          if (e.target.files) {
+                            setFiles((prev) => [
+                              ...prev,
+                              ...Array.from(e.target.files as FileList),
+                            ]);
+                          }
+                        }}
                         className="hidden"
                         accept="image/*"
+                        multiple
                       />
                     </label>
                     <button
                       onClick={async () => {
-                        if (!content && !file) return;
+                        if (!content && files.length === 0) return;
 
                         try {
-                          let imageUrl = null;
+                          let imageUrls: string[] = [];
 
-                          // ================= UPLOAD IMAGE =================
-                          if (file) {
-                            const cleanName = file.name.replace(
-                              /[^a-zA-Z0-9.]/g,
-                              "_",
-                            );
-                            const fileName = `${Date.now()}_${cleanName}`;
-
-                            const { error: uploadError } =
-                              await supabase.storage
-                                .from("posts")
-                                .upload(fileName, file);
-
-                            if (uploadError) {
-                              console.error(
-                                "UPLOAD ERROR:",
-                                uploadError.message,
+                          // ================= UPLOAD IMAGES =================
+                          if (files.length > 0) {
+                            for (const f of files) {
+                              const cleanName = f.name.replace(
+                                /[^a-zA-Z0-9.]/g,
+                                "_",
                               );
-                              return;
+                              const fileName = `${Date.now()}_${cleanName}`;
+                              const { error: uploadError } =
+                                await supabase.storage
+                                  .from("posts")
+                                  .upload(fileName, f);
+                              if (uploadError) {
+                                console.error(
+                                  "UPLOAD ERROR:",
+                                  uploadError.message,
+                                );
+                                continue;
+                              }
+                              const { data } = supabase.storage
+                                .from("posts")
+                                .getPublicUrl(fileName);
+                              imageUrls.push(data.publicUrl);
                             }
-
-                            const { data } = supabase.storage
-                              .from("posts")
-                              .getPublicUrl(fileName);
-
-                            imageUrl = data.publicUrl;
                           }
 
                           // ================= KIỂM DUYỆT AI =================
@@ -1029,14 +1075,14 @@ export default function HomePage() {
                           // ================= CHẶN & XÓA BÀI VI PHẠM =================
                           if (is_flagged) {
                             // Nếu có ảnh đi kèm thì xóa luôn ảnh đó khỏi Supabase Storage để tránh rác dữ liệu
-                            if (imageUrl) {
-                              const uploadedFileName = imageUrl
-                                .split("/")
-                                .pop();
-                              if (uploadedFileName) {
+                            if (imageUrls.length > 0) {
+                              const uploadedFileNames = imageUrls
+                                .map((url) => url.split("/").pop()!)
+                                .filter(Boolean);
+                              if (uploadedFileNames.length > 0) {
                                 await supabase.storage
                                   .from("posts")
-                                  .remove([uploadedFileName]);
+                                  .remove(uploadedFileNames);
                               }
                             }
                             return; // Dừng lại ngay lập tức, không cho phép chạy lệnh createPost()
@@ -1045,7 +1091,9 @@ export default function HomePage() {
                           // ================= CREATE POST =================
                           const newPost = await createPost({
                             content,
-                            image_url: imageUrl,
+                            image_url:
+                              imageUrls.length > 0 ? imageUrls[0] : null,
+                            image_urls: imageUrls.length > 0 ? imageUrls : null,
                             is_flagged,
                             page_id: selectedPageId,
                           });
@@ -1060,13 +1108,13 @@ export default function HomePage() {
 
                           // ================= RESET =================
                           setContent("");
-                          setFile(null);
+                          setFiles([]);
                           setSelectedPageId(null);
                         } catch (err) {
                           console.error("LỖI ĐĂNG BÀI:", err);
                         }
                       }}
-                      disabled={!content && !file}
+                      disabled={!content && files.length === 0}
                       className="bg-gradient-to-r from-primary to-accent text-primary-fg px-5 py-1.5 rounded-full font-semibold text-sm shadow-ig hover:brightness-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Đăng
@@ -1284,14 +1332,76 @@ export default function HomePage() {
                   )
                 )}
 
-                {/* IMAGE WITH DOUBLE CLICK LIKE */}
-                {post.image_url && (
-                  <div className="relative overflow-hidden bg-gray-100 dark:bg-[#1a1a1a]">
-                    <img
-                      src={post.image_url}
-                      className={`w-full h-auto max-h-[650px] object-cover object-center cursor-pointer hover:brightness-[0.98] transition-all duration-300 select-none pointer-events-none ${post.is_flagged ? "blur-xl scale-110" : ""}`}
-                      alt="Post content"
-                    />
+                {/* IMAGES WITH DOUBLE CLICK LIKE */}
+                {(post.image_urls?.length > 0 || post.image_url) && (
+                  <div
+                    className={`relative flex items-stretch justify-between bg-gray-100 dark:bg-[#1a1a1a] w-full overflow-hidden ${post.image_urls?.length > 1 ? "h-[350px] sm:h-[450px] md:h-[550px]" : "min-h-[250px] max-h-[650px]"}`}
+                  >
+                    {post.image_urls?.length > 1 ? (
+                      <div
+                        className="w-[12%] md:w-12 shrink-0 flex items-center justify-center z-20 border-r border-gray-200/50 dark:border-neutral-800/50 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                        onClick={(e) =>
+                          handlePrevImage(
+                            e,
+                            post.id,
+                            post.image_urls.length - 1,
+                          )
+                        }
+                        onDoubleClick={(e) => e.stopPropagation()}
+                      >
+                        <button className="p-1.5 md:p-2 bg-white/90 hover:bg-white dark:bg-black/60 dark:hover:bg-black/80 rounded-full shadow-md hover:scale-105 transition-transform">
+                          <ChevronLeft className="w-5 h-5 text-gray-900 dark:text-gray-100" />
+                        </button>
+                      </div>
+                    ) : null}
+
+                    <div
+                      className="flex-1 overflow-hidden flex items-center justify-center relative cursor-pointer"
+                      onClick={() => handleImageClick(post)}
+                      onDoubleClick={(e) => handleImageDoubleClick(e, post)}
+                    >
+                      <img
+                        src={
+                          post.image_urls?.[currentImageIndex[post.id] || 0] ||
+                          post.image_url
+                        }
+                        className={`max-w-full max-h-[650px] w-auto h-auto object-contain transition-all duration-300 select-none pointer-events-none ${post.is_flagged ? "blur-xl scale-110" : ""}`}
+                        alt="Post content"
+                      />
+                    </div>
+
+                    {post.image_urls?.length > 1 ? (
+                      <div
+                        className="w-[12%] md:w-12 shrink-0 flex items-center justify-center z-20 border-l border-gray-200/50 dark:border-neutral-800/50 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+                        onClick={(e) =>
+                          handleNextImage(
+                            e,
+                            post.id,
+                            post.image_urls.length - 1,
+                          )
+                        }
+                        onDoubleClick={(e) => e.stopPropagation()}
+                      >
+                        <button className="p-1.5 md:p-2 bg-white/90 hover:bg-white dark:bg-black/60 dark:hover:bg-black/80 rounded-full shadow-md hover:scale-105 transition-transform">
+                          <ChevronRight className="w-5 h-5 text-gray-900 dark:text-gray-100" />
+                        </button>
+                      </div>
+                    ) : null}
+
+                    {post.image_urls?.length > 1 && (
+                      <div className="absolute bottom-3 left-0 right-0 flex justify-center gap-1.5 z-20 pointer-events-none">
+                        {post.image_urls.map((_: any, idx: number) => (
+                          <div
+                            key={idx}
+                            className={`w-2 h-2 rounded-full shadow-sm transition-all duration-300 ${
+                              (currentImageIndex[post.id] || 0) === idx
+                                ? "bg-blue-500 scale-110"
+                                : "bg-white/60 dark:bg-black/60"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    )}
 
                     {post.is_flagged && (
                       <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/30 z-20 pointer-events-none">
@@ -1304,13 +1414,6 @@ export default function HomePage() {
                         </span>
                       </div>
                     )}
-
-                    {/* Overlay ẩn để catch event tốt hơn */}
-                    <div
-                      className="absolute inset-0 z-10 cursor-pointer"
-                      onClick={() => handleImageClick(post)}
-                      onDoubleClick={(e) => handleImageDoubleClick(e, post)}
-                    />
                   </div>
                 )}
 
@@ -1615,20 +1718,77 @@ export default function HomePage() {
             className={`text-gray-900 dark:text-gray-100 flex flex-col md:flex-row w-full ${selectedPost.image_url ? "max-w-5xl" : "max-w-xl"} max-h-[90vh] rounded-xl overflow-hidden shadow-2xl dark:shadow-black/60 relative animate-in fade-in zoom-in-95 duration-200 cursor-default transition-colors duration-500 bg-white dark:bg-[#262626]`}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Phần Ảnh */}
-            {selectedPost.image_url && (
-              <div className="flex-1 bg-[#1a1a1a] flex items-center justify-center min-h-[300px] md:min-h-[500px]">
-                <img
-                  src={selectedPost.image_url}
-                  className="w-full h-full object-cover object-center"
-                  alt="Post"
-                />
+            {/* Phần Ảnh Modal */}
+            {(selectedPost.image_urls?.length > 0 ||
+              selectedPost.image_url) && (
+              <div
+                className={`flex-1 bg-[#1a1a1a] flex items-stretch justify-between relative ${selectedPost.image_urls?.length > 1 ? "h-[40vh] md:h-[85vh]" : "min-h-[300px] md:min-h-[500px]"}`}
+              >
+                {selectedPost.image_urls?.length > 1 && (
+                  <div
+                    className="w-[12%] md:w-16 shrink-0 flex items-center justify-center z-10 cursor-pointer hover:bg-black/20 transition-colors"
+                    onClick={(e) =>
+                      handlePrevImage(
+                        e,
+                        selectedPost.id,
+                        selectedPost.image_urls.length - 1,
+                      )
+                    }
+                    onDoubleClick={(e) => e.stopPropagation()}
+                  >
+                    <button className="p-2 bg-white/80 hover:bg-white dark:bg-black/50 dark:hover:bg-black/80 rounded-full shadow hover:scale-105 transition-transform">
+                      <ChevronLeft className="w-6 h-6 text-gray-900 dark:text-gray-100" />
+                    </button>
+                  </div>
+                )}
+                <div className="flex-1 overflow-hidden flex items-center justify-center h-full relative">
+                  <img
+                    src={
+                      selectedPost.image_urls?.[
+                        currentImageIndex[selectedPost.id] || 0
+                      ] || selectedPost.image_url
+                    }
+                    className="max-w-full max-h-full w-auto h-auto object-contain transition-all duration-300 select-none pointer-events-none"
+                    alt="Post"
+                  />
+                </div>
+                {selectedPost.image_urls?.length > 1 && (
+                  <div
+                    className="w-[12%] md:w-16 shrink-0 flex items-center justify-center z-10 cursor-pointer hover:bg-black/20 transition-colors"
+                    onClick={(e) =>
+                      handleNextImage(
+                        e,
+                        selectedPost.id,
+                        selectedPost.image_urls.length - 1,
+                      )
+                    }
+                    onDoubleClick={(e) => e.stopPropagation()}
+                  >
+                    <button className="p-2 bg-white/80 hover:bg-white dark:bg-black/50 dark:hover:bg-black/80 rounded-full shadow hover:scale-105 transition-transform">
+                      <ChevronRight className="w-6 h-6 text-gray-900 dark:text-gray-100" />
+                    </button>
+                  </div>
+                )}
+                {selectedPost.image_urls?.length > 1 && (
+                  <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5 z-20 pointer-events-none">
+                    {selectedPost.image_urls.map((_: any, idx: number) => (
+                      <div
+                        key={idx}
+                        className={`w-2 h-2 rounded-full shadow-sm transition-all duration-300 ${
+                          (currentImageIndex[selectedPost.id] || 0) === idx
+                            ? "bg-blue-500 scale-110"
+                            : "bg-white/60 dark:bg-black/60"
+                        }`}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
             )}
 
             {/* Phần Thông tin / Bình luận */}
             <div
-              className={`w-full flex flex-col h-[50vh] md:h-auto transition-colors duration-500 bg-white dark:bg-[#262626] ${selectedPost.image_url ? "md:w-[400px] border-l border-gray-200 dark:border-neutral-800" : "md:min-h-[500px]"}`}
+              className={`w-full flex flex-col h-[50vh] md:h-auto transition-colors duration-500 bg-white dark:bg-[#262626] ${selectedPost.image_urls?.length > 0 || selectedPost.image_url ? "md:w-[400px] border-l border-gray-200 dark:border-neutral-800" : "md:min-h-[500px]"}`}
             >
               {/* Header & Content */}
               <div className="flex flex-col border-b border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-[#333333]">

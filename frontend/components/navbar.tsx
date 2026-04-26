@@ -14,6 +14,10 @@ import {
   Bookmark,
   Search,
   Users,
+  Menu,
+  LogOut,
+  Key,
+  X,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -34,6 +38,8 @@ export default function Navbar({ user: propUser }: any) {
 
   const searchRef = useRef<HTMLDivElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
+  const mobileMenuRef = useRef<HTMLDivElement>(null);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   // ================= LOGIN POPUP =================
   const [showLoginPopup, setShowLoginPopup] = useState(false);
@@ -444,12 +450,11 @@ export default function Navbar({ user: propUser }: any) {
   );
 
   const mobileTabs = [
-    { path: "/", icon: Home },
-    { path: "/suggested", icon: Users },
-    { path: "/search", icon: Search },
-    { path: "/messages", icon: MessageCircle },
-    { path: "/notifications", icon: Heart },
-    { path: "/saved", icon: Bookmark },
+    { id: "home", path: "/", icon: Home },
+    { id: "suggested", path: "/suggested", icon: Users },
+    { id: "messages", path: "/messages", icon: MessageCircle },
+    { id: "notifications", path: "/notifications", icon: Heart },
+    { id: "profile", path: user ? `/profile/${user.id}` : "#", icon: null },
   ];
   const mobileActiveIndex = mobileTabs.findIndex((t) =>
     t.path === "/" ? pathname === "/" : pathname?.startsWith(t.path),
@@ -568,12 +573,12 @@ export default function Navbar({ user: propUser }: any) {
               })}
             </div>
           </div>
-          <button onClick={toggleDark} className="p-2">
+          <button onClick={toggleDark} className="p-2 hidden md:block">
             {isDark ? <Sun /> : <Moon />}
           </button>
 
           {/* USER */}
-          <div className="relative" ref={userMenuRef}>
+          <div className="relative hidden md:block" ref={userMenuRef}>
             {user ? (
               <>
                 <img
@@ -702,6 +707,171 @@ export default function Navbar({ user: propUser }: any) {
               </button>
             )}
           </div>
+
+          {/* MOBILE RIGHT MENU */}
+          <div
+            className="flex md:hidden items-center gap-1 relative"
+            ref={mobileMenuRef}
+          >
+            <button
+              onClick={() => router.push("/search")}
+              className="p-2 text-gray-900 dark:text-gray-100"
+            >
+              <Search size={24} />
+            </button>
+            <button
+              onClick={() => setIsMobileMenuOpen(true)}
+              className="p-2 text-gray-900 dark:text-gray-100"
+            >
+              <Menu size={24} />
+            </button>
+
+            {/* Overlay */}
+            <div
+              className={`fixed inset-0 bg-black/20 backdrop-blur-sm z-[9998] transition-all duration-300 md:hidden ${
+                isMobileMenuOpen
+                  ? "opacity-100 visible pointer-events-auto"
+                  : "opacity-0 invisible pointer-events-none"
+              }`}
+              onClick={() => setIsMobileMenuOpen(false)}
+            />
+
+            {/* Side Drawer */}
+            <div
+              className={`fixed top-0 right-0 h-full w-[280px] bg-white dark:bg-[#262626] border-l border-gray-200 dark:border-neutral-800 shadow-2xl z-[9999] flex flex-col transition-transform duration-300 ease-in-out md:hidden ${
+                isMobileMenuOpen ? "translate-x-0" : "translate-x-full"
+              }`}
+            >
+              <div className="flex items-center justify-between p-4 border-b border-gray-100 dark:border-neutral-800">
+                <span className="font-bold text-lg">Menu</span>
+                <button
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-1 hover:bg-secondary rounded-full transition-colors"
+                >
+                  <X size={24} />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto py-2">
+                <button
+                  onClick={toggleDark}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-secondary w-full text-left"
+                >
+                  {isDark ? (
+                    <Sun size={20} className="text-yellow-500" />
+                  ) : (
+                    <Moon size={20} className="text-blue-500" />
+                  )}
+                  <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                    {isDark ? "Chế độ sáng" : "Chế độ tối"}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    router.push("/saved");
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-secondary w-full text-left border-t border-gray-100 dark:border-neutral-800"
+                >
+                  <Bookmark
+                    size={20}
+                    className="text-gray-900 dark:text-gray-100"
+                  />
+                  <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                    Đã lưu
+                  </span>
+                </button>
+
+                {user ? (
+                  <>
+                    <button
+                      onClick={() => {
+                        router.push("/fanpage");
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-secondary w-full text-left border-t border-gray-100 dark:border-neutral-800"
+                    >
+                      <PlusCircle
+                        size={20}
+                        className="text-gray-900 dark:text-gray-100"
+                      />
+                      <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                        Tạo Fanpage
+                      </span>
+                    </button>
+
+                    {userPages.length > 0 && (
+                      <div className="border-t border-gray-100 dark:border-neutral-800 my-1 pt-1 pb-2">
+                        <div className="px-4 py-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                          Trang của bạn
+                        </div>
+                        {userPages.map((p) => (
+                          <button
+                            key={p.id}
+                            onClick={() => {
+                              setIsMobileMenuOpen(false);
+                              router.push(`/fanpage/${p.id}`);
+                            }}
+                            className="w-full text-left flex items-center gap-3 px-4 py-2 hover:bg-secondary text-sm transition-colors"
+                          >
+                            <img
+                              src={
+                                p.avatar_url ||
+                                `https://api.dicebear.com/7.x/identicon/svg?seed=${p.id}`
+                              }
+                              className="w-8 h-8 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shrink-0"
+                              alt="page avatar"
+                            />
+                            <span className="truncate font-medium text-gray-900 dark:text-gray-100">
+                              {p.name}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <button
+                      onClick={() => {
+                        setShowChangePasswordPopup(true);
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-secondary w-full text-left border-t border-gray-100 dark:border-neutral-800"
+                    >
+                      <Key
+                        size={20}
+                        className="text-gray-900 dark:text-gray-100"
+                      />
+                      <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                        Đổi mật khẩu
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        handleLogout();
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/10 text-red-500 w-full text-left border-t border-gray-100 dark:border-neutral-800"
+                    >
+                      <LogOut size={20} />
+                      <span className="font-medium text-sm">Đăng xuất</span>
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setShowLoginPopup(true);
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-blue-50 dark:hover:bg-blue-900/10 text-blue-500 w-full text-left border-t border-gray-100 dark:border-neutral-800"
+                  >
+                    <span className="font-medium text-sm">Đăng nhập</span>
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -722,31 +892,48 @@ export default function Navbar({ user: propUser }: any) {
           )}
 
           {mobileTabs.map((tab, idx) => {
-            const Icon = tab.icon;
             const active = mobileActiveIndex === idx;
             return (
               <button
-                key={tab.path}
+                key={tab.id}
                 className="flex-1 flex items-center justify-center relative z-10 transition-transform active:scale-95"
-                onClick={() => router.push(tab.path)}
+                onClick={() => {
+                  if (tab.id === "profile" && !user) {
+                    setShowLoginPopup(true);
+                  } else {
+                    router.push(tab.path);
+                  }
+                }}
               >
-                <div className="relative">
-                  <Icon
-                    size={26}
-                    className={`transition-all duration-300 ${
-                      active
-                        ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110"
-                        : "text-gray-900 dark:text-gray-100"
-                    }`}
-                  />
-                  {tab.path === "/notifications" &&
+                <div className="relative flex items-center justify-center">
+                  {tab.id === "profile" ? (
+                    <img
+                      src={
+                        user?.avatar_url ||
+                        user?.user_metadata?.avatar_url ||
+                        `https://api.dicebear.com/7.x/identicon/svg?seed=${user?.id || "guest"}`
+                      }
+                      className={`w-7 h-7 rounded-full object-cover transition-all duration-300 ${active ? "ring-2 ring-cyan-500 scale-110 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)]" : "border border-gray-300 dark:border-neutral-600"}`}
+                      alt="Profile"
+                    />
+                  ) : tab.icon ? (
+                    <tab.icon
+                      size={26}
+                      className={`transition-all duration-300 ${
+                        active
+                          ? "text-cyan-500 fill-cyan-500 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)] scale-110"
+                          : "text-gray-900 dark:text-gray-100"
+                      }`}
+                    />
+                  ) : null}
+                  {tab.id === "notifications" &&
                     unreadCount > 0 &&
                     pathname !== "/notifications" && (
                       <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-white dark:border-[#262626] pointer-events-none shadow-sm">
                         {unreadCount > 99 ? "99+" : unreadCount}
                       </span>
                     )}
-                  {tab.path === "/messages" &&
+                  {tab.id === "messages" &&
                     unreadMsgCount > 0 &&
                     pathname !== "/messages" && (
                       <span className="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full border border-white dark:border-[#262626] pointer-events-none shadow-sm">

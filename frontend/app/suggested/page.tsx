@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, UserPlus, Check } from "lucide-react";
+import { UserPlus, Check } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function SuggestedPage() {
@@ -104,12 +104,6 @@ export default function SuggestedPage() {
     <div className="min-h-screen text-gray-900 dark:text-gray-100 transition-colors duration-500 bg-gray-50 dark:bg-neutral-900">
       <main className="max-w-[600px] mx-auto pt-24 px-4 pb-28 md:pb-20">
         <div className="flex items-center gap-3 mb-6">
-          <button
-            onClick={() => router.back()}
-            className="p-2 hover:bg-gray-200 dark:hover:bg-neutral-800 rounded-full transition-colors"
-          >
-            <ChevronLeft className="w-6 h-6" />
-          </button>
           <h1 className="text-2xl font-bold">Khám phá người dùng</h1>
         </div>
 
