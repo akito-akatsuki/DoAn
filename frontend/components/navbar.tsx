@@ -518,7 +518,13 @@ export default function Navbar({ user: propUser }: any) {
         {/* LOGO */}
         <h1
           className="font-bold text-xl cursor-pointer hover:opacity-80 transition-opacity"
-          onClick={() => router.push("/")}
+          onClick={() => {
+            if (pathname === "/") {
+              window.dispatchEvent(new CustomEvent("reload_feed"));
+            } else {
+              router.push("/");
+            }
+          }}
         >
           InstaMini
         </h1>
@@ -545,7 +551,17 @@ export default function Navbar({ user: propUser }: any) {
                   <button
                     key={tab.path}
                     className="relative w-10 h-10 flex items-center justify-center z-10 transition-transform hover:scale-105 active:scale-95"
-                    onClick={() => router.push(tab.path)}
+                    onClick={() => {
+                      if (pathname === tab.path) {
+                        if (tab.path === "/") {
+                          window.dispatchEvent(new CustomEvent("reload_feed"));
+                        } else {
+                          window.scrollTo({ top: 0, behavior: "smooth" });
+                        }
+                      } else {
+                        router.push(tab.path);
+                      }
+                    }}
                   >
                     <Icon
                       className={`transition-all duration-300 ${
@@ -901,7 +917,15 @@ export default function Navbar({ user: propUser }: any) {
                   if (tab.id === "profile" && !user) {
                     setShowLoginPopup(true);
                   } else {
-                    router.push(tab.path);
+                    if (pathname === tab.path) {
+                      if (tab.path === "/") {
+                        window.dispatchEvent(new CustomEvent("reload_feed"));
+                      } else {
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }
+                    } else {
+                      router.push(tab.path);
+                    }
                   }
                 }}
               >

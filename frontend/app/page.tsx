@@ -252,6 +252,16 @@ export default function HomePage() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
+  // ================= TỰ ĐỘNG TẢI LẠI BẢNG TIN KHI BẤM NÚT HOME LẦN NỮA =================
+  useEffect(() => {
+    const handleReloadFeed = () => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      loadFeed();
+    };
+    window.addEventListener("reload_feed", handleReloadFeed);
+    return () => window.removeEventListener("reload_feed", handleReloadFeed);
+  }, []);
+
   // Xử lý Click Outside để ẩn menu
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
