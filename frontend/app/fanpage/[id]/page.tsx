@@ -2154,14 +2154,16 @@ export default function FanpageProfile({
             onClick={(e) => e.stopPropagation()}
           >
             <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex justify-between items-center">
-              <h3 className="text-lg font-bold">Báo cáo bài viết</h3>
-              <button onClick={() => setReportPostId(null)}>
+              <h3 className="text-lg font-bold">
+                Báo cáo {reportType === "post" ? "bài viết" : "bình luận"}
+              </h3>
+              <button onClick={() => setReportTargetId(null)}>
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="p-4 space-y-4">
               <p className="text-sm text-gray-600 dark:text-gray-300">
-                Vui lòng nhập lý do báo cáo bài viết này. Quản trị viên sẽ xem
+                Vui lòng nhập lý do báo cáo {reportType === "post" ? "bài viết" : "bình luận"} này. Quản trị viên sẽ xem
                 xét báo cáo của bạn.
               </p>
               <textarea
