@@ -13,6 +13,10 @@ import {
   MoreHorizontal,
   Smile,
   Image as ImageIcon,
+  ShieldAlert,
+  CheckCircle,
+  Trash2,
+  Flag,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import {
@@ -21,6 +25,9 @@ import {
   deleteComment,
   updateComment,
   toggleLike,
+  submitAppeal,
+  deleteNotification,
+  reportComment,
 } from "@/lib/api";
 import { showConfirm } from "@/components/GlobalConfirm";
 
@@ -39,6 +46,16 @@ export default function NotificationsPage() {
   );
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState("");
+
+  // ================= REPORT =================
+  const [reportTargetId, setReportTargetId] = useState<string | null>(null);
+  const [reportReason, setReportReason] = useState("");
+
+  // ================= APPEAL POST =================
+  const [appealPostId, setAppealPostId] = useState<string | null>(null);
+  const [appealReason, setAppealReason] = useState("");
+  const [deletingIds, setDeletingIds] = useState<string[]>([]);
+
   const [expandedReplies, setExpandedReplies] = useState<
     Record<string, boolean>
   >({});
@@ -113,8 +130,6 @@ export default function NotificationsPage() {
       .from("notifications")
       .select("*")
       .eq("user_id", userId)
-      .neq("sender_id", userId)
-      .not("sender_id", "is", null)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -129,10 +144,20 @@ export default function NotificationsPage() {
       return;
     }
 
+    // Lọc bỏ thông báo do chính mình tạo ra (nhưng giữ lại system_alert do Admin gửi)
+    const validData = data.filter(
+      (n) =>
+        n.type === "system_alert" ||
+        n.type === "system_success" ||
+        (n.sender_id && n.sender_id !== userId),
+    );
+
     // Tải riêng thông tin của những "người gửi"
-    const senderIds = Array.from(new Set(data.map((n) => n.sender_id)));
+    const senderIds = Array.from(
+      new Set(validData.map((n) => n.sender_id).filter(Boolean)),
+    );
     const postIds = Array.from(
-      new Set(data.map((n) => n.post_id).filter(Boolean)),
+      new Set(validData.map((n) => n.post_id).filter(Boolean)),
     );
 
     let usersData: any[] = [];
@@ -154,7 +179,7 @@ export default function NotificationsPage() {
     }
 
     // Ghép thông tin Avatar, Name vào từng thông báo
-    const enrichedNotifications = data.map((n) => {
+    const enrichedNotifications = validData.map((n) => {
       const senderInfo = usersData.find((u) => u.id === n.sender_id);
       const postInfo = postsData.find((p) => p.id === n.post_id);
       return {
@@ -234,6 +259,60 @@ export default function NotificationsPage() {
     setEditingCommentId(null);
     setShowEmojiPicker(false);
     setExpandedReplies({});
+  };
+
+  // ================= DELETE NOTIFICATION =================
+  const handleDeleteNotification = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation(); // Ngăn sự kiện mở modal/chuyển trang
+
+    // Kích hoạt hiệu ứng trượt và mờ
+    setDeletingIds((prev) => [...prev, id]);
+
+    setTimeout(async () => {
+      setNotifications((prev) => prev.filter((n) => n.id !== id));
+      setDeletingIds((prev) => prev.filter((deletingId) => deletingId !== id));
+      try {
+        await deleteNotification(id);
+      } catch (err) {
+        toast.error("Xóa thông báo thất bại");
+      }
+    }, 300); // 300ms khớp với duration của transition
+  };
+
+  // ================= APPEAL POST =================
+  const handleSubmitAppeal = async () => {
+    if (!appealPostId || !appealReason.trim()) return;
+    try {
+      await submitAppeal(appealPostId, appealReason);
+      toast.success(
+        "Đã gửi yêu cầu xem xét lại! Quản trị viên sẽ phản hồi bạn sớm nhất.",
+      );
+      setAppealPostId(null);
+      setAppealReason("");
+    } catch (err) {
+      toast.error("Đã xảy ra lỗi khi gửi yêu cầu.");
+    }
+  };
+
+  // ================= REPORT =================
+  const handleReportComment = (commentId: string) => {
+    if (!user) return;
+    setReportTargetId(commentId);
+    setReportReason("");
+    setOpenCommentMenuId(null);
+  };
+
+  const submitReport = async () => {
+    if (!reportTargetId || !reportReason.trim()) return;
+    try {
+      await reportComment(reportTargetId, reportReason);
+      toast.success("Đã gửi báo cáo bình luận thành công!");
+      setReportTargetId(null);
+      setReportReason("");
+    } catch (err) {
+      console.error("LỖI BÁO CÁO BÌNH LUẬN:", err);
+      toast.error("Đã xảy ra lỗi khi báo cáo.");
+    }
   };
 
   const handleLike = async (postId: string) => {
@@ -372,86 +451,191 @@ export default function NotificationsPage() {
           </div>
         )}
 
-        <div className="space-y-2">
-          {notifications.map((n) => (
-            <div
-              key={n.id}
-              onClick={() => {
-                const type = n.type?.toLowerCase().trim();
-                if (type === "like" || type === "comment") {
-                  if (n.post_id) {
-                    openPostModal(n.post_id);
-                  } else if (n.sender_id) {
-                    router.push(`/profile/${n.sender_id}`);
+        <div className="space-y-2 overflow-x-hidden pb-2">
+          {notifications.map((n) => {
+            if (n.type === "system_alert") {
+              return (
+                <div
+                  key={n.id}
+                  onClick={() => {
+                    if (n.post_id) {
+                      openPostModal(n.post_id);
+                    }
+                  }}
+                  className={`group flex items-start gap-4 p-4 rounded-xl transition-all duration-300 border border-red-200 dark:border-red-900/30 bg-red-50/50 dark:bg-red-900/10 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/20 ${!n.is_read ? "shadow-sm" : ""} ${deletingIds.includes(n.id) ? "-translate-x-full opacity-0" : "translate-x-0 opacity-100"}`}
+                >
+                  <div className="w-11 h-11 rounded-full bg-red-100 dark:bg-red-900/50 flex items-center justify-center shrink-0">
+                    <ShieldAlert className="w-6 h-6 text-red-500 dark:text-red-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-red-500 dark:text-red-400 mb-1">
+                      Cảnh báo hệ thống
+                    </p>
+                    <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
+                      {n.content}
+                    </p>
+                    <p className="text-[12px] text-muted-foreground mt-2">
+                      {new Date(
+                        n.created_at.includes("Z") || n.created_at.includes("+")
+                          ? n.created_at
+                          : `${n.created_at}Z`,
+                      ).toLocaleString("vi-VN", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                    <button
+                      onClick={(e) => handleDeleteNotification(n.id, e)}
+                      className="p-2 text-red-400 hover:text-red-600 rounded-full hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            if (n.type === "system_success") {
+              return (
+                <div
+                  key={n.id}
+                  onClick={() => {
+                    if (n.post_id) {
+                      openPostModal(n.post_id);
+                    }
+                  }}
+                  className={`group flex items-start gap-4 p-4 rounded-xl transition-all duration-300 border border-green-200 dark:border-green-900/30 bg-green-50/50 dark:bg-green-900/10 cursor-pointer hover:bg-green-100 dark:hover:bg-green-900/20 ${!n.is_read ? "shadow-sm" : ""} ${deletingIds.includes(n.id) ? "-translate-x-full opacity-0" : "translate-x-0 opacity-100"}`}
+                >
+                  <div className="w-11 h-11 rounded-full bg-green-100 dark:bg-green-900/50 flex items-center justify-center shrink-0">
+                    <CheckCircle className="w-6 h-6 text-green-500 dark:text-green-400" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-bold text-green-500 dark:text-green-400 mb-1">
+                      Thông báo hệ thống
+                    </p>
+                    <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed">
+                      {n.content}
+                    </p>
+                    <p className="text-[12px] text-muted-foreground mt-2">
+                      {new Date(
+                        n.created_at.includes("Z") || n.created_at.includes("+")
+                          ? n.created_at
+                          : `${n.created_at}Z`,
+                      ).toLocaleString("vi-VN", {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                        day: "numeric",
+                        month: "short",
+                      })}
+                    </p>
+                  </div>
+                  <div className="flex-shrink-0 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                    <button
+                      onClick={(e) => handleDeleteNotification(n.id, e)}
+                      className="p-2 text-green-500 hover:text-green-700 rounded-full hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+
+            return (
+              <div
+                key={n.id}
+                onClick={() => {
+                  const type = n.type?.toLowerCase().trim();
+                  if (type === "like" || type === "comment") {
+                    if (n.post_id) {
+                      openPostModal(n.post_id);
+                    } else if (n.sender_id) {
+                      router.push(`/profile/${n.sender_id}`);
+                    }
+                  } else if (type === "follow") {
+                    if (n.sender_id) {
+                      router.push(`/profile/${n.sender_id}`);
+                    }
+                  } else {
+                    // Dự phòng cho các loại thông báo khác
+                    if (n.post_id) openPostModal(n.post_id);
+                    else if (n.sender_id)
+                      router.push(`/profile/${n.sender_id}`);
                   }
-                } else if (type === "follow") {
-                  if (n.sender_id) {
-                    router.push(`/profile/${n.sender_id}`);
-                  }
-                } else {
-                  // Dự phòng cho các loại thông báo khác
-                  if (n.post_id) openPostModal(n.post_id);
-                  else if (n.sender_id) router.push(`/profile/${n.sender_id}`);
-                }
-              }}
-              className={`flex items-center gap-4 p-3 rounded-xl transition-all cursor-pointer border border-transparent hover:border-gray-200 dark:hover:border-neutral-800 hover:shadow-sm dark:hover:shadow-black/40 hover:bg-white dark:hover:bg-[#262626] ${!n.is_read ? "bg-blue-50 dark:bg-[#333333]" : ""}`}
-            >
-              <div className="relative">
-                <img
-                  src={
-                    n.users?.avatar_url ||
-                    `https://api.dicebear.com/7.x/identicon/svg?seed=${n.user_id}`
-                  }
-                  className="w-11 h-11 rounded-full object-cover ring-1 ring-gray-200 dark:ring-neutral-700 shadow-sm"
-                />
-                <div className="absolute -bottom-1 -right-1 rounded-full p-1 border border-gray-200 dark:border-neutral-700 shadow-sm bg-white dark:bg-[#262626]">
-                  {iconMap[n.type] || (
-                    <Heart className="w-4 h-4 text-muted-foreground" />
-                  )}
+                }}
+                className={`group flex items-center gap-4 p-3 rounded-xl transition-all duration-300 cursor-pointer border border-transparent hover:border-gray-200 dark:hover:border-neutral-800 hover:shadow-sm dark:hover:shadow-black/40 hover:bg-white dark:hover:bg-[#262626] ${!n.is_read ? "bg-blue-50 dark:bg-[#333333]" : ""} ${deletingIds.includes(n.id) ? "-translate-x-full opacity-0" : "translate-x-0 opacity-100"}`}
+              >
+                <div className="relative">
+                  <img
+                    src={
+                      n.users?.avatar_url ||
+                      `https://api.dicebear.com/7.x/identicon/svg?seed=${n.user_id}`
+                    }
+                    className="w-11 h-11 rounded-full object-cover ring-1 ring-gray-200 dark:ring-neutral-700 shadow-sm"
+                  />
+                  <div className="absolute -bottom-1 -right-1 rounded-full p-1 border border-gray-200 dark:border-neutral-700 shadow-sm bg-white dark:bg-[#262626]">
+                    {iconMap[n.type] || (
+                      <Heart className="w-4 h-4 text-muted-foreground" />
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm leading-tight text-foreground">
+                    <span className="font-semibold text-gray-900 dark:text-gray-100">
+                      {n.users?.name || "Người dùng"}
+                    </span>{" "}
+                    {n.type === "like" && "đã thích bài viết của bạn."}
+                    {n.type === "comment" &&
+                      "đã bình luận về bài viết của bạn."}
+                    {n.type === "follow" && "đã bắt đầu theo dõi bạn."}
+                  </p>
+
+                  <p className="text-[12px] text-muted-foreground mt-1">
+                    {new Date(
+                      n.created_at.includes("Z") || n.created_at.includes("+")
+                        ? n.created_at
+                        : `${n.created_at}Z`,
+                    ).toLocaleString("vi-VN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      day: "numeric",
+                      month: "short",
+                    })}
+                  </p>
+                </div>
+
+                {/* HIỂN THỊ THUMBNAIL CỦA BÀI VIẾT Ở BÊN PHẢI */}
+                {n.posts && (
+                  <div className="flex-shrink-0 ml-2">
+                    {n.posts.image_url ? (
+                      <img
+                        src={n.posts.image_url}
+                        className="w-12 h-12 object-cover rounded-md border border-gray-200 dark:border-neutral-700 shadow-sm"
+                      />
+                    ) : (
+                      <div className="w-12 h-12 overflow-hidden bg-gray-100 dark:bg-[#333333] text-[9px] p-1 text-muted-foreground rounded-md flex items-center justify-center text-center border border-gray-200 dark:border-neutral-700 shadow-sm break-words line-clamp-3">
+                        {n.posts.content}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex-shrink-0 opacity-100 lg:opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                  <button
+                    onClick={(e) => handleDeleteNotification(n.id, e)}
+                    className="p-2 text-gray-400 hover:text-red-500 rounded-full hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
                 </div>
               </div>
-
-              <div className="flex-1 min-w-0">
-                <p className="text-sm leading-tight text-foreground">
-                  <span className="font-semibold text-gray-900 dark:text-gray-100">
-                    {n.users?.name || "Người dùng"}
-                  </span>{" "}
-                  {n.type === "like" && "đã thích bài viết của bạn."}
-                  {n.type === "comment" && "đã bình luận về bài viết của bạn."}
-                  {n.type === "follow" && "đã bắt đầu theo dõi bạn."}
-                </p>
-
-                <p className="text-[12px] text-muted-foreground mt-1">
-                  {new Date(
-                    n.created_at.includes("Z") || n.created_at.includes("+")
-                      ? n.created_at
-                      : `${n.created_at}Z`,
-                  ).toLocaleString("vi-VN", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    day: "numeric",
-                    month: "short",
-                  })}
-                </p>
-              </div>
-
-              {/* HIỂN THỊ THUMBNAIL CỦA BÀI VIẾT Ở BÊN PHẢI */}
-              {n.posts && (
-                <div className="flex-shrink-0 ml-2">
-                  {n.posts.image_url ? (
-                    <img
-                      src={n.posts.image_url}
-                      className="w-12 h-12 object-cover rounded-md border border-gray-200 dark:border-neutral-700 shadow-sm"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 overflow-hidden bg-gray-100 dark:bg-[#333333] text-[9px] p-1 text-muted-foreground rounded-md flex items-center justify-center text-center border border-gray-200 dark:border-neutral-700 shadow-sm break-words line-clamp-3">
-                      {n.posts.content}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </main>
 
@@ -474,12 +658,20 @@ export default function NotificationsPage() {
           >
             {/* Phần Ảnh */}
             {selectedPost.image_url && (
-              <div className="flex-1 bg-[#1a1a1a] flex items-center justify-center min-h-[300px] md:min-h-[500px]">
+              <div className="flex-1 bg-[#1a1a1a] flex items-center justify-center min-h-[300px] md:min-h-[500px] relative overflow-hidden">
                 <img
                   src={selectedPost.image_url}
-                  className="w-full h-full object-cover object-center"
+                  className={`w-full h-full object-cover object-center ${selectedPost.is_flagged ? "blur-xl scale-110" : ""}`}
                   alt="Post"
                 />
+                {selectedPost.is_flagged && (
+                  <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/30 z-20 pointer-events-none">
+                    <ShieldAlert className="w-12 h-12 mb-2 text-red-500 drop-shadow-md" />
+                    <span className="font-bold text-lg drop-shadow-md">
+                      Hình ảnh nhạy cảm
+                    </span>
+                  </div>
+                )}
               </div>
             )}
 
@@ -506,8 +698,24 @@ export default function NotificationsPage() {
 
                 {/* Caption */}
                 {selectedPost.content && (
-                  <div className="px-4 pb-4 text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-300">
-                    {selectedPost.content}
+                  <div
+                    className={`px-4 pb-4 text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-300 ${selectedPost.is_flagged ? "text-red-500 font-semibold italic" : ""}`}
+                  >
+                    {selectedPost.is_flagged
+                      ? "Nội dung này đã bị ẩn do vi phạm tiêu chuẩn cộng đồng."
+                      : selectedPost.content}
+                    {selectedPost.is_flagged &&
+                      user?.id === selectedPost.user_id && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setAppealPostId(selectedPost.id);
+                          }}
+                          className="block mt-2 text-blue-500 hover:underline text-[12px] font-bold not-italic"
+                        >
+                          Gửi yêu cầu xem xét lại (Kháng nghị)
+                        </button>
+                      )}
                   </div>
                 )}
               </div>
@@ -613,7 +821,7 @@ export default function NotificationsPage() {
                         )}
                       </div>
 
-                      {user?.id === c.user_id && !editingCommentId && (
+                      {user && !editingCommentId && (
                         <div className="relative opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity ml-2 mt-1">
                           <MoreHorizontal
                             className="w-4 h-4 cursor-pointer text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
@@ -626,28 +834,43 @@ export default function NotificationsPage() {
                           />
                           {openCommentMenuId === c.id && (
                             <div className="absolute right-0 mt-1 w-24 border border-gray-200 dark:border-neutral-700 shadow-lg dark:shadow-black/50 rounded-lg py-1 z-50 transition-colors duration-500 bg-white dark:bg-[#333333]">
-                              <button
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setEditingCommentId(c.id);
-                                  setEditCommentText(c.content);
-                                  setOpenCommentMenuId(null);
-                                }}
-                                className="w-full text-left px-3 py-1 text-sm hover:bg-secondary"
-                              >
-                                Sửa
-                              </button>
-                              <button
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleDeleteComment(c.id);
-                                }}
-                                className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-secondary"
-                              >
-                                Xóa
-                              </button>
+                              {user.id === c.user_id ? (
+                                <>
+                                  <button
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setEditingCommentId(c.id);
+                                      setEditCommentText(c.content);
+                                      setOpenCommentMenuId(null);
+                                    }}
+                                    className="w-full text-left px-3 py-1 text-sm hover:bg-secondary"
+                                  >
+                                    Sửa
+                                  </button>
+                                  <button
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleDeleteComment(c.id);
+                                    }}
+                                    className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-secondary"
+                                  >
+                                    Xóa
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleReportComment(c.id);
+                                  }}
+                                  className="w-full text-left px-3 py-1 text-sm hover:bg-secondary flex items-center gap-2"
+                                >
+                                  <Flag size={14} /> Báo cáo
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -795,6 +1018,114 @@ export default function NotificationsPage() {
                   </button>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL REPORT ================= */}
+      {reportTargetId && (
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4 animate-in fade-in duration-200"
+          onClick={() => setReportTargetId(null)}
+        >
+          <div
+            className="bg-white dark:bg-[#262626] rounded-2xl shadow-2xl w-full max-w-[400px] overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-200 dark:border-neutral-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                Báo cáo bình luận
+              </h3>
+              <button
+                onClick={() => setReportTargetId(null)}
+                className="hover:text-gray-500 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Vui lòng nhập lý do báo cáo bình luận này. Quản trị viên sẽ xem
+                xét báo cáo của bạn.
+              </p>
+              <textarea
+                value={reportReason}
+                onChange={(e) => setReportReason(e.target.value)}
+                placeholder="Ví dụ: Nội dung phản cảm, spam..."
+                className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none transition-colors resize-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] text-sm text-gray-900 dark:text-gray-100"
+                rows={4}
+                autoFocus
+              />
+            </div>
+            <div className="p-4 border-t border-gray-200 dark:border-neutral-800 flex justify-end gap-2">
+              <button
+                className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#333333] transition-colors rounded-lg"
+                onClick={() => setReportTargetId(null)}
+              >
+                Hủy
+              </button>
+              <button
+                className="px-4 py-2 text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition-colors rounded-lg disabled:opacity-50"
+                onClick={submitReport}
+                disabled={!reportReason.trim()}
+              >
+                Gửi báo cáo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL APPEAL POST ================= */}
+      {appealPostId && (
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4 animate-in fade-in duration-200"
+          onClick={() => setAppealPostId(null)}
+        >
+          <div
+            className="bg-white dark:bg-[#262626] rounded-2xl shadow-2xl w-full max-w-[400px] overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-200 dark:border-neutral-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                Gửi yêu cầu xem xét lại
+              </h3>
+              <button
+                onClick={() => setAppealPostId(null)}
+                className="hover:text-gray-500 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Vui lòng nhập lý do bạn cho rằng bài viết này không vi phạm tiêu
+                chuẩn cộng đồng.
+              </p>
+              <textarea
+                value={appealReason}
+                onChange={(e) => setAppealReason(e.target.value)}
+                placeholder="Ví dụ: Hình ảnh này chỉ là ảnh nghệ thuật, không có yếu tố phản cảm..."
+                className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none transition-colors resize-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] text-sm text-gray-900 dark:text-gray-100"
+                rows={4}
+                autoFocus
+              />
+            </div>
+            <div className="p-4 border-t border-gray-200 dark:border-neutral-800 flex justify-end gap-2">
+              <button
+                className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#333333] transition-colors rounded-lg"
+                onClick={() => setAppealPostId(null)}
+              >
+                Hủy
+              </button>
+              <button
+                className="px-4 py-2 text-sm font-bold text-white bg-blue-500 hover:bg-blue-600 transition-colors rounded-lg disabled:opacity-50"
+                onClick={handleSubmitAppeal}
+                disabled={!appealReason.trim()}
+              >
+                Gửi yêu cầu
+              </button>
             </div>
           </div>
         </div>

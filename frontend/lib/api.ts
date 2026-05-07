@@ -74,14 +74,16 @@ export const getFeed = async () => {
   const rpcDataMap = new Map((rpcData || []).map((p: any) => [p.id, p]));
 
   // 4. Enrich and sort
-  let enrichedData = allPosts.map((post) => {
-    const rpcInfo = rpcDataMap.get(post.id);
-    return {
-      ...post,
-      ...(rpcInfo || {}), // Add score etc. from RPC
-      is_saved: savedSet.has(post.id),
-    };
-  });
+  let enrichedData = allPosts
+    .map((post) => {
+      const rpcInfo = rpcDataMap.get(post.id);
+      return {
+        ...post,
+        ...(rpcInfo || {}), // Add score etc. from RPC
+        is_saved: savedSet.has(post.id),
+      };
+    })
+    .filter((post) => !post.is_flagged || post.user_id === userId);
 
   // 5. Sắp xếp lại theo thứ tự ưu tiên
   const now = Date.now();
@@ -380,6 +382,26 @@ export const reportPost = async (postId: string, reason: string = "spam") => {
   return data;
 };
 
+// REPORT COMMENT
+export const reportComment = async (
+  commentId: string,
+  reason: string = "spam",
+) => {
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+
+  if (!user) return;
+
+  const { data, error } = await supabase.from("reports").insert({
+    user_id: user.id,
+    comment_id: commentId,
+    reason,
+  });
+
+  if (error) throw new Error(error.message || "Lỗi báo cáo bình luận");
+  return data;
+};
+
 /* =========================
    PAGES (FANPAGE) API
 ========================= */
@@ -496,5 +518,161 @@ export const removePageMember = async (pageId: string, userId: string) => {
 export const deletePage = async (pageId: string) => {
   const { error } = await supabase.from("pages").delete().eq("id", pageId);
   if (error) handleError(error, "deletePage");
+  return true;
+};
+
+/* =========================
+   ADMIN: QUẢN LÝ BÁO CÁO
+========================= */
+export const getPendingReports = async () => {
+  const { data, error } = await supabase
+    .from("reports")
+    .select(
+      `
+      id,
+      reason,
+      created_at,
+      status,
+      posts ( id, content, image_url, user_id ),
+      comments ( id, content, image_url, user_id ),
+      users ( id, name, avatar_url )
+    `,
+    )
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+
+  if (error) handleError(error, "getPendingReports");
+  return data;
+};
+
+export const resolveReport = async (
+  reportId: string,
+  postId: string | null,
+  postOwnerId: string | null,
+  action: "delete" | "keep",
+  adminMessage: string = "",
+  commentId?: string | null,
+  commentOwnerId?: string | null,
+) => {
+  const { error: updateError } = await supabase
+    .from("reports")
+    .update({ status: "resolved" })
+    .eq("id", reportId);
+
+  if (updateError) handleError(updateError, "resolveReport");
+
+  if (action === "delete") {
+    if (postId && postOwnerId && !commentId) {
+      await supabase.from("notifications").insert({
+        user_id: postOwnerId,
+        type: "system_alert",
+        post_id: postId,
+        content: `Bài viết của bạn đã bị Quản trị viên xóa do vi phạm tiêu chuẩn cộng đồng. Lý do: ${adminMessage}`,
+      });
+      const { error: hideError } = await supabase
+        .from("posts")
+        .update({ is_flagged: true })
+        .eq("id", postId);
+      if (hideError) handleError(hideError, "hidePostAdmin");
+    } else if (commentId && commentOwnerId) {
+      await supabase.from("notifications").insert({
+        user_id: commentOwnerId,
+        type: "system_alert",
+        content: `Bình luận của bạn đã bị Quản trị viên xóa do vi phạm tiêu chuẩn cộng đồng. Lý do: ${adminMessage}`,
+      });
+      const { error: deleteError } = await supabase
+        .from("comments")
+        .delete()
+        .eq("id", commentId);
+      if (deleteError) handleError(deleteError, "deleteCommentAdmin");
+    }
+  }
+  return true;
+};
+
+/* =========================
+   GỬI YÊU CẦU KHÁNG NGHỊ (APPEAL)
+========================= */
+export const submitAppeal = async (postId: string, reason: string) => {
+  const { data: userData } = await supabase.auth.getUser();
+  const user = userData.user;
+  if (!user) throw new Error("Chưa đăng nhập");
+
+  const { data, error } = await supabase.from("appeals").insert({
+    post_id: postId,
+    user_id: user.id,
+    reason,
+  });
+
+  if (error) handleError(error, "submitAppeal");
+  return data;
+};
+
+/* =========================
+   ADMIN: QUẢN LÝ KHÁNG NGHỊ
+========================= */
+export const getPendingAppeals = async () => {
+  const { data, error } = await supabase
+    .from("appeals")
+    .select(
+      `
+      id,
+      reason,
+      status,
+      created_at,
+      posts ( id, content, image_url, user_id ),
+      users ( id, name, avatar_url )
+    `,
+    )
+    .eq("status", "pending")
+    .order("created_at", { ascending: false });
+
+  if (error) handleError(error, "getPendingAppeals");
+  return data;
+};
+
+export const resolveAppeal = async (
+  appealId: string,
+  postId: string | null,
+  postOwnerId: string | null,
+  action: "restore" | "reject",
+) => {
+  const { error: updateError } = await supabase
+    .from("appeals")
+    .update({ status: "resolved" })
+    .eq("id", appealId);
+
+  if (updateError) handleError(updateError, "resolveAppeal");
+
+  if (action === "restore" && postId && postOwnerId) {
+    await supabase.from("notifications").insert({
+      user_id: postOwnerId,
+      type: "system_success",
+      post_id: postId,
+      content: `Kháng nghị thành công! Bài viết của bạn đã được Quản trị viên khôi phục và hiển thị lại trên bảng tin.`,
+    });
+    const { error: restoreError } = await supabase
+      .from("posts")
+      .update({ is_flagged: false })
+      .eq("id", postId);
+    if (restoreError) handleError(restoreError, "restorePostAdmin");
+  }
+  return true;
+};
+
+/* =========================
+   DELETE NOTIFICATION
+========================= */
+export const deleteNotification = async (notificationId: string) => {
+  const { data: userData } = await supabase.auth.getUser();
+  if (!userData.user) throw new Error("Chưa đăng nhập");
+
+  const { error } = await supabase
+    .from("notifications")
+    .delete()
+    .eq("id", notificationId)
+    .eq("user_id", userData.user.id);
+
+  if (error) handleError(error, "deleteNotification");
   return true;
 };

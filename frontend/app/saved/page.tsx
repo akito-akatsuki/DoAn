@@ -12,6 +12,7 @@ import {
   updateComment,
   toggleLike,
   reportPost,
+  reportComment,
 } from "@/lib/api";
 import { showConfirm } from "@/components/GlobalConfirm";
 
@@ -37,8 +38,9 @@ export default function SavedPage() {
     Record<string, boolean>
   >({});
 
-  // ================= REPORT POST =================
-  const [reportPostId, setReportPostId] = useState<string | null>(null);
+  // ================= REPORT =================
+  const [reportTargetId, setReportTargetId] = useState<string | null>(null);
+  const [reportType, setReportType] = useState<"post" | "comment">("post");
   const [reportReason, setReportReason] = useState("");
 
   // ================= CLICK OUTSIDE =================
@@ -80,6 +82,8 @@ export default function SavedPage() {
               id,
               content,
               image_url,
+              is_flagged,
+              user_id,
               users (
                 id,
                 name,
@@ -92,7 +96,12 @@ export default function SavedPage() {
           .order("created_at", { ascending: false });
 
         if (data) {
-          setSavedPosts(data);
+          const filteredData = data.filter(
+            (item: any) =>
+              item.posts &&
+              (!item.posts.is_flagged || item.posts.user_id === user.id),
+          );
+          setSavedPosts(filteredData);
         }
         if (error) {
           console.error("Error fetching saved posts:", error);
@@ -266,17 +275,30 @@ export default function SavedPage() {
   };
 
   const handleReportPost = (postId: string) => {
-    setReportPostId(postId);
+    setReportTargetId(postId);
+    setReportType("post");
     setReportReason("");
     setOpenPostMenu(false);
   };
 
+  const handleReportComment = (commentId: string) => {
+    if (!user) return;
+    setReportTargetId(commentId);
+    setReportType("comment");
+    setReportReason("");
+    setOpenCommentMenuId(null);
+  };
+
   const submitReport = async () => {
-    if (!reportPostId || !reportReason.trim()) return;
+    if (!reportTargetId || !reportReason.trim()) return;
     try {
-      await reportPost(reportPostId, reportReason);
+      if (reportType === "post") {
+        await reportPost(reportTargetId, reportReason);
+      } else {
+        await reportComment(reportTargetId, reportReason);
+      }
       toast.success("Đã gửi báo cáo thành công!");
-      setReportPostId(null);
+      setReportTargetId(null);
       setReportReason("");
     } catch (err) {
       console.error("REPORT POST ERROR:", err);
@@ -522,7 +544,7 @@ export default function SavedPage() {
                         )}
                       </div>
 
-                      {user?.id === c.user_id && !editingCommentId && (
+                      {user && !editingCommentId && (
                         <div className="relative opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity ml-2 mt-1">
                           <MoreHorizontal
                             className="w-4 h-4 cursor-pointer text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
@@ -535,28 +557,43 @@ export default function SavedPage() {
                           />
                           {openCommentMenuId === c.id && (
                             <div className="absolute right-0 mt-1 w-24 border border-gray-200 dark:border-neutral-700 shadow-lg dark:shadow-black/50 rounded-lg py-1 z-50 transition-colors duration-500 bg-white dark:bg-[#333333]">
-                              <button
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setEditingCommentId(c.id);
-                                  setEditCommentText(c.content);
-                                  setOpenCommentMenuId(null);
-                                }}
-                                className="w-full text-left px-3 py-1 text-sm hover:bg-secondary"
-                              >
-                                Sửa
-                              </button>
-                              <button
-                                onMouseDown={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  handleDeleteComment(c.id);
-                                }}
-                                className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-secondary"
-                              >
-                                Xóa
-                              </button>
+                              {user.id === c.user_id ? (
+                                <>
+                                  <button
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setEditingCommentId(c.id);
+                                      setEditCommentText(c.content);
+                                      setOpenCommentMenuId(null);
+                                    }}
+                                    className="w-full text-left px-3 py-1 text-sm hover:bg-secondary"
+                                  >
+                                    Sửa
+                                  </button>
+                                  <button
+                                    onMouseDown={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      handleDeleteComment(c.id);
+                                    }}
+                                    className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-secondary"
+                                  >
+                                    Xóa
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onMouseDown={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    handleReportComment(c.id);
+                                  }}
+                                  className="w-full text-left px-3 py-1 text-sm hover:bg-secondary flex items-center gap-2"
+                                >
+                                  <Flag size={14} /> Báo cáo
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -684,11 +721,11 @@ export default function SavedPage() {
         </div>
       )}
 
-      {/* ================= MODAL REPORT POST ================= */}
-      {reportPostId && (
+      {/* ================= MODAL REPORT ================= */}
+      {reportTargetId && (
         <div
           className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4 animate-in fade-in duration-200"
-          onClick={() => setReportPostId(null)}
+          onClick={() => setReportTargetId(null)}
         >
           <div
             className="bg-white dark:bg-[#262626] rounded-2xl shadow-2xl w-full max-w-[400px] overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-200 dark:border-neutral-800"
@@ -696,10 +733,10 @@ export default function SavedPage() {
           >
             <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex justify-between items-center">
               <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
-                Báo cáo bài viết
+                Báo cáo {reportType === "post" ? "bài viết" : "bình luận"}
               </h3>
               <button
-                onClick={() => setReportPostId(null)}
+                onClick={() => setReportTargetId(null)}
                 className="hover:text-gray-500 transition-colors"
               >
                 <X className="w-5 h-5" />
@@ -707,8 +744,9 @@ export default function SavedPage() {
             </div>
             <div className="p-4 space-y-4">
               <p className="text-sm text-gray-600 dark:text-gray-300">
-                Vui lòng nhập lý do báo cáo bài viết này. Quản trị viên sẽ xem
-                xét báo cáo của bạn.
+                Vui lòng nhập lý do báo cáo{" "}
+                {reportType === "post" ? "bài viết" : "bình luận"} này. Quản trị
+                viên sẽ xem xét báo cáo của bạn.
               </p>
               <textarea
                 value={reportReason}
@@ -722,7 +760,7 @@ export default function SavedPage() {
             <div className="p-4 border-t border-gray-200 dark:border-neutral-800 flex justify-end gap-2">
               <button
                 className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#333333] transition-colors rounded-lg"
-                onClick={() => setReportPostId(null)}
+                onClick={() => setReportTargetId(null)}
               >
                 Hủy
               </button>

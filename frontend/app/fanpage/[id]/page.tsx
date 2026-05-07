@@ -47,6 +47,7 @@ import {
   toggleLike,
   toggleSavePost,
   reportPost,
+  reportComment,
 } from "@/lib/api";
 import toast from "react-hot-toast";
 import { showConfirm } from "@/components/GlobalConfirm";
@@ -123,12 +124,13 @@ export default function FanpageProfile({
   const [editingPostId, setEditingPostId] = useState<string | null>(null);
   const [editPostContent, setEditPostContent] = useState("");
 
-  // ================= CREATE POST STATES =================
+  // ================= CREATE POST & REPORT STATES =================
   const [postContent, setPostContent] = useState("");
   const [postFiles, setPostFiles] = useState<File[]>([]);
   const [isPosting, setIsPosting] = useState(false);
 
-  const [reportPostId, setReportPostId] = useState<string | null>(null);
+  const [reportTargetId, setReportTargetId] = useState<string | null>(null);
+  const [reportType, setReportType] = useState<"post" | "comment">("post");
   const [reportReason, setReportReason] = useState("");
 
   // ================= MODAL POST STATES =================
@@ -312,13 +314,18 @@ export default function FanpageProfile({
             (savedRes.data || []).map((s: any) => s.post_id),
           );
 
-          const enrichedData = postsData!.map((post: any) => ({
-            ...post,
-            pages: pageData,
-            likes_count: likesCountByPost[post.id] || 0,
-            is_liked: userLikedPosts.has(post.id),
-            is_saved: userSavedPosts.has(post.id),
-          }));
+          const enrichedData = postsData!
+            .map((post: any) => ({
+              ...post,
+              pages: pageData,
+              likes_count: likesCountByPost[post.id] || 0,
+              is_liked: userLikedPosts.has(post.id),
+              is_saved: userSavedPosts.has(post.id),
+            }))
+            .filter(
+              (post: any) =>
+                !post.is_flagged || post.user_id === user?.id || isAdmin,
+            );
 
           setPosts(enrichedData);
         } else {
@@ -1003,18 +1010,31 @@ export default function FanpageProfile({
   };
 
   const handleReportPost = (postId: string) => {
-    setReportPostId(postId);
+    setReportTargetId(postId);
+    setReportType("post");
     setReportReason("");
     setOpenMenuId(null);
     setOpenPostMenu(false);
   };
 
+  const handleReportComment = (commentId: string) => {
+    if (!currentUser) return;
+    setReportTargetId(commentId);
+    setReportType("comment");
+    setReportReason("");
+    setOpenCommentMenuId(null);
+  };
+
   const submitReport = async () => {
-    if (!reportPostId || !reportReason.trim()) return;
+    if (!reportTargetId || !reportReason.trim()) return;
     try {
-      await reportPost(reportPostId, reportReason);
+      if (reportType === "post") {
+        await reportPost(reportTargetId, reportReason);
+      } else {
+        await reportComment(reportTargetId, reportReason);
+      }
       toast.success("Đã gửi báo cáo thành công!");
-      setReportPostId(null);
+      setReportTargetId(null);
       setReportReason("");
     } catch (err) {
       toast.error("Đã xảy ra lỗi khi báo cáo bài viết.");
@@ -1587,50 +1607,62 @@ export default function FanpageProfile({
                                 </div>
                               )}
                             </div>
-                            {(currentUser?.id === c.user_id || isAdmin) &&
-                              !editingCommentId && (
-                                <div className="relative opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity ml-2">
-                                  <MoreHorizontal
-                                    className="w-4 h-4 cursor-pointer text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      setOpenCommentMenuId(
-                                        openCommentMenuId === c.id
-                                          ? null
-                                          : c.id,
-                                      );
-                                    }}
-                                  />
-                                  {openCommentMenuId === c.id && (
-                                    <div className="absolute right-0 mt-1 w-24 border border-gray-200 dark:border-neutral-700 shadow-lg rounded-lg py-1 z-50 bg-white dark:bg-[#333333]">
-                                      {currentUser?.id === c.user_id && (
+                            {currentUser && !editingCommentId && (
+                              <div className="relative opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                                <MoreHorizontal
+                                  className="w-4 h-4 cursor-pointer text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setOpenCommentMenuId(
+                                      openCommentMenuId === c.id ? null : c.id,
+                                    );
+                                  }}
+                                />
+                                {openCommentMenuId === c.id && (
+                                  <div className="absolute right-0 mt-1 w-24 border border-gray-200 dark:border-neutral-700 shadow-lg rounded-lg py-1 z-50 bg-white dark:bg-[#333333]">
+                                    {currentUser.id === c.user_id || isAdmin ? (
+                                      <>
+                                        {currentUser.id === c.user_id && (
+                                          <button
+                                            onMouseDown={(e) => {
+                                              e.preventDefault();
+                                              e.stopPropagation();
+                                              setEditingCommentId(c.id);
+                                              setEditCommentText(c.content);
+                                              setOpenCommentMenuId(null);
+                                            }}
+                                            className="w-full text-left px-3 py-1 text-sm hover:bg-secondary"
+                                          >
+                                            Sửa
+                                          </button>
+                                        )}
                                         <button
                                           onMouseDown={(e) => {
                                             e.preventDefault();
                                             e.stopPropagation();
-                                            setEditingCommentId(c.id);
-                                            setEditCommentText(c.content);
-                                            setOpenCommentMenuId(null);
+                                            handleDeleteComment(c.id, post.id);
                                           }}
-                                          className="w-full text-left px-3 py-1 text-sm hover:bg-secondary"
+                                          className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-secondary"
                                         >
-                                          Sửa
+                                          Xóa
                                         </button>
-                                      )}
+                                      </>
+                                    ) : (
                                       <button
                                         onMouseDown={(e) => {
                                           e.preventDefault();
                                           e.stopPropagation();
-                                          handleDeleteComment(c.id, post.id);
+                                          handleReportComment(c.id);
                                         }}
-                                        className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-secondary"
+                                        className="w-full text-left px-3 py-1 text-sm hover:bg-secondary flex items-center gap-2"
                                       >
-                                        Xóa
+                                        <Flag size={14} /> Báo cáo
                                       </button>
-                                    </div>
-                                  )}
-                                </div>
-                              )}
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
                         );
                       })}
@@ -1909,52 +1941,66 @@ export default function FanpageProfile({
                           </span>
                         )}
                       </div>
-                      {(currentUser?.id === c.user_id || isAdmin) &&
-                        !editingCommentId && (
-                          <div className="relative opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity ml-2 mt-1">
-                            <MoreHorizontal
-                              className="w-4 h-4 cursor-pointer text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOpenCommentMenuId(
-                                  openCommentMenuId === c.id ? null : c.id,
-                                );
-                              }}
-                            />
-                            {openCommentMenuId === c.id && (
-                              <div className="absolute right-0 mt-1 w-24 border border-gray-200 dark:border-neutral-700 shadow-lg rounded-lg py-1 z-50 bg-white dark:bg-[#333333]">
-                                {currentUser?.id === c.user_id && (
+                      {currentUser && !editingCommentId && (
+                        <div className="relative opacity-100 md:opacity-0 group-hover:opacity-100 transition-opacity ml-2 mt-1">
+                          <MoreHorizontal
+                            className="w-4 h-4 cursor-pointer text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOpenCommentMenuId(
+                                openCommentMenuId === c.id ? null : c.id,
+                              );
+                            }}
+                          />
+                          {openCommentMenuId === c.id && (
+                            <div className="absolute right-0 mt-1 w-24 border border-gray-200 dark:border-neutral-700 shadow-lg rounded-lg py-1 z-50 bg-white dark:bg-[#333333]">
+                              {currentUser.id === c.user_id || isAdmin ? (
+                                <>
+                                  {currentUser.id === c.user_id && (
+                                    <button
+                                      onMouseDown={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setEditingCommentId(c.id);
+                                        setEditCommentText(c.content);
+                                        setOpenCommentMenuId(null);
+                                      }}
+                                      className="w-full text-left px-3 py-1 text-sm hover:bg-secondary"
+                                    >
+                                      Sửa
+                                    </button>
+                                  )}
                                   <button
                                     onMouseDown={(e) => {
                                       e.preventDefault();
                                       e.stopPropagation();
-                                      setEditingCommentId(c.id);
-                                      setEditCommentText(c.content);
-                                      setOpenCommentMenuId(null);
+                                      handleDeleteComment(
+                                        c.id,
+                                        selectedPost.id,
+                                        true,
+                                      );
                                     }}
-                                    className="w-full text-left px-3 py-1 text-sm hover:bg-secondary"
+                                    className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-secondary"
                                   >
-                                    Sửa
+                                    Xóa
                                   </button>
-                                )}
+                                </>
+                              ) : (
                                 <button
                                   onMouseDown={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();
-                                    handleDeleteComment(
-                                      c.id,
-                                      selectedPost.id,
-                                      true,
-                                    );
+                                    handleReportComment(c.id);
                                   }}
-                                  className="w-full text-left px-3 py-1 text-sm text-red-500 hover:bg-secondary"
+                                  className="w-full text-left px-3 py-1 text-sm hover:bg-secondary flex items-center gap-2"
                                 >
-                                  Xóa
+                                  <Flag size={14} /> Báo cáo
                                 </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
 
@@ -2097,11 +2143,11 @@ export default function FanpageProfile({
         </div>
       )}
 
-      {/* ================= MODAL REPORT POST ================= */}
-      {reportPostId && (
+      {/* ================= MODAL REPORT ================= */}
+      {reportTargetId && (
         <div
           className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4 animate-in fade-in duration-200"
-          onClick={() => setReportPostId(null)}
+          onClick={() => setReportTargetId(null)}
         >
           <div
             className="bg-white dark:bg-[#262626] rounded-2xl shadow-2xl w-full max-w-[400px] overflow-hidden border border-gray-200 dark:border-neutral-800"
@@ -2130,7 +2176,7 @@ export default function FanpageProfile({
             <div className="p-4 border-t border-gray-200 dark:border-neutral-800 flex justify-end gap-2">
               <button
                 className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#333333] rounded-lg"
-                onClick={() => setReportPostId(null)}
+                onClick={() => setReportTargetId(null)}
               >
                 Hủy
               </button>

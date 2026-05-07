@@ -1,0 +1,203 @@
+1 sơ đồ thực thể
+erDiagram
+    %% Định nghĩa các bảng và thuộc tính
+    USERS {
+        uuid id PK
+        string name
+        string email
+        string avatar_url
+        string cover_url
+        string bio
+        timestamp created_at
+    }
+
+    PAGES {
+        uuid id PK
+        string name
+        string avatar_url
+        string cover_url
+        string bio
+        string post_permission
+        uuid created_by FK
+    }
+
+    POSTS {
+        uuid id PK
+        uuid user_id FK
+        uuid page_id FK
+        text content
+        string image_urls
+        boolean is_flagged
+        timestamp created_at
+    }
+
+    COMMENTS {
+        uuid id PK
+        uuid user_id FK
+        uuid post_id FK
+        text content
+        string image_url
+        timestamp created_at
+    }
+
+    LIKES {
+        uuid id PK
+        uuid user_id FK
+        uuid post_id FK
+    }
+
+    FOLLOWS {
+        uuid id PK
+        uuid follower_id FK
+        uuid following_id FK
+    }
+
+    CONVERSATIONS {
+        uuid id PK
+        boolean is_group
+        string group_name
+        uuid admin_id FK
+        string last_message
+    }
+
+    MESSAGES {
+        uuid id PK
+        uuid conversation_id FK
+        uuid sender_id FK
+        text content
+        string file_url
+        boolean is_read
+        timestamp created_at
+    }
+
+    NOTIFICATIONS {
+        uuid id PK
+        uuid user_id FK
+        uuid sender_id FK
+        string type
+        boolean is_read
+    }
+
+    CALLS {
+        uuid id PK
+        uuid caller_id FK
+        uuid receiver_id FK
+        string room_id
+        string status
+    }
+
+    %% Các mối quan hệ (Relationships)
+    USERS ||--o{ POSTS : "đăng"
+    PAGES ||--o{ POSTS : "chứa"
+    USERS ||--o{ PAGES : "tạo/quản lý"
+
+    USERS ||--o{ COMMENTS : "viết"
+    POSTS ||--o{ COMMENTS : "có"
+
+    USERS ||--o{ LIKES : "thích"
+    POSTS ||--o{ LIKES : "nhận"
+
+    USERS ||--o{ FOLLOWS : "người theo dõi"
+    USERS ||--o{ FOLLOWS : "người đang theo dõi"
+
+    CONVERSATIONS ||--o{ MESSAGES : "chứa"
+    USERS ||--o{ MESSAGES : "gửi"
+
+    USERS ||--o{ NOTIFICATIONS : "nhận"
+    USERS ||--o{ CALLS : "thực hiện"
+
+
+sơ đồ usecase
+flowchart LR
+    %% Định nghĩa các Actor (Người dùng hệ thống)
+    Guest([👤 Khách vãng lai])
+    User([👤 Người dùng đăng nhập])
+    Admin([🛡️ Quản trị viên Fanpage])
+    AI([🤖 Hệ thống AI Gemini])
+
+    %% Group các chức năng chính của hệ thống
+    subgraph InstaMini["Hệ thống Mạng xã hội InstaMini"]
+        direction TB
+
+        %% Nhóm Xác thực
+        UC_Auth(Đăng nhập / Đăng ký)
+        UC_Forgot(Khôi phục mật khẩu)
+
+        %% Nhóm Tương tác MXH
+        UC_Post(Đăng bài viết mới)
+        UC_Interact(Thích & Bình luận bài viết)
+        UC_Save(Lưu bài viết)
+        UC_Follow(Theo dõi người dùng/trang)
+
+        %% Nhóm Nhắn tin & Gọi điện
+        UC_Chat(Nhắn tin thời gian thực)
+        UC_GroupChat(Tạo nhóm chat)
+        UC_Call(Gọi Video / Thoại WebRTC)
+
+        %% Nhóm Fanpage
+        UC_CreatePage(Tạo Fanpage)
+        UC_ManagePage(Quản lý Trang & Thành viên)
+
+        %% Nhóm Quản trị
+        UC_Report(Báo cáo nội dung)
+        UC_Moderate(Kiểm duyệt nội dung tự động)
+    end
+
+    %% Gán quan hệ cho Khách
+    Guest --> UC_Auth
+    Guest --> UC_Forgot
+
+    %% Gán quan hệ cho Người dùng (Được kế thừa quyền của Khách)
+    Guest -. "Trở thành" .-> User
+    User --> UC_Post
+    User --> UC_Interact
+    User --> UC_Save
+    User --> UC_Follow
+    User --> UC_Chat
+    User --> UC_GroupChat
+    User --> UC_Call
+    User --> UC_CreatePage
+    User --> UC_Report
+
+    %% Gán quan hệ cho Admin Fanpage
+    User -. "Đóng vai trò" .-> Admin
+    Admin --> UC_ManagePage
+    Admin --> UC_Post
+
+    %% Gán quan hệ cho AI
+    UC_Post -. "<<include>>\nGửi text kiểm tra" .-> UC_Moderate
+    AI -. "Trả về kết quả (is_flagged)" .-> UC_Moderate
+
+    %% Style cho đẹp
+    classDef actor fill:#f9f9f9,stroke:#333,stroke-width:2px,font-weight:bold;
+    class Guest,User,Admin,AI actor;
+
+usecase
+Nhóm 1: Tương tác của Khách vãng lai
+
+Khách ---> (Đăng ký tài khoản)
+Khách ---> (Đăng nhập)
+Khách ---> (Khôi phục mật khẩu)
+Nhóm 2: Tương tác của Người dùng (User)
+
+Người dùng ---> (Quản lý hồ sơ cá nhân)
+Người dùng ---> (Đăng bài viết)
+Người dùng ---> (Tương tác: Thích, Bình luận, Lưu)
+Người dùng ---> (Theo dõi User/Fanpage)
+Người dùng ---> (Nhắn tin thời gian thực)
+Người dùng ---> (Tạo nhóm chat)
+Người dùng ---> (Gọi Video / Thoại)
+Người dùng ---> (Tạo Fanpage)
+Người dùng ---> (Báo cáo vi phạm)
+Nhóm 3: Tương tác của Quản trị viên Fanpage (Admin) (Vẽ mũi tên kế thừa từ Admin chỉ sang User)
+
+Admin ---> (Chỉnh sửa thông tin trang)
+Admin ---> (Quản lý thành viên/Admin khác)
+Admin ---> (Xóa bài viết trên trang)
+Nhóm 4: Các mối quan hệ đặc biệt (<<include>> và <<extend>>) Nhớ dùng mũi tên nét đứt cho các quan hệ này:
+
+(Đăng bài viết) --- <<include>> ---> (Kiểm duyệt nội dung tự động)
+AI ---> (Kiểm duyệt nội dung tự động)
+(Tương tác: Thích, Bình luận) --- <<extend>> ---> (Tự động gửi thông báo)
+(Đăng ký tài khoản) --- <<extend>> ---> (Đăng nhập bằng Google)
+(Gọi Video / Thoại) --- <<include>> ---> (Khởi tạo phòng WebRTC)
