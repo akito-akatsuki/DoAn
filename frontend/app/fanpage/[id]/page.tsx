@@ -1674,9 +1674,11 @@ export default function FanpageProfile({
                       src={
                         currentUser?.avatar_url ||
                         currentUser?.user_metadata?.avatar_url ||
-                        `https://api.dicebear.com/7.x/identicon/svg?seed=${currentUser?.id}`
+                        (currentUser
+                          ? `https://api.dicebear.com/7.x/identicon/svg?seed=${currentUser.id}`
+                          : "/sukhoi.jpg")
                       }
-                      className="w-7 h-7 rounded-full flex-shrink-0"
+                      className="w-7 h-7 rounded-full flex-shrink-0 object-cover"
                     />
                     <input
                       ref={(el) => {
@@ -2163,8 +2165,9 @@ export default function FanpageProfile({
             </div>
             <div className="p-4 space-y-4">
               <p className="text-sm text-gray-600 dark:text-gray-300">
-                Vui lòng nhập lý do báo cáo {reportType === "post" ? "bài viết" : "bình luận"} này. Quản trị viên sẽ xem
-                xét báo cáo của bạn.
+                Vui lòng nhập lý do báo cáo{" "}
+                {reportType === "post" ? "bài viết" : "bình luận"} này. Quản trị
+                viên sẽ xem xét báo cáo của bạn.
               </p>
               <textarea
                 value={reportReason}

@@ -947,7 +947,11 @@ export default function HomePage() {
               onClick={() => setShowLoginPopup(true)}
               className="shadow-md rounded-[12px] p-4 mb-4 border border-gray-200 dark:border-neutral-800 bg-white dark:bg-[#262626] cursor-pointer flex items-center gap-3 transition-colors hover:bg-gray-50 dark:hover:bg-[#333333]"
             >
-              <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-neutral-700 flex-shrink-0" />
+              <img
+                src="/sukhoi.jpg"
+                className="w-10 h-10 rounded-full flex-shrink-0 object-cover"
+                alt="Guest"
+              />
               <div className="flex-1 bg-gray-100 dark:bg-[#333333] rounded-full px-4 py-2.5 text-sm text-muted-foreground font-medium text-left">
                 Đăng nhập để chia sẻ suy nghĩ của bạn...
               </div>
@@ -1643,9 +1647,11 @@ export default function HomePage() {
                       src={
                         user?.avatar_url ||
                         user?.user_metadata?.avatar_url ||
-                        `https://api.dicebear.com/7.x/identicon/svg?seed=${user?.id}`
+                        (user
+                          ? `https://api.dicebear.com/7.x/identicon/svg?seed=${user.id}`
+                          : "/sukhoi.jpg")
                       }
-                      className="w-7 h-7 rounded-full flex-shrink-0"
+                      className="w-7 h-7 rounded-full flex-shrink-0 object-cover"
                       alt="User"
                     />
                     <input

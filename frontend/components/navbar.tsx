@@ -965,7 +965,9 @@ export default function Navbar({ user: propUser }: any) {
                       src={
                         user?.avatar_url ||
                         user?.user_metadata?.avatar_url ||
-                        `https://api.dicebear.com/7.x/identicon/svg?seed=${user?.id || "guest"}`
+                        (user
+                          ? `https://api.dicebear.com/7.x/identicon/svg?seed=${user.id}`
+                          : "/sukhoi.jpg")
                       }
                       className={`w-7 h-7 rounded-full object-cover transition-all duration-300 ${active ? "ring-2 ring-cyan-500 scale-110 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)]" : "border border-gray-300 dark:border-neutral-600"}`}
                       alt="Profile"
