@@ -18,6 +18,7 @@ import {
   LogOut,
   Key,
   X,
+  ShieldAlert,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -705,6 +706,19 @@ export default function Navbar({ user: propUser }: any) {
                       </div>
                     )}
 
+                    {/* NÚT ADMIN (Chỉ hiển thị cho người có role là 'admin') */}
+                    {user?.role === "admin" && (
+                      <button
+                        onClick={() => {
+                          setOpen(false);
+                          router.push("/admin");
+                        }}
+                        className="w-full text-left px-3 py-2 text-red-500 font-bold hover:bg-red-500/10 transition-colors border-t border-gray-200 dark:border-neutral-700 mt-1"
+                      >
+                        Trung tâm kiểm duyệt
+                      </button>
+                    )}
+
                     <button
                       onClick={handleLogout}
                       className="w-full text-left px-3 py-2 text-red-500 hover:bg-red-500/10 transition-colors"
@@ -845,6 +859,22 @@ export default function Navbar({ user: propUser }: any) {
                           </button>
                         ))}
                       </div>
+                    )}
+
+                    {/* MOBILE ADMIN BUTTON */}
+                    {user?.role === "admin" && (
+                      <button
+                        onClick={() => {
+                          router.push("/admin");
+                          setIsMobileMenuOpen(false);
+                        }}
+                        className="flex items-center gap-3 px-4 py-3 hover:bg-red-50 dark:hover:bg-red-900/10 w-full text-left border-t border-gray-100 dark:border-neutral-800"
+                      >
+                        <ShieldAlert size={20} className="text-red-500" />
+                        <span className="font-bold text-sm text-red-500">
+                          Trung tâm kiểm duyệt
+                        </span>
+                      </button>
                     )}
 
                     <button

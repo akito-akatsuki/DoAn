@@ -14,7 +14,9 @@ import {
   CheckCircle,
   AlertTriangle,
   X,
+  Loader2,
 } from "lucide-react";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function AdminReportsPage() {
   const [reports, setReports] = useState<any[]>([]);
@@ -24,14 +26,43 @@ export default function AdminReportsPage() {
 
   const [activeTab, setActiveTab] = useState<"reports" | "appeals">("reports");
   const [appeals, setAppeals] = useState<any[]>([]);
+  const [isAuthorized, setIsAuthorized] = useState(false);
 
   useEffect(() => {
+    const checkAdmin = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) {
+        window.location.href = "/";
+        return;
+      }
+
+      // Kiểm tra role trong Database
+      const { data: dbUser } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      if (dbUser?.role !== "admin") {
+        toast.error("Bạn không có quyền truy cập trang Quản trị!");
+        window.location.href = "/";
+      } else {
+        setIsAuthorized(true);
+      }
+    };
+    checkAdmin();
+  }, []);
+
+  useEffect(() => {
+    if (!isAuthorized) return;
     if (activeTab === "reports") {
       loadReports();
     } else {
       loadAppeals();
     }
-  }, [activeTab]);
+  }, [activeTab, isAuthorized]);
 
   const loadReports = async () => {
     setLoading(true);
@@ -121,6 +152,14 @@ export default function AdminReportsPage() {
       loadAppeals();
     }
   };
+
+  if (!isAuthorized) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-neutral-900">
+        <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen pt-24 px-4 bg-gray-50 dark:bg-neutral-900 text-gray-900 dark:text-gray-100 pb-20">
