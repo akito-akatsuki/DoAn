@@ -264,7 +264,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
         } else if (type === "ACCEPT") {
           setIsInCall(true);
           setCallState("idle");
-          setCallStartTime(Date.now());
+          setCallStartTime((prev) => prev || Date.now()); // Giữ nguyên giờ nếu đã có người bắt máy trước đó (Gọi nhóm)
         } else if (type === "REJECT") {
           setCallState("idle");
           toast.error(`${caller?.name || "Người dùng"} đã từ chối cuộc gọi.`);
@@ -796,6 +796,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
   const acceptCall = () => {
     setIsInCall(true);
     setCallState("idle");
+    setCallStartTime(Date.now()); // Đánh dấu giờ bắt đầu cho người nhận
     sendCallSignalToUser(callUserInfo?.id, {
       type: "ACCEPT",
       caller: currentUser,
@@ -819,6 +820,24 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
 
     const isInitiator = callRoomId.endsWith(`_${userId}`);
 
+    // Nếu bạn là người gọi thì hệ thống mới gửi tin nhắn (Tránh việc cả nhóm cùng spam tin nhắn kết thúc)
+    if (isInitiator && conversationId) {
+      let durationMsg = "Bị nhỡ / Chưa trả lời";
+      if (callStartTime) {
+        const diff = Math.floor((Date.now() - callStartTime) / 1000);
+        const m = Math.floor(diff / 60)
+          .toString()
+          .padStart(2, "0");
+        const s = (diff % 60).toString().padStart(2, "0");
+        const h = Math.floor(diff / 3600);
+        const timeStr =
+          h > 0 ? `${h.toString().padStart(2, "0")}:${m}:${s}` : `${m}:${s}`;
+        durationMsg = `Thời lượng ${timeStr}`;
+      }
+      const msgText = `📞 Cuộc gọi ${callType === "video" ? "Video" : "Thoại"} kết thúc. ${durationMsg}`;
+      sendMessage(conversationId, userId, msgText).catch(() => {});
+    }
+
     if (callUserInfo?.is_group) {
       if (isInitiator && conversationId) {
         try {
@@ -835,6 +854,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
     }
     setCallUserInfo(null);
     setCurrentCallId(null);
+    setCallStartTime(null); // Reset bộ đếm
   };
 
   // ================= BLOCKED CONTROL HANDLERS =================
@@ -2173,6 +2193,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                 onLeave={handleLeaveCall}
                 callType={callType}
                 isGroup={callUserInfo?.is_group}
+                startTime={callStartTime}
               />
             )}
 

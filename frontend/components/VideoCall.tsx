@@ -10,6 +10,7 @@ interface VideoCallProps {
   onLeave: () => void;
   callType: "video" | "voice";
   isGroup?: boolean;
+  startTime?: number | null;
 }
 
 export default function VideoCall({
@@ -19,14 +20,89 @@ export default function VideoCall({
   onLeave,
   callType,
   isGroup,
+  startTime,
 }: VideoCallProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [errorMsg, setErrorMsg] = useState("");
+  const [durationStr, setDurationStr] = useState("00:00");
 
   const onLeaveRef = useRef(onLeave);
   useEffect(() => {
     onLeaveRef.current = onLeave;
   }, [onLeave]);
+
+  // ================= BỘ ĐẾM THỜI GIAN =================
+  useEffect(() => {
+    if (!startTime) return;
+    const interval = setInterval(() => {
+      const diff = Math.floor((Date.now() - startTime) / 1000);
+      const m = Math.floor(diff / 60)
+        .toString()
+        .padStart(2, "0");
+      const s = (diff % 60).toString().padStart(2, "0");
+      const h = Math.floor(diff / 3600);
+      if (h > 0) {
+        setDurationStr(`${h.toString().padStart(2, "0")}:${m}:${s}`);
+      } else {
+        setDurationStr(`${m}:${s}`);
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [startTime]);
+
+  // ================= BỘ LỌC LỖI NỘI BỘ ZEGOCLOUD =================
+  // SDK ZegoCloud có lỗi nội bộ khi tắt máy đột ngột khiến các tiến trình ngầm
+  // gọi vào object đã bị null (createSpan, enabled).
+  // Bộ lọc này giúp đánh chặn và ẩn các bảng lỗi đỏ của Next.js để UX không bị gián đoạn.
+  useEffect(() => {
+    const originalConsoleError = console.error;
+    console.error = (...args: any[]) => {
+      const msg = args[0]?.toString() || "";
+      if (
+        msg.includes("createSpan") ||
+        msg.includes("enabled") ||
+        msg.includes("Zego") ||
+        msg.includes("zego")
+      )
+        return;
+      originalConsoleError(...args);
+    };
+
+    const handleError = (e: ErrorEvent) => {
+      const msg = e.message || "";
+      if (
+        msg.includes("createSpan") ||
+        msg.includes("enabled") ||
+        msg.includes("zego")
+      ) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    };
+
+    const handleRejection = (e: PromiseRejectionEvent) => {
+      const msg = e.reason?.message || e.reason?.toString() || "";
+      if (
+        msg.includes("createSpan") ||
+        msg.includes("enabled") ||
+        msg.includes("zego")
+      ) {
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      }
+    };
+
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleRejection);
+
+    return () => {
+      setTimeout(() => {
+        console.error = originalConsoleError;
+        window.removeEventListener("error", handleError);
+        window.removeEventListener("unhandledrejection", handleRejection);
+      }, 3000); // Giữ màng lọc 3 giây sau khi tắt máy để dọn sạch rác của Zego
+    };
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -109,6 +185,13 @@ export default function VideoCall({
 
   return (
     <div className="fixed inset-0 z-[999999] bg-[#1a1a1a] flex items-center justify-center">
+      {startTime && (
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-[10] bg-black/50 backdrop-blur-md px-4 py-1.5 rounded-full text-white font-mono font-bold text-sm tracking-widest flex items-center gap-2 shadow-lg border border-white/10 pointer-events-none">
+          <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+          {durationStr}
+        </div>
+      )}
+
       {errorMsg && (
         <div className="absolute z-10 bg-white dark:bg-[#262626] p-6 rounded-2xl shadow-2xl max-w-sm w-full text-center border border-red-100 dark:border-red-900/30">
           <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
