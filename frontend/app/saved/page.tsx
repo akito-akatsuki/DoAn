@@ -400,22 +400,19 @@ export default function SavedPage() {
           >
             {/* Phần Ảnh */}
             {selectedPost.image_url && (
-              <div className="flex-1 bg-[#1a1a1a] flex items-center justify-center min-h-[300px] md:min-h-[500px] relative group">
+              <div
+                className="flex-1 bg-[#1a1a1a] flex items-center justify-center min-h-[300px] md:min-h-[500px] relative group cursor-pointer"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setViewingImage(selectedPost.image_url);
+                  setImageScale(1);
+                }}
+              >
                 <img
                   src={selectedPost.image_url}
                   className="w-full h-full object-cover object-center"
                   alt="Post"
                 />
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setViewingImage(selectedPost.image_url);
-                    setImageScale(1);
-                  }}
-                  className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-md"
-                >
-                  <Maximize size={20} />
-                </button>
               </div>
             )}
 

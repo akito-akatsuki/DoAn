@@ -1893,7 +1893,18 @@ export default function HomePage() {
                     </button>
                   </div>
                 )}
-                <div className="flex-1 overflow-hidden flex items-center justify-center h-full relative group">
+                <div
+                  className="flex-1 overflow-hidden flex items-center justify-center h-full relative group cursor-pointer"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewingImage(
+                      selectedPost.image_urls?.[
+                        currentImageIndex[selectedPost.id] || 0
+                      ] || selectedPost.image_url,
+                    );
+                    setImageScale(1);
+                  }}
+                >
                   <img
                     src={
                       selectedPost.image_urls?.[
@@ -1903,20 +1914,6 @@ export default function HomePage() {
                     className="max-w-full max-h-full w-auto h-auto object-contain transition-all duration-300 select-none pointer-events-none"
                     alt="Post"
                   />
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setViewingImage(
-                        selectedPost.image_urls?.[
-                          currentImageIndex[selectedPost.id] || 0
-                        ] || selectedPost.image_url,
-                      );
-                      setImageScale(1);
-                    }}
-                    className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-md"
-                  >
-                    <Maximize size={20} />
-                  </button>
                 </div>
                 {selectedPost.image_urls?.length > 1 && (
                   <div
