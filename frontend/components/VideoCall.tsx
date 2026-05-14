@@ -35,7 +35,9 @@ export default function VideoCall({
   useEffect(() => {
     if (!containerRef.current) return;
 
+    isDestroyedRef.current = false;
     let isMounted = true;
+    let zpInstance: any = null;
     const appID = Number(process.env.NEXT_PUBLIC_ZEGO_APP_ID);
     const serverSecret = process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET as string;
 
@@ -46,7 +48,9 @@ export default function VideoCall({
       return;
     }
 
-    const initZego = async () => {
+    const timer = setTimeout(async () => {
+      if (!isMounted) return;
+
       try {
         // TẠO USERID ĐỘC NHẤT ĐỂ TRÁNH LỖI TRÙNG ID KHI TEST LOCAL CÙNG TRÌNH DUYỆT
         const uniqueUserID = userID
@@ -62,7 +66,13 @@ export default function VideoCall({
         );
 
         const zp = ZegoUIKitPrebuilt.create(kitToken);
+        zpInstance = zp;
         zpRef.current = zp;
+
+        if (!isMounted) {
+          zp.destroy();
+          return;
+        }
 
         // await joinRoom để bắt lỗi nếu Zego từ chối kết nối
         await zp.joinRoom({
@@ -90,15 +100,14 @@ export default function VideoCall({
           );
         }
       }
-    };
-
-    initZego();
+    }, 150);
 
     return () => {
       isMounted = false;
-      if (zpRef.current && !isDestroyedRef.current) {
+      clearTimeout(timer);
+      if (zpInstance && !isDestroyedRef.current) {
         isDestroyedRef.current = true;
-        zpRef.current.destroy();
+        zpInstance.destroy();
       }
     };
   }, [roomID, userID, userName, callType, isGroup]); // Removed onLeave from dependencies

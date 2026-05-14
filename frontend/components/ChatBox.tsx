@@ -81,11 +81,13 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
   const [isBlockedListOpen, setIsBlockedListOpen] = useState(false);
   const [blockedUsersList, setBlockedUsersList] = useState<any[]>([]);
 
-  const [isTyping, setIsTyping] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<
+    { id: string; name: string }[]
+  >([]);
   const typingChannelRef = useRef<any>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTypingTimeRef = useRef(0);
-  const receiveTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -178,7 +180,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
     requestAnimationFrame(() => {
       scrollRef.current!.scrollTop = scrollRef.current!.scrollHeight;
     });
-  }, [messages.length, isTyping]);
+  }, [messages.length, typingUsers.length]);
 
   // ================= REALTIME + BROADCAST (MULTIPLEXING) =================
   useEffect(() => {
@@ -217,16 +219,32 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
         },
       )
       .on("broadcast", { event: "typing" }, (payload) => {
-        const { isTyping: remoteIsTyping, senderId } = payload.payload;
+        const {
+          isTyping: remoteIsTyping,
+          senderId,
+          senderName,
+        } = payload.payload;
         if (senderId !== userId) {
-          setIsTyping(remoteIsTyping);
-          if (receiveTypingTimeoutRef.current)
-            clearTimeout(receiveTypingTimeoutRef.current);
           if (remoteIsTyping) {
-            receiveTypingTimeoutRef.current = setTimeout(
-              () => setIsTyping(false),
-              3000,
-            );
+            setTypingUsers((prev) => {
+              if (prev.find((u) => u.id === senderId)) return prev;
+              return [
+                ...prev,
+                { id: senderId, name: senderName || "Người dùng" },
+              ];
+            });
+            if (typingTimeoutsRef.current[senderId]) {
+              clearTimeout(typingTimeoutsRef.current[senderId]);
+            }
+            typingTimeoutsRef.current[senderId] = setTimeout(() => {
+              setTypingUsers((prev) => prev.filter((u) => u.id !== senderId));
+            }, 3000);
+          } else {
+            setTypingUsers((prev) => prev.filter((u) => u.id !== senderId));
+            if (typingTimeoutsRef.current[senderId]) {
+              clearTimeout(typingTimeoutsRef.current[senderId]);
+              delete typingTimeoutsRef.current[senderId];
+            }
           }
         }
       })
@@ -769,7 +787,11 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
       typingChannelRef.current.send({
         type: "broadcast",
         event: "typing",
-        payload: { isTyping: false, senderId: userId },
+        payload: {
+          isTyping: false,
+          senderId: userId,
+          senderName: currentUser?.name || "Người dùng",
+        },
       });
     }
     lastTypingTimeRef.current = 0;
@@ -2000,9 +2022,11 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                 </div>
               );
             })}
-            {isTyping && (
+            {typingUsers.length > 0 && (
               <div className="text-xs text-muted-foreground italic ml-2 mt-1">
-                {targetUser?.name} đang soạn tin...
+                {typingUsers.length === 1
+                  ? `${targetUser?.is_group ? typingUsers[0].name : targetUser?.name} đang soạn tin...`
+                  : `${typingUsers.map((u) => u.name).join(", ")} đang soạn tin...`}
               </div>
             )}
           </div>
@@ -2133,7 +2157,11 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                         typingChannelRef.current.send({
                           type: "broadcast",
                           event: "typing",
-                          payload: { isTyping: false, senderId: userId },
+                          payload: {
+                            isTyping: false,
+                            senderId: userId,
+                            senderName: currentUser?.name || "Người dùng",
+                          },
                         });
                         lastTypingTimeRef.current = 0;
                       } else {
@@ -2142,7 +2170,11 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                           typingChannelRef.current.send({
                             type: "broadcast",
                             event: "typing",
-                            payload: { isTyping: true, senderId: userId },
+                            payload: {
+                              isTyping: true,
+                              senderId: userId,
+                              senderName: currentUser?.name || "Người dùng",
+                            },
                           });
                           lastTypingTimeRef.current = now;
                         }
@@ -2152,7 +2184,11 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                           typingChannelRef.current?.send({
                             type: "broadcast",
                             event: "typing",
-                            payload: { isTyping: false, senderId: userId },
+                            payload: {
+                              isTyping: false,
+                              senderId: userId,
+                              senderName: currentUser?.name || "Người dùng",
+                            },
                           });
                           lastTypingTimeRef.current = 0;
                         }, 2000);

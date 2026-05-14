@@ -68,11 +68,13 @@ export default function MessagesPage() {
 
   const [replyingTo, setReplyingTo] = useState<any | null>(null);
 
-  const [isTyping, setIsTyping] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<
+    { id: string; name: string }[]
+  >([]);
   const typingChannelRef = useRef<any>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTypingTimeRef = useRef(0);
-  const receiveTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const [openMessageMenuId, setOpenMessageMenuId] = useState<string | null>(
@@ -159,7 +161,7 @@ export default function MessagesPage() {
     requestAnimationFrame(() => {
       scrollRef.current!.scrollTop = scrollRef.current!.scrollHeight;
     });
-  }, [messages.length, isTyping]);
+  }, [messages.length, typingUsers.length]);
 
   // ================= LOAD CONVERSATIONS =================
   const loadConversations = useCallback(async () => {
@@ -304,16 +306,32 @@ export default function MessagesPage() {
 
     typingChannel
       .on("broadcast", { event: "typing" }, (payload) => {
-        const { isTyping: remoteIsTyping, senderId } = payload.payload;
-        if (senderId !== user.id) {
-          setIsTyping(remoteIsTyping);
-          if (receiveTypingTimeoutRef.current)
-            clearTimeout(receiveTypingTimeoutRef.current);
+        const {
+          isTyping: remoteIsTyping,
+          senderId,
+          senderName,
+        } = payload.payload;
+        if (senderId !== user?.id) {
           if (remoteIsTyping) {
-            receiveTypingTimeoutRef.current = setTimeout(
-              () => setIsTyping(false),
-              3000,
-            );
+            setTypingUsers((prev) => {
+              if (prev.find((u) => u.id === senderId)) return prev;
+              return [
+                ...prev,
+                { id: senderId, name: senderName || "Người dùng" },
+              ];
+            });
+            if (typingTimeoutsRef.current[senderId]) {
+              clearTimeout(typingTimeoutsRef.current[senderId]);
+            }
+            typingTimeoutsRef.current[senderId] = setTimeout(() => {
+              setTypingUsers((prev) => prev.filter((u) => u.id !== senderId));
+            }, 3000);
+          } else {
+            setTypingUsers((prev) => prev.filter((u) => u.id !== senderId));
+            if (typingTimeoutsRef.current[senderId]) {
+              clearTimeout(typingTimeoutsRef.current[senderId]);
+              delete typingTimeoutsRef.current[senderId];
+            }
           }
         }
       })
@@ -825,7 +843,11 @@ export default function MessagesPage() {
       typingChannelRef.current.send({
         type: "broadcast",
         event: "typing",
-        payload: { isTyping: false, senderId: user?.id },
+        payload: {
+          isTyping: false,
+          senderId: user?.id,
+          senderName: user?.name || "Người dùng",
+        },
       });
     }
     lastTypingTimeRef.current = 0;
@@ -1417,9 +1439,11 @@ export default function MessagesPage() {
                         </div>
                       );
                     })}
-                    {isTyping && (
+                    {typingUsers.length > 0 && (
                       <div className="text-sm text-muted-foreground italic ml-2 mt-1">
-                        {targetUser?.name} đang soạn tin...
+                        {typingUsers.length === 1
+                          ? `${targetUser?.is_group ? typingUsers[0].name : targetUser?.name} đang soạn tin...`
+                          : `${typingUsers.map((u) => u.name).join(", ")} đang soạn tin...`}
                       </div>
                     )}
                   </div>
@@ -1549,6 +1573,7 @@ export default function MessagesPage() {
                                 payload: {
                                   isTyping: false,
                                   senderId: user?.id,
+                                  senderName: user?.name || "Người dùng",
                                 },
                               });
                               lastTypingTimeRef.current = 0;
@@ -1561,6 +1586,7 @@ export default function MessagesPage() {
                                   payload: {
                                     isTyping: true,
                                     senderId: user?.id,
+                                    senderName: user?.name || "Người dùng",
                                   },
                                 });
                                 lastTypingTimeRef.current = now;
@@ -1574,6 +1600,7 @@ export default function MessagesPage() {
                                   payload: {
                                     isTyping: false,
                                     senderId: user?.id,
+                                    senderName: user?.name || "Người dùng",
                                   },
                                 });
                                 lastTypingTimeRef.current = 0;
