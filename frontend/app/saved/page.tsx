@@ -4,7 +4,17 @@ import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import Navbar from "@/components/navbar";
 import toast from "react-hot-toast";
-import { Bookmark, Heart, MoreHorizontal, X, Smile, Flag } from "lucide-react";
+import {
+  Bookmark,
+  Heart,
+  MoreHorizontal,
+  X,
+  Smile,
+  Flag,
+  Maximize,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
 import {
   getComments,
   createComment,
@@ -42,6 +52,9 @@ export default function SavedPage() {
   const [reportTargetId, setReportTargetId] = useState<string | null>(null);
   const [reportType, setReportType] = useState<"post" | "comment">("post");
   const [reportReason, setReportReason] = useState("");
+
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [imageScale, setImageScale] = useState(1);
 
   // ================= CLICK OUTSIDE =================
   useEffect(() => {
@@ -387,12 +400,22 @@ export default function SavedPage() {
           >
             {/* Phần Ảnh */}
             {selectedPost.image_url && (
-              <div className="flex-1 bg-[#1a1a1a] flex items-center justify-center min-h-[300px] md:min-h-[500px]">
+              <div className="flex-1 bg-[#1a1a1a] flex items-center justify-center min-h-[300px] md:min-h-[500px] relative group">
                 <img
                   src={selectedPost.image_url}
                   className="w-full h-full object-cover object-center"
                   alt="Post"
                 />
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setViewingImage(selectedPost.image_url);
+                    setImageScale(1);
+                  }}
+                  className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-md"
+                >
+                  <Maximize size={20} />
+                </button>
               </div>
             )}
 
@@ -772,6 +795,66 @@ export default function SavedPage() {
                 Gửi báo cáo
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL XEM ẢNH FULL MÀN HÌNH ================= */}
+      {viewingImage && (
+        <div
+          className="fixed inset-0 z-[9999999] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => {
+            setViewingImage(null);
+            setImageScale(1);
+          }}
+        >
+          <div className="absolute top-4 right-4 flex items-center gap-4 z-50">
+            <div className="flex items-center gap-2 bg-black/50 rounded-full px-2 py-1 shadow-md">
+              <button
+                className="text-white hover:text-gray-300 p-2 transition-colors disabled:opacity-50"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImageScale((prev) => Math.max(0.5, prev - 0.25));
+                }}
+                disabled={imageScale <= 0.5}
+              >
+                <ZoomOut size={20} />
+              </button>
+              <span className="text-white text-xs font-mono w-10 text-center select-none">
+                {Math.round(imageScale * 100)}%
+              </span>
+              <button
+                className="text-white hover:text-gray-300 p-2 transition-colors disabled:opacity-50"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImageScale((prev) => Math.min(3, prev + 0.25));
+                }}
+                disabled={imageScale >= 3}
+              >
+                <ZoomIn size={20} />
+              </button>
+            </div>
+            <button
+              className="text-white hover:text-gray-300 p-2 bg-black/50 rounded-full transition-colors shadow-md"
+              onClick={(e) => {
+                e.stopPropagation();
+                setViewingImage(null);
+                setImageScale(1);
+              }}
+            >
+              <X size={24} />
+            </button>
+          </div>
+          <div
+            className="w-full h-full overflow-auto flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={viewingImage}
+              alt="fullscreen-img"
+              className="max-w-full max-h-screen object-contain rounded-xl shadow-2xl transition-transform duration-200"
+              style={{ transform: `scale(${imageScale})` }}
+            />
           </div>
         </div>
       )}

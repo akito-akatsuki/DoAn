@@ -21,6 +21,9 @@ import {
   Image as ImageIcon,
   ChevronLeft,
   ChevronRight,
+  Maximize,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import {
   getFeed,
@@ -102,6 +105,9 @@ export default function HomePage() {
   // ================= APPEAL POST =================
   const [appealPostId, setAppealPostId] = useState<string | null>(null);
   const [appealReason, setAppealReason] = useState("");
+
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [imageScale, setImageScale] = useState(1);
 
   const [suggestedUsers, setSuggestedUsers] = useState<any[]>([]);
 
@@ -1470,7 +1476,7 @@ export default function HomePage() {
                     ) : null}
 
                     <div
-                      className="flex-1 overflow-hidden flex items-center justify-center relative cursor-pointer"
+                      className="flex-1 overflow-hidden flex items-center justify-center relative cursor-pointer group"
                       onClick={() => handleImageClick(post)}
                       onDoubleClick={(e) => handleImageDoubleClick(e, post)}
                     >
@@ -1482,6 +1488,21 @@ export default function HomePage() {
                         className={`max-w-full max-h-[650px] w-auto h-auto object-contain transition-all duration-300 select-none pointer-events-none ${post.is_flagged ? "blur-xl scale-110" : ""}`}
                         alt="Post content"
                       />
+                      {!post.is_flagged && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setViewingImage(
+                              post.image_urls?.[
+                                currentImageIndex[post.id] || 0
+                              ] || post.image_url,
+                            );
+                          }}
+                          className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-md"
+                        >
+                          <Maximize size={18} />
+                        </button>
+                      )}
                     </div>
 
                     {post.image_urls?.length > 1 ? (
@@ -1549,24 +1570,7 @@ export default function HomePage() {
                       onClick={() => openPostModal(post)}
                       className="w-7 h-7 cursor-pointer stroke-[2px]"
                     />
-                    <Send
-                      className="w-7 h-7 cursor-pointer stroke-[2px] hover:scale-110 transition-transform text-gray-900 dark:text-gray-100 hover:text-blue-500"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (navigator.share) {
-                          navigator
-                            .share({
-                              title: "InstaMini",
-                              text: "Hãy xem bài viết tuyệt vời này trên InstaMini!",
-                              url: window.location.origin,
-                            })
-                            .catch(() => {});
-                        } else {
-                          navigator.clipboard.writeText(window.location.origin);
-                          toast.success("Đã sao chép liên kết!");
-                        }
-                      }}
-                    />
+                    <Send className="w-7 h-7 cursor-pointer stroke-[2px]" />
                   </div>
 
                   <p className="text-sm font-bold mt-1">
@@ -1889,7 +1893,7 @@ export default function HomePage() {
                     </button>
                   </div>
                 )}
-                <div className="flex-1 overflow-hidden flex items-center justify-center h-full relative">
+                <div className="flex-1 overflow-hidden flex items-center justify-center h-full relative group">
                   <img
                     src={
                       selectedPost.image_urls?.[
@@ -1899,6 +1903,20 @@ export default function HomePage() {
                     className="max-w-full max-h-full w-auto h-auto object-contain transition-all duration-300 select-none pointer-events-none"
                     alt="Post"
                   />
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setViewingImage(
+                        selectedPost.image_urls?.[
+                          currentImageIndex[selectedPost.id] || 0
+                        ] || selectedPost.image_url,
+                      );
+                      setImageScale(1);
+                    }}
+                    className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-md"
+                  >
+                    <Maximize size={20} />
+                  </button>
                 </div>
                 {selectedPost.image_urls?.length > 1 && (
                   <div
@@ -2376,10 +2394,8 @@ export default function HomePage() {
       {/* FIXED CHAT UI */}
       <div className="hidden md:flex fixed bottom-6 right-6 z-[999] flex-col items-end gap-4">
         {/* Khung ChatBox hiện lên khi nhấn nút */}
-        {user && (
-          <div
-            className={`w-[380px] h-[550px] bg-white dark:bg-[#262626] text-gray-900 dark:text-gray-100 rounded-2xl shadow-2xl dark:shadow-black/50 border border-gray-200 dark:border-neutral-800 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300 transition-colors duration-500 ${isChatOpen ? "flex flex-col" : "hidden"}`}
-          >
+        {isChatOpen && user && (
+          <div className="w-[380px] h-[550px] bg-white dark:bg-[#262626] text-gray-900 dark:text-gray-100 rounded-2xl shadow-2xl dark:shadow-black/50 border border-gray-200 dark:border-neutral-800 overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 transition-colors duration-500">
             <ChatBox userId={user.id} onClose={() => setIsChatOpen(false)} />
           </div>
         )}
@@ -2508,6 +2524,65 @@ export default function HomePage() {
                 Gửi yêu cầu
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* ================= MODAL XEM ẢNH FULL MÀN HÌNH ================= */}
+      {viewingImage && (
+        <div
+          className="fixed inset-0 z-[9999999] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => {
+            setViewingImage(null);
+            setImageScale(1);
+          }}
+        >
+          <div className="absolute top-4 right-4 flex items-center gap-4 z-50">
+            <div className="flex items-center gap-2 bg-black/50 rounded-full px-2 py-1 shadow-md">
+              <button
+                className="text-white hover:text-gray-300 p-2 transition-colors disabled:opacity-50"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImageScale((prev) => Math.max(0.5, prev - 0.25));
+                }}
+                disabled={imageScale <= 0.5}
+              >
+                <ZoomOut size={20} />
+              </button>
+              <span className="text-white text-xs font-mono w-10 text-center select-none">
+                {Math.round(imageScale * 100)}%
+              </span>
+              <button
+                className="text-white hover:text-gray-300 p-2 transition-colors disabled:opacity-50"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImageScale((prev) => Math.min(3, prev + 0.25));
+                }}
+                disabled={imageScale >= 3}
+              >
+                <ZoomIn size={20} />
+              </button>
+            </div>
+            <button
+              className="text-white hover:text-gray-300 p-2 bg-black/50 rounded-full transition-colors shadow-md"
+              onClick={(e) => {
+                e.stopPropagation();
+                setViewingImage(null);
+                setImageScale(1);
+              }}
+            >
+              <X size={24} />
+            </button>
+          </div>
+          <div
+            className="w-full h-full overflow-auto flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={viewingImage}
+              alt="fullscreen-img"
+              className="max-w-full max-h-screen object-contain rounded-xl shadow-2xl transition-transform duration-200"
+              style={{ transform: `scale(${imageScale})` }}
+            />
           </div>
         </div>
       )}

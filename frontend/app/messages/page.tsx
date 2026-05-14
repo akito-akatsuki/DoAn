@@ -27,6 +27,8 @@ import {
   Users,
   Phone,
   Video,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { showConfirm } from "@/components/GlobalConfirm";
@@ -111,6 +113,7 @@ export default function MessagesPage() {
   const [currentCallId, setCurrentCallId] = useState<string | null>(null);
   const [callStartTime, setCallStartTime] = useState<number | null>(null);
   const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [imageScale, setImageScale] = useState(1);
 
   // ================= LOAD USER =================
   useEffect(() => {
@@ -1418,7 +1421,10 @@ export default function MessagesPage() {
                                         src={url}
                                         alt="chat-img"
                                         className="max-h-32 w-auto rounded-lg object-cover cursor-pointer"
-                                        onClick={() => setViewingImage(url)}
+                                        onClick={() => {
+                                          setViewingImage(url);
+                                          setImageScale(1);
+                                        }}
                                       />
                                     ),
                                   )}
@@ -1428,11 +1434,12 @@ export default function MessagesPage() {
                                   src={m.image_urls?.[0] || m.image_url}
                                   alt="chat-img"
                                   className="max-w-full rounded-lg mb-1 object-cover cursor-pointer"
-                                  onClick={() =>
+                                  onClick={() => {
                                     setViewingImage(
                                       m.image_urls?.[0] || m.image_url,
-                                    )
-                                  }
+                                    );
+                                    setImageScale(1);
+                                  }}
                                 />
                               ) : null}
                               {m.content}
@@ -2147,20 +2154,59 @@ export default function MessagesPage() {
             {viewingImage && (
               <div
                 className="fixed inset-0 z-[9999999] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
-                onClick={() => setViewingImage(null)}
+                onClick={() => {
+                  setViewingImage(null);
+                  setImageScale(1);
+                }}
               >
-                <button
-                  className="absolute top-4 right-4 text-white hover:text-gray-300 p-2 z-50 bg-black/50 rounded-full transition-colors"
-                  onClick={() => setViewingImage(null)}
-                >
-                  <X size={24} />
-                </button>
-                <img
-                  src={viewingImage}
-                  alt="fullscreen-img"
-                  className="max-w-full max-h-[90vh] object-contain rounded-xl shadow-2xl"
+                <div className="absolute top-4 right-4 flex items-center gap-4 z-50">
+                  <div className="flex items-center gap-2 bg-black/50 rounded-full px-2 py-1 shadow-md">
+                    <button
+                      className="text-white hover:text-gray-300 p-2 transition-colors disabled:opacity-50"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setImageScale((prev) => Math.max(0.5, prev - 0.25));
+                      }}
+                      disabled={imageScale <= 0.5}
+                    >
+                      <ZoomOut size={20} />
+                    </button>
+                    <span className="text-white text-xs font-mono w-10 text-center select-none">
+                      {Math.round(imageScale * 100)}%
+                    </span>
+                    <button
+                      className="text-white hover:text-gray-300 p-2 transition-colors disabled:opacity-50"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setImageScale((prev) => Math.min(3, prev + 0.25));
+                      }}
+                      disabled={imageScale >= 3}
+                    >
+                      <ZoomIn size={20} />
+                    </button>
+                  </div>
+                  <button
+                    className="text-white hover:text-gray-300 p-2 bg-black/50 rounded-full transition-colors shadow-md"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setViewingImage(null);
+                      setImageScale(1);
+                    }}
+                  >
+                    <X size={24} />
+                  </button>
+                </div>
+                <div
+                  className="w-full h-full overflow-auto flex items-center justify-center"
                   onClick={(e) => e.stopPropagation()}
-                />
+                >
+                  <img
+                    src={viewingImage}
+                    alt="fullscreen-img"
+                    className="max-w-full max-h-screen object-contain rounded-xl shadow-2xl transition-transform duration-200"
+                    style={{ transform: `scale(${imageScale})` }}
+                  />
+                </div>
               </div>
             )}
           </>,

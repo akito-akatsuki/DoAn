@@ -30,6 +30,9 @@ import {
   Check,
   UserMinus,
   ChevronRight,
+  Maximize,
+  ZoomIn,
+  ZoomOut,
 } from "lucide-react";
 import {
   updatePageInfo,
@@ -137,6 +140,9 @@ export default function FanpageProfile({
   // ================= APPEAL POST STATES =================
   const [appealPostId, setAppealPostId] = useState<string | null>(null);
   const [appealReason, setAppealReason] = useState("");
+
+  const [viewingImage, setViewingImage] = useState<string | null>(null);
+  const [imageScale, setImageScale] = useState(1);
 
   // ================= MODAL POST STATES =================
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
@@ -1489,7 +1495,7 @@ export default function FanpageProfile({
                     ) : null}
 
                     <div
-                      className="flex-1 overflow-hidden flex items-center justify-center relative cursor-pointer"
+                      className="flex-1 overflow-hidden flex items-center justify-center relative cursor-pointer group"
                       onClick={() => handleImageClick(post)}
                       onDoubleClick={(e) => handleImageDoubleClick(e, post)}
                     >
@@ -1501,6 +1507,23 @@ export default function FanpageProfile({
                         className={`max-w-full max-h-[650px] w-auto h-auto object-contain transition-all duration-300 select-none pointer-events-none ${post.is_flagged ? "blur-xl scale-110" : ""}`}
                         alt="Post content"
                       />
+                      {!post.is_flagged && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setViewingImage(
+                              post.image_urls?.[
+                                currentImageIndex[post.id] || 0
+                              ] || post.image_url,
+                            );
+                            setImageScale(1);
+                            setImageScale(1);
+                          }}
+                          className="absolute top-4 right-4 p-2 bg-black/50 hover:bg-black/70 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity z-20 shadow-md"
+                        >
+                          <Maximize size={18} />
+                        </button>
+                      )}
                     </div>
 
                     {post.image_urls?.length > 1 ? (
@@ -2637,6 +2660,66 @@ export default function FanpageProfile({
                 </div>
               )}
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL XEM ẢNH FULL MÀN HÌNH ================= */}
+      {viewingImage && (
+        <div
+          className="fixed inset-0 z-[9999999] bg-black/95 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => {
+            setViewingImage(null);
+            setImageScale(1);
+          }}
+        >
+          <div className="absolute top-4 right-4 flex items-center gap-4 z-50">
+            <div className="flex items-center gap-2 bg-black/50 rounded-full px-2 py-1 shadow-md">
+              <button
+                className="text-white hover:text-gray-300 p-2 transition-colors disabled:opacity-50"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImageScale((prev) => Math.max(0.5, prev - 0.25));
+                }}
+                disabled={imageScale <= 0.5}
+              >
+                <ZoomOut size={20} />
+              </button>
+              <span className="text-white text-xs font-mono w-10 text-center select-none">
+                {Math.round(imageScale * 100)}%
+              </span>
+              <button
+                className="text-white hover:text-gray-300 p-2 transition-colors disabled:opacity-50"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setImageScale((prev) => Math.min(3, prev + 0.25));
+                }}
+                disabled={imageScale >= 3}
+              >
+                <ZoomIn size={20} />
+              </button>
+            </div>
+            <button
+              className="text-white hover:text-gray-300 p-2 bg-black/50 rounded-full transition-colors shadow-md"
+              onClick={(e) => {
+                e.stopPropagation();
+                setViewingImage(null);
+                setImageScale(1);
+              }}
+            >
+              <X size={24} />
+            </button>
+          </div>
+          <div
+            className="w-full h-full overflow-auto flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <img
+              src={viewingImage}
+              alt="fullscreen-img"
+              className="max-w-full max-h-screen object-contain rounded-xl shadow-2xl transition-transform duration-200"
+              style={{ transform: `scale(${imageScale})` }}
+            />
           </div>
         </div>
       )}
