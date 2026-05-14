@@ -22,11 +22,8 @@ export default function VideoCall({
 }: VideoCallProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const zpRef = useRef<any>(null);
-  const isDestroyedRef = useRef(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  // Keep a mutable ref of the latest onLeave callback to avoid stale closures
-  // and prevent triggering useEffect on every ChatBox render
   const onLeaveRef = useRef(onLeave);
   useEffect(() => {
     onLeaveRef.current = onLeave;
@@ -35,25 +32,24 @@ export default function VideoCall({
   useEffect(() => {
     if (!containerRef.current) return;
 
-    isDestroyedRef.current = false;
     let isMounted = true;
+    let isDestroyed = false;
     let zpInstance: any = null;
-    let joinPromise: Promise<any> | null = null;
-    const appID = Number(process.env.NEXT_PUBLIC_ZEGO_APP_ID);
-    const serverSecret = process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET as string;
 
-    if (!appID || !serverSecret) {
-      setErrorMsg(
-        "Thiếu thông tin NEXT_PUBLIC_ZEGO_APP_ID hoặc NEXT_PUBLIC_ZEGO_SERVER_SECRET trong file .env.local",
-      );
-      return;
-    }
+    const initZego = async () => {
+      const appID = Number(process.env.NEXT_PUBLIC_ZEGO_APP_ID);
+      const serverSecret = process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET as string;
 
-    const timer = setTimeout(async () => {
-      if (!isMounted) return;
+      if (!appID || !serverSecret) {
+        if (isMounted) {
+          setErrorMsg(
+            "Thiếu thông tin NEXT_PUBLIC_ZEGO_APP_ID hoặc NEXT_PUBLIC_ZEGO_SERVER_SECRET trong file .env.local",
+          );
+        }
+        return;
+      }
 
       try {
-        // TẠO USERID ĐỘC NHẤT ĐỂ TRÁNH LỖI TRÙNG ID KHI TEST LOCAL CÙNG TRÌNH DUYỆT
         const uniqueUserID = userID
           ? `${userID}_${Math.floor(Math.random() * 10000)}`
           : `user_${Date.now()}`;
@@ -66,17 +62,13 @@ export default function VideoCall({
           userName || "Người dùng",
         );
 
+        if (!isMounted) return;
+
         const zp = ZegoUIKitPrebuilt.create(kitToken);
         zpInstance = zp;
         zpRef.current = zp;
 
-        if (!isMounted) {
-          zp.destroy();
-          return;
-        }
-
-        // await joinRoom để bắt lỗi nếu Zego từ chối kết nối
-        joinPromise = zp.joinRoom({
+        zp.joinRoom({
           container: containerRef.current,
           scenario: {
             mode: isGroup
@@ -87,13 +79,10 @@ export default function VideoCall({
           showMyCameraToggleButton: callType === "video",
           showPreJoinView: false,
           onLeaveRoom: () => {
-            isDestroyedRef.current = true;
-            if (onLeaveRef.current) {
-              onLeaveRef.current();
-            }
+            isDestroyed = true;
+            if (onLeaveRef.current) onLeaveRef.current();
           },
         });
-        await joinPromise;
       } catch (error: any) {
         if (isMounted) {
           setErrorMsg(
@@ -102,35 +91,23 @@ export default function VideoCall({
           );
         }
       }
-    }, 150);
+    };
+
+    const timer = setTimeout(() => {
+      initZego();
+    }, 200);
 
     return () => {
       isMounted = false;
       clearTimeout(timer);
-      if (zpInstance && !isDestroyedRef.current) {
-        isDestroyedRef.current = true;
-
-        // Chờ kết nối hoàn tất rồi mới được phép hủy phòng để tránh Crash SDK Zego
-        if (joinPromise) {
-          joinPromise
-            .then(() => {
-              try {
-                zpInstance.destroy();
-              } catch (e) {}
-            })
-            .catch(() => {
-              try {
-                zpInstance.destroy();
-              } catch (e) {}
-            });
-        } else {
-          try {
-            zpInstance.destroy();
-          } catch (e) {}
-        }
+      if (zpInstance && !isDestroyed) {
+        isDestroyed = true;
+        try {
+          zpInstance.destroy();
+        } catch (e) {}
       }
     };
-  }, [roomID, userID, userName, callType, isGroup]); // Removed onLeave from dependencies
+  }, [roomID, userID, userName, callType, isGroup]);
 
   return (
     <div className="fixed inset-0 z-[999999] bg-[#1a1a1a] flex items-center justify-center">
