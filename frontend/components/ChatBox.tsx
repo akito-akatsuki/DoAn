@@ -1859,12 +1859,6 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                                 setViewingImage(url);
                                 setImageScale(1);
                               }}
-                              onClick={() => {
-                                setViewingImage(
-                                  m.image_urls?.[0] || m.image_url,
-                                );
-                                setImageScale(1);
-                              }}
                             />
                           ))}
                         </div>
@@ -2255,15 +2249,13 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                     <X size={24} />
                   </button>
                 </div>
-                <div
-                  className="w-full h-full overflow-auto flex items-center justify-center"
-                  onClick={(e) => e.stopPropagation()}
-                >
+                <div className="w-full h-full overflow-auto flex items-center justify-center">
                   <img
                     src={viewingImage}
                     alt="fullscreen-img"
                     className="max-w-full max-h-screen object-contain rounded-xl shadow-2xl transition-transform duration-200"
                     style={{ transform: `scale(${imageScale})` }}
+                    onClick={(e) => e.stopPropagation()}
                   />
                 </div>
               </div>
