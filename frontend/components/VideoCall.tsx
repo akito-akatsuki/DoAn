@@ -21,7 +21,6 @@ export default function VideoCall({
   isGroup,
 }: VideoCallProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const zpRef = useRef<any>(null);
   const [errorMsg, setErrorMsg] = useState("");
 
   const onLeaveRef = useRef(onLeave);
@@ -33,10 +32,9 @@ export default function VideoCall({
     if (!containerRef.current) return;
 
     let isMounted = true;
-    let isDestroyed = false;
     let zpInstance: any = null;
 
-    const initZego = async () => {
+    const initZego = () => {
       const appID = Number(process.env.NEXT_PUBLIC_ZEGO_APP_ID);
       const serverSecret = process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET as string;
 
@@ -66,7 +64,6 @@ export default function VideoCall({
 
         const zp = ZegoUIKitPrebuilt.create(kitToken);
         zpInstance = zp;
-        zpRef.current = zp;
 
         zp.joinRoom({
           container: containerRef.current,
@@ -79,7 +76,6 @@ export default function VideoCall({
           showMyCameraToggleButton: callType === "video",
           showPreJoinView: false,
           onLeaveRoom: () => {
-            isDestroyed = true;
             if (onLeaveRef.current) onLeaveRef.current();
           },
         });
@@ -94,20 +90,22 @@ export default function VideoCall({
     };
 
     const timer = setTimeout(() => {
-      initZego();
-    }, 200);
+      if (isMounted) {
+        initZego();
+      }
+    }, 500); // Tăng lên 500ms để tránh triệt để lỗi Strict Mode của React 18
 
     return () => {
       isMounted = false;
       clearTimeout(timer);
-      if (zpInstance && !isDestroyed) {
-        isDestroyed = true;
+      if (zpInstance) {
         try {
           zpInstance.destroy();
         } catch (e) {}
       }
     };
-  }, [roomID, userID, userName, callType, isGroup]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // <-- Khóa cứng, đảm bảo chỉ kết nối duy nhất 1 lần
 
   return (
     <div className="fixed inset-0 z-[999999] bg-[#1a1a1a] flex items-center justify-center">
