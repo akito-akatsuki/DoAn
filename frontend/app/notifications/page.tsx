@@ -1136,8 +1136,10 @@ export default function NotificationsPage() {
         className="fixed bottom-20 md:bottom-6 right-4 md:right-6 z-[999] flex flex-col items-end gap-4"
         ref={chatContainerRef}
       >
-        {isChatOpen && user && (
-          <div className="w-[380px] h-[550px] text-gray-900 dark:text-gray-100 rounded-2xl shadow-2xl dark:shadow-black/50 border border-gray-200 dark:border-neutral-800 overflow-hidden flex flex-col animate-in fade-in slide-in-from-bottom-4 duration-300 transition-colors duration-500 bg-white dark:bg-[#262626]">
+        {user && (
+          <div
+            className={`w-[380px] h-[550px] text-gray-900 dark:text-gray-100 rounded-2xl shadow-2xl dark:shadow-black/50 border border-gray-200 dark:border-neutral-800 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300 transition-colors duration-500 bg-white dark:bg-[#262626] ${isChatOpen ? "flex flex-col" : "hidden"}`}
+          >
             <ChatBox userId={user.id} onClose={() => setIsChatOpen(false)} />
           </div>
         )}
