@@ -45,6 +45,8 @@ import {
   unblockUser,
   createCallRecord,
   updateCallRecord,
+  addMembersToGroup,
+  removeMemberFromGroup,
 } from "@/lib/chatApi";
 import dynamic from "next/dynamic";
 
@@ -98,6 +100,8 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
   const [groupMembers, setGroupMembers] = useState<any[]>([]);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupAvatar, setNewGroupAvatar] = useState<File | null>(null);
+  const [memberSearchQuery, setMemberSearchQuery] = useState("");
+  const [memberSearchResults, setMemberSearchResults] = useState<any[]>([]);
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
   const [newNickname, setNewNickname] = useState("");
   const [openMessageMenuId, setOpenMessageMenuId] = useState<string | null>(
@@ -542,6 +546,27 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
     return () => clearTimeout(t);
   }, [search, userId, isCreatingGroup]);
 
+  // ================= SEARCH MEMBERS TO ADD =================
+  useEffect(() => {
+    const t = setTimeout(async () => {
+      if (!memberSearchQuery.trim() || !conversationId) {
+        setMemberSearchResults([]);
+        return;
+      }
+      const excludeIds = groupMembers.map((m) => m.id);
+      let query = supabase
+        .from("users")
+        .select("id, name, avatar_url")
+        .ilike("name", `%${memberSearchQuery.trim()}%`);
+      if (excludeIds.length > 0) {
+        query = query.not("id", "in", `(${excludeIds.join(",")})`);
+      }
+      const { data } = await query.limit(5);
+      setMemberSearchResults(data || []);
+    }, 300);
+    return () => clearTimeout(t);
+  }, [memberSearchQuery, groupMembers, conversationId]);
+
   // ================= CREATE GROUP =================
   const handleCreateGroup = async () => {
     if (!groupName.trim()) {
@@ -858,6 +883,41 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleAddMember = async (userToAdd: any) => {
+    if (!conversationId) return;
+    try {
+      setLoading(true);
+      await addMembersToGroup(conversationId, [userToAdd.id]);
+      setGroupMembers((prev) => [...prev, userToAdd]);
+      setMemberSearchQuery("");
+      setMemberSearchResults([]);
+      toast.success(`Đã thêm ${userToAdd.name} vào nhóm`);
+    } catch (e) {
+      toast.error("Lỗi khi thêm thành viên");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveMember = async (memberId: string) => {
+    if (!conversationId) return;
+    showConfirm(
+      "Bạn có chắc chắn muốn xóa thành viên này khỏi nhóm?",
+      async () => {
+        try {
+          setLoading(true);
+          await removeMemberFromGroup(conversationId, memberId);
+          setGroupMembers((prev) => prev.filter((m) => m.id !== memberId));
+          toast.success("Đã xóa thành viên");
+        } catch (e) {
+          toast.error("Lỗi khi xóa thành viên");
+        } finally {
+          setLoading(false);
+        }
+      },
+    );
   };
 
   const handleUpdateGroupName = async () => {
@@ -1554,24 +1614,77 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
             )}
 
             {settingsView === "members" && (
-              <div className="bg-white dark:bg-[#262626] rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 shadow-sm">
-                {groupMembers.map((member) => (
-                  <div
-                    key={member.id}
-                    className="flex items-center gap-3 p-3 border-b border-gray-200 dark:border-neutral-800 last:border-0 hover:bg-secondary transition-colors"
-                  >
-                    <img
-                      src={
-                        member.avatar_url ||
-                        `https://api.dicebear.com/7.x/identicon/svg?seed=${member.id}`
-                      }
-                      className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shadow-sm"
+              <div className="space-y-4">
+                <div className="bg-white dark:bg-[#262626] rounded-xl p-3 border border-gray-200 dark:border-neutral-800 shadow-sm flex flex-col gap-2">
+                  <div className="flex items-center gap-2 border border-gray-200 dark:border-neutral-700 shadow-inner bg-gray-50 dark:bg-[#333333] p-2 rounded-xl">
+                    <Search size={16} className="text-muted-foreground" />
+                    <input
+                      value={memberSearchQuery}
+                      onChange={(e) => setMemberSearchQuery(e.target.value)}
+                      placeholder="Tìm để thêm thành viên..."
+                      className="flex-1 outline-none text-[15px] bg-transparent"
                     />
-                    <span className="font-semibold text-[15px]">
-                      {member.name} {member.id === userId && "(Bạn)"}
-                    </span>
                   </div>
-                ))}
+                  {memberSearchResults.length > 0 && (
+                    <div className="space-y-1 mt-2 border-t border-gray-200 dark:border-neutral-800 pt-2">
+                      {memberSearchResults.map((u) => (
+                        <div
+                          key={u.id}
+                          className="flex items-center justify-between p-2 hover:bg-secondary rounded-lg transition-colors"
+                        >
+                          <div className="flex items-center gap-3">
+                            <img
+                              src={
+                                u.avatar_url ||
+                                `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
+                              }
+                              className="w-8 h-8 rounded-full"
+                            />
+                            <span className="text-sm font-semibold">
+                              {u.name}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => handleAddMember(u)}
+                            className="text-xs font-bold text-blue-500 hover:underline"
+                          >
+                            Thêm
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-white dark:bg-[#262626] rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 shadow-sm">
+                  {groupMembers.map((member) => (
+                    <div
+                      key={member.id}
+                      className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-neutral-800 last:border-0 hover:bg-secondary transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <img
+                          src={
+                            member.avatar_url ||
+                            `https://api.dicebear.com/7.x/identicon/svg?seed=${member.id}`
+                          }
+                          className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shadow-sm"
+                        />
+                        <span className="font-semibold text-[15px]">
+                          {member.name} {member.id === userId && "(Bạn)"}
+                        </span>
+                      </div>
+                      {member.id !== userId && (
+                        <button
+                          onClick={() => handleRemoveMember(member.id)}
+                          className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
               </div>
             )}
 

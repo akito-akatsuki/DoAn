@@ -217,6 +217,39 @@ export const getConversationMembers = async (conversationId: string) => {
 };
 
 /* ======================================
+   ADD MEMBERS TO GROUP
+====================================== */
+export const addMembersToGroup = async (
+  conversationId: string,
+  memberIds: string[],
+) => {
+  const participantsData = memberIds.map((userId) => ({
+    conversation_id: conversationId,
+    user_id: userId,
+  }));
+  const { error } = await supabase
+    .from("conversation_participants")
+    .insert(participantsData);
+  if (error) throw new Error(error.message || "Lỗi thêm thành viên");
+  return true;
+};
+
+/* ======================================
+   REMOVE MEMBER FROM GROUP
+====================================== */
+export const removeMemberFromGroup = async (
+  conversationId: string,
+  userId: string,
+) => {
+  const { error } = await supabase
+    .from("conversation_participants")
+    .delete()
+    .match({ conversation_id: conversationId, user_id: userId });
+  if (error) throw new Error(error.message || "Lỗi xóa thành viên");
+  return true;
+};
+
+/* ======================================
    UPDATE GROUP NAME
 ====================================== */
 export const updateGroupName = async (
