@@ -695,27 +695,33 @@ export default function MessagesPage() {
     setCallRoomId(roomId);
     setCallUserInfo(targetUser);
     setCallType(type);
+    setCallState("calling");
 
     if (targetUser.is_group) {
-      setIsInCall(true);
-      setCallState("idle");
       try {
         const members = await getConversationMembers(conversationId!);
+        let delay = 0;
         members.forEach((m: any) => {
           if (m.id !== user?.id) {
-            sendCallSignalToUser(m.id, {
-              type: "OFFER",
-              callType: type,
-              roomId,
-              caller: { ...user, group_name: targetUser.name, is_group: true },
-            });
+            setTimeout(() => {
+              sendCallSignalToUser(m.id, {
+                type: "OFFER",
+                callType: type,
+                roomId,
+                caller: {
+                  ...user,
+                  group_name: targetUser.name,
+                  is_group: true,
+                },
+              });
+            }, delay);
+            delay += 100;
           }
         });
       } catch (e) {
         console.error(e);
       }
     } else {
-      setCallState("calling");
       sendCallSignalToUser(targetUser.id, {
         type: "OFFER",
         callType: type,
@@ -745,13 +751,28 @@ export default function MessagesPage() {
     setCallUserInfo(null);
   };
 
-  const handleLeaveCall = () => {
+  const handleLeaveCall = async () => {
     setIsInCall(false);
     setCallState("idle");
-    if (!callUserInfo?.is_group) {
+
+    const isInitiator = callRoomId.endsWith(`_${user?.id}`);
+
+    if (callUserInfo?.is_group) {
+      if (isInitiator && conversationId) {
+        try {
+          const members = await getConversationMembers(conversationId);
+          members.forEach((m: any) => {
+            if (m.id !== user?.id) {
+              sendCallSignalToUser(m.id, { type: "END" });
+            }
+          });
+        } catch (e) {}
+      }
+    } else {
       sendCallSignalToUser(callUserInfo?.id, { type: "END" });
     }
     setCallUserInfo(null);
+    setCurrentCallId(null);
   };
 
   // ================= GỬI TIN NHẮN =================

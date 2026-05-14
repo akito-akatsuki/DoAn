@@ -45,8 +45,6 @@ import {
   unblockUser,
   createCallRecord,
   updateCallRecord,
-  addMembersToGroup,
-  removeMemberFromGroup,
 } from "@/lib/chatApi";
 import dynamic from "next/dynamic";
 
@@ -81,13 +79,11 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
   const [isBlockedListOpen, setIsBlockedListOpen] = useState(false);
   const [blockedUsersList, setBlockedUsersList] = useState<any[]>([]);
 
-  const [typingUsers, setTypingUsers] = useState<
-    { id: string; name: string }[]
-  >([]);
+  const [isTyping, setIsTyping] = useState(false);
   const typingChannelRef = useRef<any>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const lastTypingTimeRef = useRef(0);
-  const typingTimeoutsRef = useRef<Record<string, NodeJS.Timeout>>({});
+  const receiveTypingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -102,8 +98,6 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
   const [groupMembers, setGroupMembers] = useState<any[]>([]);
   const [newGroupName, setNewGroupName] = useState("");
   const [newGroupAvatar, setNewGroupAvatar] = useState<File | null>(null);
-  const [memberSearchQuery, setMemberSearchQuery] = useState("");
-  const [memberSearchResults, setMemberSearchResults] = useState<any[]>([]);
   const [followedIds, setFollowedIds] = useState<Set<string>>(new Set());
   const [newNickname, setNewNickname] = useState("");
   const [openMessageMenuId, setOpenMessageMenuId] = useState<string | null>(
@@ -180,7 +174,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
     requestAnimationFrame(() => {
       scrollRef.current!.scrollTop = scrollRef.current!.scrollHeight;
     });
-  }, [messages.length, typingUsers.length]);
+  }, [messages.length, isTyping]);
 
   // ================= REALTIME + BROADCAST (MULTIPLEXING) =================
   useEffect(() => {
@@ -219,32 +213,16 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
         },
       )
       .on("broadcast", { event: "typing" }, (payload) => {
-        const {
-          isTyping: remoteIsTyping,
-          senderId,
-          senderName,
-        } = payload.payload;
+        const { isTyping: remoteIsTyping, senderId } = payload.payload;
         if (senderId !== userId) {
+          setIsTyping(remoteIsTyping);
+          if (receiveTypingTimeoutRef.current)
+            clearTimeout(receiveTypingTimeoutRef.current);
           if (remoteIsTyping) {
-            setTypingUsers((prev) => {
-              if (prev.find((u) => u.id === senderId)) return prev;
-              return [
-                ...prev,
-                { id: senderId, name: senderName || "Người dùng" },
-              ];
-            });
-            if (typingTimeoutsRef.current[senderId]) {
-              clearTimeout(typingTimeoutsRef.current[senderId]);
-            }
-            typingTimeoutsRef.current[senderId] = setTimeout(() => {
-              setTypingUsers((prev) => prev.filter((u) => u.id !== senderId));
-            }, 3000);
-          } else {
-            setTypingUsers((prev) => prev.filter((u) => u.id !== senderId));
-            if (typingTimeoutsRef.current[senderId]) {
-              clearTimeout(typingTimeoutsRef.current[senderId]);
-              delete typingTimeoutsRef.current[senderId];
-            }
+            receiveTypingTimeoutRef.current = setTimeout(
+              () => setIsTyping(false),
+              3000,
+            );
           }
         }
       })
@@ -564,27 +542,6 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
     return () => clearTimeout(t);
   }, [search, userId, isCreatingGroup]);
 
-  // ================= SEARCH MEMBERS TO ADD =================
-  useEffect(() => {
-    const t = setTimeout(async () => {
-      if (!memberSearchQuery.trim() || !conversationId) {
-        setMemberSearchResults([]);
-        return;
-      }
-      const excludeIds = groupMembers.map((m) => m.id);
-      let query = supabase
-        .from("users")
-        .select("id, name, avatar_url")
-        .ilike("name", `%${memberSearchQuery.trim()}%`);
-      if (excludeIds.length > 0) {
-        query = query.not("id", "in", `(${excludeIds.join(",")})`);
-      }
-      const { data } = await query.limit(5);
-      setMemberSearchResults(data || []);
-    }, 300);
-    return () => clearTimeout(t);
-  }, [memberSearchQuery, groupMembers, conversationId]);
-
   // ================= CREATE GROUP =================
   const handleCreateGroup = async () => {
     if (!groupName.trim()) {
@@ -787,11 +744,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
       typingChannelRef.current.send({
         type: "broadcast",
         event: "typing",
-        payload: {
-          isTyping: false,
-          senderId: userId,
-          senderName: currentUser?.name || "Người dùng",
-        },
+        payload: { isTyping: false, senderId: userId },
       });
     }
     lastTypingTimeRef.current = 0;
@@ -804,31 +757,33 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
     setCallRoomId(roomId);
     setCallUserInfo(targetUser);
     setCallType(type);
+    setCallState("calling");
 
     if (targetUser.is_group) {
-      setIsInCall(true);
-      setCallState("idle");
       try {
         const members = await getConversationMembers(conversationId!);
+        let delay = 0;
         members.forEach((m: any) => {
           if (m.id !== userId) {
-            sendCallSignalToUser(m.id, {
-              type: "OFFER",
-              callType: type,
-              roomId,
-              caller: {
-                ...currentUser,
-                group_name: targetUser.name,
-                is_group: true,
-              },
-            });
+            setTimeout(() => {
+              sendCallSignalToUser(m.id, {
+                type: "OFFER",
+                callType: type,
+                roomId,
+                caller: {
+                  ...currentUser,
+                  group_name: targetUser.name,
+                  is_group: true,
+                },
+              });
+            }, delay);
+            delay += 100;
           }
         });
       } catch (e) {
         console.error(e);
       }
     } else {
-      setCallState("calling");
       sendCallSignalToUser(targetUser.id, {
         type: "OFFER",
         callType: type,
@@ -858,13 +813,28 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
     setCallUserInfo(null);
   };
 
-  const handleLeaveCall = () => {
+  const handleLeaveCall = async () => {
     setIsInCall(false);
     setCallState("idle");
-    if (!callUserInfo?.is_group) {
+
+    const isInitiator = callRoomId.endsWith(`_${userId}`);
+
+    if (callUserInfo?.is_group) {
+      if (isInitiator && conversationId) {
+        try {
+          const members = await getConversationMembers(conversationId);
+          members.forEach((m: any) => {
+            if (m.id !== userId) {
+              sendCallSignalToUser(m.id, { type: "END" });
+            }
+          });
+        } catch (e) {}
+      }
+    } else {
       sendCallSignalToUser(callUserInfo?.id, { type: "END" });
     }
     setCallUserInfo(null);
+    setCurrentCallId(null);
   };
 
   // ================= BLOCKED CONTROL HANDLERS =================
@@ -905,41 +875,6 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleAddMember = async (userToAdd: any) => {
-    if (!conversationId) return;
-    try {
-      setLoading(true);
-      await addMembersToGroup(conversationId, [userToAdd.id]);
-      setGroupMembers((prev) => [...prev, userToAdd]);
-      setMemberSearchQuery("");
-      setMemberSearchResults([]);
-      toast.success(`Đã thêm ${userToAdd.name} vào nhóm`);
-    } catch (e) {
-      toast.error("Lỗi khi thêm thành viên");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleRemoveMember = async (memberId: string) => {
-    if (!conversationId) return;
-    showConfirm(
-      "Bạn có chắc chắn muốn xóa thành viên này khỏi nhóm?",
-      async () => {
-        try {
-          setLoading(true);
-          await removeMemberFromGroup(conversationId, memberId);
-          setGroupMembers((prev) => prev.filter((m) => m.id !== memberId));
-          toast.success("Đã xóa thành viên");
-        } catch (e) {
-          toast.error("Lỗi khi xóa thành viên");
-        } finally {
-          setLoading(false);
-        }
-      },
-    );
   };
 
   const handleUpdateGroupName = async () => {
@@ -1636,77 +1571,24 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
             )}
 
             {settingsView === "members" && (
-              <div className="space-y-4">
-                <div className="bg-white dark:bg-[#262626] rounded-xl p-3 border border-gray-200 dark:border-neutral-800 shadow-sm flex flex-col gap-2">
-                  <div className="flex items-center gap-2 border border-gray-200 dark:border-neutral-700 shadow-inner bg-gray-50 dark:bg-[#333333] p-2 rounded-xl">
-                    <Search size={16} className="text-muted-foreground" />
-                    <input
-                      value={memberSearchQuery}
-                      onChange={(e) => setMemberSearchQuery(e.target.value)}
-                      placeholder="Tìm để thêm thành viên..."
-                      className="flex-1 outline-none text-[15px] bg-transparent"
+              <div className="bg-white dark:bg-[#262626] rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 shadow-sm">
+                {groupMembers.map((member) => (
+                  <div
+                    key={member.id}
+                    className="flex items-center gap-3 p-3 border-b border-gray-200 dark:border-neutral-800 last:border-0 hover:bg-secondary transition-colors"
+                  >
+                    <img
+                      src={
+                        member.avatar_url ||
+                        `https://api.dicebear.com/7.x/identicon/svg?seed=${member.id}`
+                      }
+                      className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shadow-sm"
                     />
+                    <span className="font-semibold text-[15px]">
+                      {member.name} {member.id === userId && "(Bạn)"}
+                    </span>
                   </div>
-                  {memberSearchResults.length > 0 && (
-                    <div className="space-y-1 mt-2 border-t border-gray-200 dark:border-neutral-800 pt-2">
-                      {memberSearchResults.map((u) => (
-                        <div
-                          key={u.id}
-                          className="flex items-center justify-between p-2 hover:bg-secondary rounded-lg transition-colors"
-                        >
-                          <div className="flex items-center gap-3">
-                            <img
-                              src={
-                                u.avatar_url ||
-                                `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
-                              }
-                              className="w-8 h-8 rounded-full"
-                            />
-                            <span className="text-sm font-semibold">
-                              {u.name}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => handleAddMember(u)}
-                            className="text-xs font-bold text-blue-500 hover:underline"
-                          >
-                            Thêm
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-white dark:bg-[#262626] rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 shadow-sm">
-                  {groupMembers.map((member) => (
-                    <div
-                      key={member.id}
-                      className="flex items-center justify-between p-3 border-b border-gray-200 dark:border-neutral-800 last:border-0 hover:bg-secondary transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={
-                            member.avatar_url ||
-                            `https://api.dicebear.com/7.x/identicon/svg?seed=${member.id}`
-                          }
-                          className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shadow-sm"
-                        />
-                        <span className="font-semibold text-[15px]">
-                          {member.name} {member.id === userId && "(Bạn)"}
-                        </span>
-                      </div>
-                      {member.id !== userId && (
-                        <button
-                          onClick={() => handleRemoveMember(member.id)}
-                          className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                ))}
               </div>
             )}
 
@@ -2022,11 +1904,9 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                 </div>
               );
             })}
-            {typingUsers.length > 0 && (
+            {isTyping && (
               <div className="text-xs text-muted-foreground italic ml-2 mt-1">
-                {typingUsers.length === 1
-                  ? `${targetUser?.is_group ? typingUsers[0].name : targetUser?.name} đang soạn tin...`
-                  : `${typingUsers.map((u) => u.name).join(", ")} đang soạn tin...`}
+                {targetUser?.name} đang soạn tin...
               </div>
             )}
           </div>
@@ -2157,11 +2037,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                         typingChannelRef.current.send({
                           type: "broadcast",
                           event: "typing",
-                          payload: {
-                            isTyping: false,
-                            senderId: userId,
-                            senderName: currentUser?.name || "Người dùng",
-                          },
+                          payload: { isTyping: false, senderId: userId },
                         });
                         lastTypingTimeRef.current = 0;
                       } else {
@@ -2170,11 +2046,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                           typingChannelRef.current.send({
                             type: "broadcast",
                             event: "typing",
-                            payload: {
-                              isTyping: true,
-                              senderId: userId,
-                              senderName: currentUser?.name || "Người dùng",
-                            },
+                            payload: { isTyping: true, senderId: userId },
                           });
                           lastTypingTimeRef.current = now;
                         }
@@ -2184,11 +2056,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                           typingChannelRef.current?.send({
                             type: "broadcast",
                             event: "typing",
-                            payload: {
-                              isTyping: false,
-                              senderId: userId,
-                              senderName: currentUser?.name || "Người dùng",
-                            },
+                            payload: { isTyping: false, senderId: userId },
                           });
                           lastTypingTimeRef.current = 0;
                         }, 2000);

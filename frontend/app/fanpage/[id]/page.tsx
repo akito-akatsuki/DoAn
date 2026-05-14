@@ -1560,7 +1560,24 @@ export default function FanpageProfile({
                       onClick={() => openPostModal(post)}
                       className="w-7 h-7 cursor-pointer stroke-[2px]"
                     />
-                    <Send className="w-7 h-7 cursor-pointer stroke-[2px]" />
+                    <Send
+                      className="w-7 h-7 cursor-pointer stroke-[2px] hover:scale-110 transition-transform text-gray-900 dark:text-gray-100 hover:text-blue-500"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (navigator.share) {
+                          navigator
+                            .share({
+                              title: "InstaMini",
+                              text: "Hãy xem bài viết tuyệt vời này trên InstaMini!",
+                              url: window.location.origin,
+                            })
+                            .catch(() => {});
+                        } else {
+                          navigator.clipboard.writeText(window.location.origin);
+                          toast.success("Đã sao chép liên kết!");
+                        }
+                      }}
+                    />
                   </div>
                   <p className="text-sm font-bold mt-1">
                     {post.likes_count || 0} lượt thích

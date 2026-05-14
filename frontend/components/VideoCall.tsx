@@ -79,7 +79,7 @@ export default function VideoCall({
           container: containerRef.current,
           scenario: {
             mode: isGroup
-              ? ZegoUIKitPrebuilt.GroupCall
+              ? ZegoUIKitPrebuilt.VideoConference
               : ZegoUIKitPrebuilt.OneONoneCall,
           },
           turnOnCameraWhenJoining: callType === "video",
