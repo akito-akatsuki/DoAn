@@ -9,6 +9,7 @@ interface VideoCallProps {
   userName: string;
   onLeave: () => void;
   callType: "video" | "voice";
+  isGroup?: boolean;
 }
 
 export default function VideoCall({
@@ -17,6 +18,7 @@ export default function VideoCall({
   userName,
   onLeave,
   callType,
+  isGroup,
 }: VideoCallProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const zpRef = useRef<any>(null);
@@ -66,7 +68,9 @@ export default function VideoCall({
         await zp.joinRoom({
           container: containerRef.current,
           scenario: {
-            mode: ZegoUIKitPrebuilt.OneONoneCall,
+            mode: isGroup
+              ? ZegoUIKitPrebuilt.GroupCall
+              : ZegoUIKitPrebuilt.OneONoneCall,
           },
           turnOnCameraWhenJoining: callType === "video",
           showMyCameraToggleButton: callType === "video",
@@ -97,7 +101,7 @@ export default function VideoCall({
         zpRef.current.destroy();
       }
     };
-  }, [roomID, userID, userName, callType]); // Removed onLeave from dependencies
+  }, [roomID, userID, userName, callType, isGroup]); // Removed onLeave from dependencies
 
   return (
     <div className="fixed inset-0 z-[999999] bg-[#1a1a1a] flex items-center justify-center">

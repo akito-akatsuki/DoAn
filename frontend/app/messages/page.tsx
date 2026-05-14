@@ -588,20 +588,40 @@ export default function MessagesPage() {
   };
 
   // ================= CALL CONTROL HANDLERS =================
-  const startCall = (type: "video" | "voice") => {
-    if (!targetUser || targetUser.is_group) return;
+  const startCall = async (type: "video" | "voice") => {
+    if (!targetUser) return;
     const roomId = `room_${Date.now()}_${user?.id}`;
     setCallRoomId(roomId);
     setCallUserInfo(targetUser);
     setCallType(type);
-    setCallState("calling");
 
-    sendCallSignalToUser(targetUser.id, {
-      type: "OFFER",
-      callType: type,
-      roomId,
-      caller: user,
-    });
+    if (targetUser.is_group) {
+      setIsInCall(true);
+      setCallState("idle");
+      try {
+        const members = await getConversationMembers(conversationId!);
+        members.forEach((m: any) => {
+          if (m.id !== user?.id) {
+            sendCallSignalToUser(m.id, {
+              type: "OFFER",
+              callType: type,
+              roomId,
+              caller: { ...user, group_name: targetUser.name, is_group: true },
+            });
+          }
+        });
+      } catch (e) {
+        console.error(e);
+      }
+    } else {
+      setCallState("calling");
+      sendCallSignalToUser(targetUser.id, {
+        type: "OFFER",
+        callType: type,
+        roomId,
+        caller: user,
+      });
+    }
   };
 
   const acceptCall = () => {
@@ -615,17 +635,21 @@ export default function MessagesPage() {
 
   const rejectCall = () => {
     setCallState("idle");
-    sendCallSignalToUser(callUserInfo?.id, {
-      type: "REJECT",
-      caller: user,
-    });
+    if (!callUserInfo?.is_group) {
+      sendCallSignalToUser(callUserInfo?.id, {
+        type: "REJECT",
+        caller: user,
+      });
+    }
     setCallUserInfo(null);
   };
 
   const handleLeaveCall = () => {
     setIsInCall(false);
     setCallState("idle");
-    sendCallSignalToUser(callUserInfo?.id, { type: "END" });
+    if (!callUserInfo?.is_group) {
+      sendCallSignalToUser(callUserInfo?.id, { type: "END" });
+    }
     setCallUserInfo(null);
   };
 
@@ -1069,22 +1093,18 @@ export default function MessagesPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
-                      {!targetUser?.is_group && (
-                        <>
-                          <button
-                            onClick={() => startCall("voice")}
-                            className="p-2 hover:bg-secondary rounded-full transition-colors text-blue-500"
-                          >
-                            <Phone size={20} />
-                          </button>
-                          <button
-                            onClick={() => startCall("video")}
-                            className="p-2 hover:bg-secondary rounded-full transition-colors text-blue-500"
-                          >
-                            <Video size={20} />
-                          </button>
-                        </>
-                      )}
+                      <button
+                        onClick={() => startCall("voice")}
+                        className="p-2 hover:bg-secondary rounded-full transition-colors text-blue-500"
+                      >
+                        <Phone size={20} />
+                      </button>
+                      <button
+                        onClick={() => startCall("video")}
+                        className="p-2 hover:bg-secondary rounded-full transition-colors text-blue-500"
+                      >
+                        <Video size={20} />
+                      </button>
                       <button
                         onClick={() => {
                           setIsSettingsOpen(true);
@@ -1846,7 +1866,9 @@ export default function MessagesPage() {
                   />
                   <div>
                     <h3 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                      {callUserInfo?.name}
+                      {callUserInfo?.is_group
+                        ? `${callUserInfo.name} (Nhóm ${callUserInfo.group_name})`
+                        : callUserInfo?.name}
                     </h3>
                     <p className="text-muted-foreground mt-2 text-lg">
                       Đang gọi {callType === "video" ? "video" : "thoại"} cho
@@ -1906,6 +1928,7 @@ export default function MessagesPage() {
                 userName={user?.name || "Người dùng"}
                 onLeave={handleLeaveCall}
                 callType={callType}
+                isGroup={callUserInfo?.is_group}
               />
             )}
 

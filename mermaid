@@ -201,3 +201,224 @@ AI ---> (Kiểm duyệt nội dung tự động)
 (Tương tác: Thích, Bình luận) --- <<extend>> ---> (Tự động gửi thông báo)
 (Đăng ký tài khoản) --- <<extend>> ---> (Đăng nhập bằng Google)
 (Gọi Video / Thoại) --- <<include>> ---> (Khởi tạo phòng WebRTC)
+sequence đăng nhập
+sequenceDiagram
+    autonumber
+    actor User as 👤 Người dùng
+    participant FE as 🖥️ Frontend (Next.js)
+    participant Auth as 🔐 Supabase Auth
+    participant DB as 🗃️ Supabase DB (Bảng users)
+
+    User->>FE: Nhập Email, Mật khẩu & Bấm "Đăng nhập"
+    activate FE
+    FE->>Auth: Gọi hàm signInWithPassword({email, password})
+    activate Auth
+
+    alt Thông tin hợp lệ
+        Auth-->>FE: Trả về Session & JWT Token
+        FE->>DB: Gọi getUser() lấy thông tin chi tiết (role, avatar...)
+        activate DB
+        DB-->>FE: Trả về chi tiết User
+        deactivate DB
+        FE->>User: ✅ Báo "Đăng nhập thành công" & Tải lại trang (Mount app)
+    else Sai mật khẩu / Email chưa đăng ký
+        Auth-->>FE: Trả về Lỗi (Invalid login credentials)
+        FE->>User: ❌ Hiển thị thông báo "Email hoặc mật khẩu không đúng"
+    end
+    deactivate Auth
+    deactivate FE
+sequence nhắn tin
+sequenceDiagram
+    autonumber
+    actor UserA as 👤 Người gửi (A)
+    participant FE_A as 🖥️ Frontend (Máy A)
+    participant DB as 🗃️ Supabase DB
+    participant Realtime as ⚡ Supabase Realtime
+    participant FE_B as 🖥️ Frontend (Máy B)
+    actor UserB as 👤 Người nhận (B)
+
+    Note over FE_B, Realtime: Máy B đã subscribe channel "postgres_changes" từ trước
+
+    UserA->>FE_A: Gõ tin nhắn và nhấn "Gửi"
+    FE_A->>DB: INSERT INTO messages (sender_id, content, ...)
+    activate DB
+    DB-->>FE_A: Trả về bản ghi tin nhắn mới tạo
+
+    %% Kích hoạt Realtime
+    DB-->>Realtime: Kích hoạt Trigger "INSERT" sự kiện
+    deactivate DB
+
+    FE_A->>UserA: Cập nhật giao diện ChatBox của A (Hiển thị tin gửi đi)
+
+    activate Realtime
+    Realtime->>FE_B: Broadcast Payload (Bản ghi tin nhắn mới)
+    deactivate Realtime
+
+    FE_B->>UserB: Hiển thị tin nhắn mới / Tăng số đếm "Thông báo chưa đọc"
+sequence đăng bài
+sequenceDiagram
+    autonumber
+    actor User as 👤 Người dùng
+    participant FE as 🖥️ Frontend (Next.js)
+    participant Storage as 🗄️ Supabase Storage
+    participant API as ⚙️ Server API (/api/moderate)
+    participant AI as 🤖 Gemini AI
+    participant DB as 🗃️ Supabase DB
+
+    User->>FE: Nhập văn bản, chọn ảnh & Nhấn "Đăng bài"
+    activate FE
+
+    opt Có đính kèm ảnh
+        FE->>Storage: Gọi upload() lưu file ảnh vào bucket "posts"
+        activate Storage
+        Storage-->>FE: Trả về Public URLs của ảnh
+        deactivate Storage
+    end
+
+    opt Có nội dung văn bản
+        FE->>API: POST { content }
+        activate API
+        API->>AI: Gửi prompt + nội dung để phân tích ngữ nghĩa
+        activate AI
+        AI-->>API: Trả về kết quả JSON { "flagged": true/false }
+        deactivate AI
+        API-->>FE: Trả kết quả kiểm duyệt (is_flagged)
+        deactivate API
+    end
+
+    alt Nếu is_flagged == true (Nội dung vi phạm)
+        FE->>User: ❌ Báo lỗi "Vi phạm tiêu chuẩn cộng đồng"
+        opt Nếu có ảnh đã upload trước đó
+            FE->>Storage: Gửi yêu cầu remove() để xóa ảnh rác
+            Storage-->>FE: Xác nhận đã xóa thành công
+        end
+    else Nếu is_flagged == false (Nội dung an toàn)
+        FE->>DB: Gọi API createPost(content, image_urls)
+        activate DB
+        DB-->>FE: Lưu thành công, trả về dữ liệu Bài viết mới
+        deactivate DB
+        FE->>User: ✅ Cập nhật Bảng tin & Báo "Đăng bài thành công!"
+    end
+
+    deactivate FE
+sequence báo cáo
+sequenceDiagram
+    autonumber
+    actor User as 👤 Người dùng (Reporter)
+    participant FE as 🖥️ Frontend
+    participant DB as 🗃️ Supabase DB
+    actor Admin as 🛡️ Quản trị viên (Admin)
+
+    %% Giai đoạn gửi báo cáo
+    User->>FE: Bấm "Báo cáo bài viết", nhập lý do & Gửi
+    activate FE
+    FE->>DB: INSERT INTO reports (target_id, type, reason)
+    activate DB
+    DB-->>FE: Xác nhận lưu báo cáo thành công
+    deactivate DB
+    FE->>User: ✅ Báo "Đã gửi báo cáo thành công!"
+    deactivate FE
+
+    %% Giai đoạn Admin xử lý
+    Note over Admin, DB: Admin truy cập Trung tâm kiểm duyệt (/admin)
+    Admin->>FE: Mở tab "Báo cáo chờ duyệt"
+    activate FE
+    FE->>DB: GET pending reports (kèm dữ liệu bài viết/bằng chứng)
+    activate DB
+    DB-->>FE: Trả về danh sách báo cáo
+    deactivate DB
+    FE->>Admin: Hiển thị giao diện danh sách
+
+    Admin->>FE: Xem xét & Chọn "Xóa bài / Ẩn bài" + Nhập lời nhắn
+    FE->>DB: Xóa Post/Comment, Đổi status Report, Gửi Notification
+    activate DB
+    DB-->>FE: Cập nhật thành công
+    deactivate DB
+
+    FE->>FE: Cập nhật giao diện (Xóa thẻ báo cáo khỏi danh sách)
+    FE->>Admin: ✅ Báo "Đã gỡ bài và gửi thông báo!"
+    deactivate FE
+sequence bình luận
+sequenceDiagram
+    autonumber
+    actor User as 👤 Người dùng
+    participant FE as 🖥️ Frontend
+    participant Storage as 🗄️ Supabase Storage
+    participant DB as 🗃️ Supabase DB
+
+    User->>FE: Nhập bình luận, đính kèm ảnh & Bấm "Đăng"
+    activate FE
+
+    %% Optimistic Update
+    FE->>User: Hiển thị ngay Comment tạm (Loading state) trên UI
+
+    opt Nếu có đính kèm ảnh
+        FE->>Storage: upload(file) lên bucket "comment_images"
+        activate Storage
+        Storage-->>FE: Trả về URL ảnh (publicUrl)
+        deactivate Storage
+    end
+
+    FE->>DB: INSERT INTO comments (post_id, content, image_url)
+    activate DB
+    DB-->>FE: Trả về bản ghi Comment chính thức (Có ID từ DB)
+    deactivate DB
+
+    FE->>FE: Tráo đổi ID ảo bằng ID thật trong State (để cho phép xóa/sửa)
+    FE->>User: Hoàn tất quá trình hiển thị
+    deactivate FE
+
+sequence đổi mật khẩu
+sequenceDiagram
+    autonumber
+    actor User as 👤 Người dùng
+    participant FE as 🖥️ Frontend (Navbar)
+    participant Auth as 🔐 Supabase Auth
+
+    User->>FE: Nhập Mật khẩu cũ, Mật khẩu mới & Bấm "Đổi mật khẩu"
+    activate FE
+
+    opt Nếu tài khoản đã có mật khẩu từ trước
+        FE->>Auth: Gọi signInWithPassword(oldPassword) để xác thực
+        activate Auth
+        Auth-->>FE: Trả về kết quả xác thực
+        deactivate Auth
+    end
+
+    alt Xác thực mật khẩu cũ thành công / Tài khoản chưa có mật khẩu
+        FE->>Auth: Gọi updateUser({ password: newPassword })
+        activate Auth
+        Auth-->>FE: Xác nhận cập nhật thành công
+        deactivate Auth
+        FE->>User: ✅ Báo "Đổi mật khẩu thành công" & Tải lại trang
+    else Sai mật khẩu cũ
+        FE->>User: ❌ Hiển thị lỗi "Mật khẩu hiện tại không đúng"
+    end
+    deactivate FE
+
+sequence cập nhật hồ sơ
+sequenceDiagram
+    autonumber
+    actor User as 👤 Người dùng
+    participant FE as 🖥️ Frontend (Profile)
+    participant Storage as 🗄️ Supabase Storage
+    participant DB as 🗃️ Supabase DB
+
+    User->>FE: Sửa Tên, Bio, chọn Ảnh đại diện/Ảnh bìa mới & "Lưu"
+    activate FE
+
+    opt Có thay đổi Ảnh đại diện / Ảnh bìa
+        FE->>Storage: Gọi upload() lưu file ảnh vào bucket "posts"
+        activate Storage
+        Storage-->>FE: Trả về Public URL của ảnh mới
+        deactivate Storage
+    end
+
+    FE->>DB: UPDATE users SET name, bio, avatar_url, cover_url
+    activate DB
+    DB-->>FE: Xác nhận cập nhật thành công
+    deactivate DB
+
+    FE->>FE: Cập nhật lại State Profile và CurrentUser trên UI
+    FE->>User: ✅ Báo "Cập nhật thông tin thành công!" & Đóng Modal
+    deactivate FE

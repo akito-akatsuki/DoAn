@@ -348,18 +348,72 @@ export default function HomePage() {
           ? follows.map((f: any) => f.following_id)
           : [];
 
-        // Tải danh sách Gợi ý kết bạn (những người chưa follow)
-        let query = supabase
-          .from("users")
-          .select("id, name, avatar_url")
-          .neq("id", data.user.id);
-
+        // --- THUẬT TOÁN GỢI Ý KẾT BẠN (HEURISTIC RECOMMENDATION) ---
+        // 1. Tìm "Bạn của bạn bè" (Mutual Friends)
+        let mutualSuggestedIds: string[] = [];
         if (followedIds.length > 0) {
-          query = query.not("id", "in", `(${followedIds.join(",")})`);
+          const { data: friendsFollows } = await supabase
+            .from("follows")
+            .select("following_id")
+            .in("follower_id", followedIds);
+
+          if (friendsFollows) {
+            const tempSet = new Set<string>();
+            friendsFollows.forEach((f: any) => {
+              // Bỏ qua chính mình và những người mình đã theo dõi rồi
+              if (
+                f.following_id !== data.user.id &&
+                !followedIds.includes(f.following_id)
+              ) {
+                tempSet.add(f.following_id);
+              }
+            });
+            mutualSuggestedIds = Array.from(tempSet).slice(0, 5); // Lấy tối đa 5 tài khoản
+          }
         }
 
-        const { data: suggestions } = await query.limit(5);
-        if (suggestions) setSuggestedUsers(suggestions);
+        let suggestions: any[] = [];
+
+        // 2. Tải thông tin của những người là bạn chung
+        if (mutualSuggestedIds.length > 0) {
+          const { data: mutualUsers } = await supabase
+            .from("users")
+            .select("id, name, avatar_url")
+            .in("id", mutualSuggestedIds);
+          if (mutualUsers) {
+            suggestions = mutualUsers.map((u) => ({
+              ...u,
+              reason: "Có bạn bè chung",
+            }));
+          }
+        }
+
+        // 3. Nếu chưa đủ 5 người, lấy ngẫu nhiên các tài khoản mới tham gia
+        if (suggestions.length < 5) {
+          let query = supabase
+            .from("users")
+            .select("id, name, avatar_url")
+            .neq("id", data.user.id)
+            .order("created_at", { ascending: false }); // Lấy người mới tham gia
+
+          const excludeIds = [...followedIds, ...suggestions.map((s) => s.id)];
+          if (excludeIds.length > 0) {
+            query = query.not("id", "in", `(${excludeIds.join(",")})`);
+          }
+
+          const { data: newUsers } = await query.limit(5 - suggestions.length);
+          if (newUsers) {
+            suggestions = [
+              ...suggestions,
+              ...newUsers.map((u) => ({
+                ...u,
+                reason: "Mới tham gia InstaMini",
+              })),
+            ];
+          }
+        }
+
+        setSuggestedUsers(suggestions);
 
         const pages = await getUserPages();
         setUserPages(pages || []);
@@ -1762,7 +1816,7 @@ export default function HomePage() {
                         {u.name}
                       </span>
                       <span className="text-[12px] text-muted-foreground">
-                        Gợi ý kết bạn
+                        {u.reason || "Gợi ý cho bạn"}
                       </span>
                     </div>
                   </div>
