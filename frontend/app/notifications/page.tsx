@@ -697,7 +697,7 @@ export default function NotificationsPage() {
                 </div>
 
                 {/* Caption */}
-                {selectedPost.content && (
+                {(selectedPost.content || selectedPost.is_flagged) && (
                   <div
                     className={`px-4 pb-4 text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-300 ${selectedPost.is_flagged ? "text-red-500 font-semibold italic" : ""}`}
                   >

@@ -48,6 +48,7 @@ import {
   toggleSavePost,
   reportPost,
   reportComment,
+  submitAppeal,
 } from "@/lib/api";
 import toast from "react-hot-toast";
 import { showConfirm } from "@/components/GlobalConfirm";
@@ -132,6 +133,10 @@ export default function FanpageProfile({
   const [reportTargetId, setReportTargetId] = useState<string | null>(null);
   const [reportType, setReportType] = useState<"post" | "comment">("post");
   const [reportReason, setReportReason] = useState("");
+
+  // ================= APPEAL POST STATES =================
+  const [appealPostId, setAppealPostId] = useState<string | null>(null);
+  const [appealReason, setAppealReason] = useState("");
 
   // ================= MODAL POST STATES =================
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
@@ -1041,6 +1046,21 @@ export default function FanpageProfile({
     }
   };
 
+  // ================= APPEAL POST HANDLER =================
+  const handleSubmitAppeal = async () => {
+    if (!appealPostId || !appealReason.trim()) return;
+    try {
+      await submitAppeal(appealPostId, appealReason);
+      toast.success(
+        "Đã gửi yêu cầu xem xét lại! Quản trị viên sẽ phản hồi bạn sớm nhất.",
+      );
+      setAppealPostId(null);
+      setAppealReason("");
+    } catch (err) {
+      toast.error("Đã xảy ra lỗi khi gửi yêu cầu.");
+    }
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen pt-24 text-center text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-neutral-900">
@@ -1424,13 +1444,24 @@ export default function FanpageProfile({
                 </div>
 
                 {/* CONTENT */}
-                {post.content && (
+                {(post.content || post.is_flagged) && (
                   <div
                     className={`px-4 pb-3 text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-300 ${post.is_flagged ? "text-red-500 font-semibold italic" : ""}`}
                   >
                     {post.is_flagged
                       ? "Nội dung này đã bị ẩn do vi phạm tiêu chuẩn cộng đồng."
                       : post.content}
+                    {post.is_flagged && currentUser?.id === post.user_id && (
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAppealPostId(post.id);
+                        }}
+                        className="block mt-2 text-blue-500 hover:underline text-[12px] font-bold not-italic"
+                      >
+                        Gửi yêu cầu xem xét lại (Kháng nghị)
+                      </button>
+                    )}
                   </div>
                 )}
 
@@ -2191,6 +2222,60 @@ export default function FanpageProfile({
                 disabled={!reportReason.trim()}
               >
                 Gửi báo cáo
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= MODAL APPEAL POST ================= */}
+      {appealPostId && (
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4 animate-in fade-in duration-200"
+          onClick={() => setAppealPostId(null)}
+        >
+          <div
+            className="bg-white dark:bg-[#262626] rounded-2xl shadow-2xl w-full max-w-[400px] overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-200 dark:border-neutral-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                Gửi yêu cầu xem xét lại
+              </h3>
+              <button
+                onClick={() => setAppealPostId(null)}
+                className="hover:text-gray-500 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                Vui lòng nhập lý do bạn cho rằng bài viết này không vi phạm tiêu
+                chuẩn cộng đồng.
+              </p>
+              <textarea
+                value={appealReason}
+                onChange={(e) => setAppealReason(e.target.value)}
+                placeholder="Ví dụ: Hình ảnh này chỉ là ảnh nghệ thuật, không có yếu tố phản cảm..."
+                className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none transition-colors resize-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626] text-sm text-gray-900 dark:text-gray-100"
+                rows={4}
+                autoFocus
+              />
+            </div>
+            <div className="p-4 border-t border-gray-200 dark:border-neutral-800 flex justify-end gap-2">
+              <button
+                className="px-4 py-2 text-sm font-semibold text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#333333] transition-colors rounded-lg"
+                onClick={() => setAppealPostId(null)}
+              >
+                Hủy
+              </button>
+              <button
+                className="px-4 py-2 text-sm font-bold text-white bg-blue-500 hover:bg-blue-600 transition-colors rounded-lg disabled:opacity-50"
+                onClick={handleSubmitAppeal}
+                disabled={!appealReason.trim()}
+              >
+                Gửi yêu cầu
               </button>
             </div>
           </div>
