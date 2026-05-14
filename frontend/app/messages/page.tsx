@@ -182,11 +182,22 @@ export default function MessagesPage() {
         ...(blockerData || []).map((b) => b.blocker_id),
       ]);
 
-      // Lấy các cuộc trò chuyện và sắp xếp theo tin nhắn mới nhất
+      // Lấy danh sách ID các phòng chat mà người dùng tham gia (hỗ trợ cả nhóm)
+      const { data: parts } = await supabase
+        .from("conversation_participants")
+        .select("conversation_id")
+        .eq("user_id", user.id);
+
+      if (!parts || parts.length === 0) {
+        setConversations([]);
+        return;
+      }
+      const convIds = parts.map((p) => p.conversation_id);
+
       const { data } = await supabase
         .from("conversations")
         .select("*")
-        .or(`user1_id.eq.${user.id},user2_id.eq.${user.id}`)
+        .in("id", convIds)
         .order("updated_at", { ascending: false });
 
       if (!data) return;
@@ -194,26 +205,38 @@ export default function MessagesPage() {
       // Gắn thêm thông tin của user đối phương
       const enriched = await Promise.all(
         data.map(async (c) => {
-          const otherId = c.user1_id === user.id ? c.user2_id : c.user1_id;
+          let otherUser;
+          if (c.is_group) {
+            otherUser = {
+              id: c.id,
+              name: c.group_name || "Nhóm chưa đặt tên",
+              avatar_url:
+                c.group_avatar ||
+                `https://api.dicebear.com/7.x/identicon/svg?seed=${c.id}`,
+              is_group: true,
+            };
+          } else {
+            const otherId = c.user1_id === user.id ? c.user2_id : c.user1_id;
+            if (excludedIds.has(otherId)) return null; // Ẩn người bị chặn
 
-          if (excludedIds.has(otherId)) return null; // Ẩn người bị chặn
+            const { data: u } = await supabase
+              .from("users")
+              .select("id, name, avatar_url")
+              .eq("id", otherId)
+              .maybeSingle();
 
-          const { data: u } = await supabase
-            .from("users")
-            .select("id, name, avatar_url")
-            .eq("id", otherId)
-            .maybeSingle();
+            // Ưu tiên hiển thị tên gợi nhớ nếu có
+            const { data: nick } = await supabase
+              .from("nicknames")
+              .select("nickname")
+              .eq("conversation_id", c.id)
+              .eq("user_id", user.id)
+              .eq("target_id", otherId)
+              .maybeSingle();
 
-          // Ưu tiên hiển thị tên gợi nhớ nếu có
-          const { data: nick } = await supabase
-            .from("nicknames")
-            .select("nickname")
-            .eq("conversation_id", c.id)
-            .eq("user_id", user.id)
-            .eq("target_id", otherId)
-            .maybeSingle();
-
-          if (u && nick?.nickname) u.name = nick.nickname;
+            if (u && nick?.nickname) u.name = nick.nickname;
+            otherUser = u;
+          }
 
           // Lấy trực tiếp tin nhắn mới nhất từ bảng messages
           const { data: lastMsg } = await supabase
@@ -245,7 +268,7 @@ export default function MessagesPage() {
 
           return {
             ...c,
-            otherUser: u,
+            otherUser: otherUser,
             display_last_message: displayTxt,
             has_unread: hasUnread,
           };
