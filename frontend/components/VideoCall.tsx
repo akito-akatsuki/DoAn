@@ -38,6 +38,7 @@ export default function VideoCall({
     isDestroyedRef.current = false;
     let isMounted = true;
     let zpInstance: any = null;
+    let joinPromise: Promise<any> | null = null;
     const appID = Number(process.env.NEXT_PUBLIC_ZEGO_APP_ID);
     const serverSecret = process.env.NEXT_PUBLIC_ZEGO_SERVER_SECRET as string;
 
@@ -75,7 +76,7 @@ export default function VideoCall({
         }
 
         // await joinRoom để bắt lỗi nếu Zego từ chối kết nối
-        await zp.joinRoom({
+        joinPromise = zp.joinRoom({
           container: containerRef.current,
           scenario: {
             mode: isGroup
@@ -92,6 +93,7 @@ export default function VideoCall({
             }
           },
         });
+        await joinPromise;
       } catch (error: any) {
         if (isMounted) {
           setErrorMsg(
@@ -107,7 +109,25 @@ export default function VideoCall({
       clearTimeout(timer);
       if (zpInstance && !isDestroyedRef.current) {
         isDestroyedRef.current = true;
-        zpInstance.destroy();
+
+        // Chờ kết nối hoàn tất rồi mới được phép hủy phòng để tránh Crash SDK Zego
+        if (joinPromise) {
+          joinPromise
+            .then(() => {
+              try {
+                zpInstance.destroy();
+              } catch (e) {}
+            })
+            .catch(() => {
+              try {
+                zpInstance.destroy();
+              } catch (e) {}
+            });
+        } else {
+          try {
+            zpInstance.destroy();
+          } catch (e) {}
+        }
       }
     };
   }, [roomID, userID, userName, callType, isGroup]); // Removed onLeave from dependencies
