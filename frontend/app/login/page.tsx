@@ -11,6 +11,8 @@ export default function AuthPage() {
   );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [dob, setDob] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -50,6 +52,10 @@ export default function AuthPage() {
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/`,
+          data: {
+            name: name,
+            dob: dob,
+          },
         },
       });
       if (error) {
@@ -118,6 +124,34 @@ export default function AuthPage() {
           </h2>
 
           <form onSubmit={handleAuthAction}>
+            {view === "register" && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
+                  Tên hiển thị
+                </label>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors"
+                />
+              </div>
+            )}
+            {view === "register" && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
+                  Ngày sinh
+                </label>
+                <input
+                  type="date"
+                  value={dob}
+                  onChange={(e) => setDob(e.target.value)}
+                  required
+                  className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors"
+                />
+              </div>
+            )}
             {view !== "update" && (
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">

@@ -38,6 +38,7 @@ type UserProfile = {
   bio?: string | null;
   cover_url?: string | null;
   cover_position_y?: number | null;
+  dob?: string | null;
 };
 
 export default function ProfilePage({
@@ -93,6 +94,7 @@ export default function ProfilePage({
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [editName, setEditName] = useState("");
   const [editBio, setEditBio] = useState("");
+  const [editDob, setEditDob] = useState("");
   const [editAvatar, setEditAvatar] = useState<File | null>(null);
   const [editCover, setEditCover] = useState<File | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState<
@@ -524,6 +526,7 @@ export default function ProfilePage({
   const openEditProfile = () => {
     setEditName(profile?.name || "");
     setEditBio(profile?.bio || "");
+    setEditDob(profile?.dob || "");
     setEditAvatar(null);
     setEditCover(null);
     setEditCoverPositionY(profile?.cover_position_y ?? 50);
@@ -575,6 +578,7 @@ export default function ProfilePage({
           avatar_url: newAvatarUrl,
           cover_url: newCoverUrl,
           cover_position_y: editCoverPositionY,
+          dob: editDob ? editDob : null,
         })
         .eq("id", currentUser.id);
 
@@ -594,6 +598,7 @@ export default function ProfilePage({
         avatar_url: newAvatarUrl,
         cover_url: newCoverUrl,
         cover_position_y: editCoverPositionY,
+        dob: editDob ? editDob : null,
       });
       if (currentUser && currentUser.id === profile.id) {
         setCurrentUser((prev: any) => ({
@@ -719,6 +724,12 @@ export default function ProfilePage({
               <p className="text-sm text-muted-foreground">
                 {profile.bio || "Chưa có thông tin giới thiệu"}
               </p>
+              {profile.dob && (
+                <p className="text-sm text-muted-foreground mt-1 flex items-center justify-center md:justify-start">
+                  🎂 Sinh nhật:{" "}
+                  {new Date(profile.dob).toLocaleDateString("vi-VN")}
+                </p>
+              )}
             </div>
           </div>
 
@@ -1322,6 +1333,18 @@ export default function ProfilePage({
                   className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none transition-colors resize-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626]"
                   rows={3}
                   placeholder="Giới thiệu đôi nét về bản thân..."
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-1">
+                  Ngày sinh
+                </label>
+                <input
+                  type="date"
+                  value={editDob}
+                  onChange={(e) => setEditDob(e.target.value)}
+                  className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none transition-colors bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626]"
                 />
               </div>
 
