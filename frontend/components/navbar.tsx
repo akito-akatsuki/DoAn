@@ -215,7 +215,12 @@ export default function Navbar({ user: propUser }: any) {
         try {
           const { data, error } = await supabase.auth.getUser();
           if (error) {
-            console.warn("Lỗi xác thực Supabase:", error.message);
+            if (!error.message.includes("Auth session missing!")) {
+              console.warn("Lỗi xác thực Supabase:", error.message);
+            }
+            if (error.message.includes("Refresh Token Not Found")) {
+              await supabase.auth.signOut();
+            }
             return;
           }
           if (data?.user) {
@@ -590,7 +595,7 @@ export default function Navbar({ user: propUser }: any) {
                           }}
                         >
                           <div className="flex items-center gap-3 overflow-hidden">
-                            {avatarUrl ? (
+                            {avatarUrl && avatarUrl !== "null" ? (
                               <img
                                 src={avatarUrl}
                                 className="w-8 h-8 rounded-full object-cover shrink-0"
@@ -637,8 +642,14 @@ export default function Navbar({ user: propUser }: any) {
                           <div className="flex items-center gap-2">
                             <img
                               src={
-                                item.pages?.avatar_url ||
-                                item.users?.avatar_url ||
+                                (item.pages?.avatar_url &&
+                                item.pages.avatar_url !== "null"
+                                  ? item.pages.avatar_url
+                                  : null) ||
+                                (item.users?.avatar_url &&
+                                item.users.avatar_url !== "null"
+                                  ? item.users.avatar_url
+                                  : null) ||
                                 `https://api.dicebear.com/7.x/identicon/svg?seed=${item.pages?.id || item.users?.id}`
                               }
                               className="w-6 h-6 rounded-full object-cover shrink-0"
@@ -674,7 +685,9 @@ export default function Navbar({ user: propUser }: any) {
                         >
                           <img
                             src={
-                              item.avatar_url ||
+                              (item.avatar_url && item.avatar_url !== "null"
+                                ? item.avatar_url
+                                : null) ||
                               `https://api.dicebear.com/7.x/identicon/svg?seed=${item.id}`
                             }
                             className="w-9 h-9 rounded-full object-cover shrink-0"
@@ -797,8 +810,13 @@ export default function Navbar({ user: propUser }: any) {
                 <img
                   onClick={() => setOpen(!open)}
                   src={
-                    user?.avatar_url ||
-                    user?.user_metadata?.avatar_url ||
+                    (user?.avatar_url && user.avatar_url !== "null"
+                      ? user.avatar_url
+                      : null) ||
+                    (user?.user_metadata?.avatar_url &&
+                    user.user_metadata.avatar_url !== "null"
+                      ? user.user_metadata.avatar_url
+                      : null) ||
                     `https://api.dicebear.com/7.x/identicon/svg?seed=${user.id}`
                   }
                   className={`w-8 h-8 rounded-full cursor-pointer border-[2px] transition-all duration-300 ${pathname?.startsWith("/profile") ? "border-cyan-500 scale-110 drop-shadow-[0_0_12px_rgba(6,182,212,0.8)]" : "border-transparent hover:scale-105"}`}
@@ -888,7 +906,9 @@ export default function Navbar({ user: propUser }: any) {
                           >
                             <img
                               src={
-                                p.avatar_url ||
+                                (p.avatar_url && p.avatar_url !== "null"
+                                  ? p.avatar_url
+                                  : null) ||
                                 `https://api.dicebear.com/7.x/identicon/svg?seed=${p.id}`
                               }
                               className="w-6 h-6 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shrink-0"
@@ -1043,7 +1063,9 @@ export default function Navbar({ user: propUser }: any) {
                           >
                             <img
                               src={
-                                p.avatar_url ||
+                                (p.avatar_url && p.avatar_url !== "null"
+                                  ? p.avatar_url
+                                  : null) ||
                                 `https://api.dicebear.com/7.x/identicon/svg?seed=${p.id}`
                               }
                               className="w-8 h-8 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shrink-0"
@@ -1159,8 +1181,13 @@ export default function Navbar({ user: propUser }: any) {
                   {tab.id === "profile" ? (
                     <img
                       src={
-                        user?.avatar_url ||
-                        user?.user_metadata?.avatar_url ||
+                        (user?.avatar_url && user.avatar_url !== "null"
+                          ? user.avatar_url
+                          : null) ||
+                        (user?.user_metadata?.avatar_url &&
+                        user.user_metadata.avatar_url !== "null"
+                          ? user.user_metadata.avatar_url
+                          : null) ||
                         (user
                           ? `https://api.dicebear.com/7.x/identicon/svg?seed=${user.id}`
                           : "/sukhoi.jpg")

@@ -376,7 +376,9 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
               id: c.id,
               name: c.group_name || "Nhóm chưa đặt tên",
               avatar_url:
-                c.group_avatar ||
+                (c.group_avatar && c.group_avatar !== "null"
+                  ? c.group_avatar
+                  : null) ||
                 `https://api.dicebear.com/7.x/identicon/svg?seed=${c.id}`,
               is_group: true,
             };
@@ -1087,14 +1089,19 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
 
             <div className="relative">
               <img
-                src={targetUser?.avatar_url}
+                src={
+                  (targetUser?.avatar_url && targetUser.avatar_url !== "null"
+                    ? targetUser.avatar_url
+                    : null) ||
+                  `https://api.dicebear.com/7.x/identicon/svg?seed=${targetUser?.id}`
+                }
                 onClick={() => {
                   if (!targetUser?.is_group) {
                     router.push(`/profile/${targetUser?.id}`);
                     if (onClose) onClose();
                   }
                 }}
-                className={`w-8 h-8 rounded-full ${!targetUser?.is_group ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
+                className={`w-8 h-8 rounded-full object-cover shrink-0 ${!targetUser?.is_group ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
               />
               {!targetUser?.is_group &&
                 targetUser &&
@@ -1260,7 +1267,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                         <div className="flex items-center gap-3">
                           <img
                             src={u.avatar_url}
-                            className="w-10 h-10 rounded-full"
+                            className="w-10 h-10 rounded-full object-cover shrink-0"
                           />
                           <span className="text-sm font-semibold">
                             {u.name}
@@ -1295,7 +1302,9 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                       <div className="flex items-center gap-3">
                         <img
                           src={
-                            u.avatar_url ||
+                            (u.avatar_url && u.avatar_url !== "null"
+                              ? u.avatar_url
+                              : null) ||
                             `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
                           }
                           className="w-10 h-10 rounded-full border border-gray-200 dark:border-neutral-700"
@@ -1355,7 +1364,12 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                   >
                     <div className="relative">
                       <img
-                        src={u.avatar_url}
+                        src={
+                          (u.avatar_url && u.avatar_url !== "null"
+                            ? u.avatar_url
+                            : null) ||
+                          `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
+                        }
                         className="w-8 h-8 rounded-full"
                       />
                       {onlineUsers.has(u.id) && (
@@ -1374,8 +1388,14 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                   >
                     <div className="relative flex-shrink-0">
                       <img
-                        src={c.otherUser?.avatar_url}
-                        className="w-10 h-10 rounded-full"
+                        src={
+                          (c.otherUser?.avatar_url &&
+                          c.otherUser.avatar_url !== "null"
+                            ? c.otherUser.avatar_url
+                            : null) ||
+                          `https://api.dicebear.com/7.x/identicon/svg?seed=${c.otherUser?.id}`
+                        }
+                        className="w-10 h-10 rounded-full object-cover shrink-0"
                       />
                       {!c.is_group && onlineUsers.has(c.otherUser?.id) && (
                         <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 border-2 border-white dark:border-[#262626] rounded-full"></span>
@@ -1412,14 +1432,20 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
               <>
                 <div className="flex flex-col items-center justify-center py-6">
                   <img
-                    src={targetUser?.avatar_url}
+                    src={
+                      (targetUser?.avatar_url &&
+                      targetUser.avatar_url !== "null"
+                        ? targetUser.avatar_url
+                        : null) ||
+                      `https://api.dicebear.com/7.x/identicon/svg?seed=${targetUser?.id}`
+                    }
                     onClick={() => {
                       if (!targetUser?.is_group) {
                         router.push(`/profile/${targetUser?.id}`);
                         if (onClose) onClose();
                       }
                     }}
-                    className={`w-20 h-20 rounded-full mb-3 shadow-md border-2 border-white dark:border-[#262626] ${!targetUser?.is_group ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
+                    className={`w-20 h-20 rounded-full object-cover shrink-0 mb-3 shadow-md border-2 border-white dark:border-[#262626] ${!targetUser?.is_group ? "cursor-pointer hover:opacity-80 transition-opacity" : ""}`}
                   />
                   <span
                     onClick={() => {
@@ -1605,7 +1631,7 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                         member.avatar_url ||
                         `https://api.dicebear.com/7.x/identicon/svg?seed=${member.id}`
                       }
-                      className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shadow-sm"
+                      className="w-10 h-10 rounded-full object-cover shrink-0 border border-gray-200 dark:border-neutral-700 shadow-sm"
                     />
                     <span className="font-semibold text-[15px]">
                       {member.name} {member.id === userId && "(Bạn)"}
@@ -1622,9 +1648,13 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                     src={
                       newGroupAvatar
                         ? URL.createObjectURL(newGroupAvatar)
-                        : targetUser?.avatar_url
+                        : (targetUser?.avatar_url &&
+                          targetUser.avatar_url !== "null"
+                            ? targetUser.avatar_url
+                            : null) ||
+                          `https://api.dicebear.com/7.x/identicon/svg?seed=${targetUser?.id}`
                     }
-                    className="w-20 h-20 rounded-full object-cover border-2 border-gray-200 dark:border-neutral-700 shadow-sm"
+                    className="w-20 h-20 rounded-full object-cover shrink-0 border-2 border-gray-200 dark:border-neutral-700 shadow-sm"
                     alt="Group Avatar"
                   />
                   <label className="text-blue-500 font-semibold text-sm cursor-pointer hover:text-blue-600 transition-colors">
@@ -1667,8 +1697,14 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
               <div className="space-y-4">
                 <div className="flex flex-col items-center gap-3">
                   <img
-                    src={targetUser?.avatar_url}
-                    className="w-20 h-20 rounded-full object-cover border-2 border-gray-200 dark:border-neutral-700 shadow-sm"
+                    src={
+                      (targetUser?.avatar_url &&
+                      targetUser.avatar_url !== "null"
+                        ? targetUser.avatar_url
+                        : null) ||
+                      `https://api.dicebear.com/7.x/identicon/svg?seed=${targetUser?.id}`
+                    }
+                    className="w-20 h-20 rounded-full object-cover shrink-0 border-2 border-gray-200 dark:border-neutral-700 shadow-sm"
                     alt="User Avatar"
                   />
                 </div>
@@ -2129,7 +2165,10 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                 <div className="bg-white dark:bg-[#262626] rounded-3xl p-8 flex flex-col items-center gap-6 text-center max-w-sm w-full shadow-2xl">
                   <img
                     src={
-                      callUserInfo?.avatar_url ||
+                      (callUserInfo?.avatar_url &&
+                      callUserInfo.avatar_url !== "null"
+                        ? callUserInfo.avatar_url
+                        : null) ||
                       `https://api.dicebear.com/7.x/identicon/svg?seed=${callUserInfo?.id}`
                     }
                     className="w-28 h-28 rounded-full border-4 border-blue-500 animate-bounce object-cover shadow-lg"
@@ -2168,7 +2207,10 @@ export default function ChatBox({ userId, onClose }: ChatBoxProps) {
                 <div className="bg-white dark:bg-[#262626] rounded-3xl p-8 flex flex-col items-center gap-6 text-center max-w-sm w-full shadow-2xl">
                   <img
                     src={
-                      callUserInfo?.avatar_url ||
+                      (callUserInfo?.avatar_url &&
+                      callUserInfo.avatar_url !== "null"
+                        ? callUserInfo.avatar_url
+                        : null) ||
                       `https://api.dicebear.com/7.x/identicon/svg?seed=${callUserInfo?.id}`
                     }
                     className="w-28 h-28 rounded-full border-4 border-gray-200 dark:border-neutral-700 animate-pulse object-cover shadow-lg"

@@ -1110,7 +1110,9 @@ export default function FanpageProfile({
         <div className="bg-white dark:bg-[#262626] rounded-2xl p-6 shadow-sm border border-gray-200 dark:border-neutral-800 flex flex-col md:flex-row items-center md:items-end gap-6 mb-8 text-center md:text-left">
           <img
             src={
-              pageInfo.avatar_url ||
+              (pageInfo.avatar_url && pageInfo.avatar_url !== "null"
+                ? pageInfo.avatar_url
+                : null) ||
               `https://api.dicebear.com/7.x/identicon/svg?seed=${pageInfo.id}`
             }
             alt="Avatar"
@@ -1239,8 +1241,14 @@ export default function FanpageProfile({
                   <div className="flex items-start gap-4">
                     <img
                       src={
-                        currentUser.avatar_url ||
-                        currentUser.user_metadata?.avatar_url ||
+                        (currentUser.avatar_url &&
+                        currentUser.avatar_url !== "null"
+                          ? currentUser.avatar_url
+                          : null) ||
+                        (currentUser.user_metadata?.avatar_url &&
+                        currentUser.user_metadata.avatar_url !== "null"
+                          ? currentUser.user_metadata.avatar_url
+                          : null) ||
                         `https://api.dicebear.com/7.x/identicon/svg?seed=${currentUser.id}`
                       }
                       className="w-10 h-10 rounded-full ring-1 ring-border flex-shrink-0 mt-1 cursor-pointer hover:opacity-80 transition-opacity"
@@ -1347,7 +1355,10 @@ export default function FanpageProfile({
                   <div className="flex items-center gap-3">
                     <img
                       src={
-                        post.pages?.avatar_url ||
+                        (post.pages?.avatar_url &&
+                        post.pages.avatar_url !== "null"
+                          ? post.pages.avatar_url
+                          : null) ||
                         `https://api.dicebear.com/7.x/identicon/svg?seed=${post.pages?.id}`
                       }
                       className="w-10 h-10 rounded-full ring-1 ring-border object-cover"
@@ -1743,8 +1754,14 @@ export default function FanpageProfile({
                   <div className="flex items-center gap-3 pt-3 mt-2 border-t border-border">
                     <img
                       src={
-                        currentUser?.avatar_url ||
-                        currentUser?.user_metadata?.avatar_url ||
+                        (currentUser?.avatar_url &&
+                        currentUser.avatar_url !== "null"
+                          ? currentUser.avatar_url
+                          : null) ||
+                        (currentUser?.user_metadata?.avatar_url &&
+                        currentUser.user_metadata.avatar_url !== "null"
+                          ? currentUser.user_metadata.avatar_url
+                          : null) ||
                         (currentUser
                           ? `https://api.dicebear.com/7.x/identicon/svg?seed=${currentUser.id}`
                           : "/sukhoi.jpg")
@@ -1848,7 +1865,10 @@ export default function FanpageProfile({
                   <div className="flex items-center gap-3">
                     <img
                       src={
-                        selectedPost.pages?.avatar_url ||
+                        (selectedPost.pages?.avatar_url &&
+                        selectedPost.pages.avatar_url !== "null"
+                          ? selectedPost.pages.avatar_url
+                          : null) ||
                         `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPost.pages?.id}`
                       }
                       className="w-10 h-10 rounded-full border object-cover"
@@ -1958,7 +1978,9 @@ export default function FanpageProfile({
                     >
                       <img
                         src={
-                          c.users?.avatar_url ||
+                          (c.users?.avatar_url && c.users.avatar_url !== "null"
+                            ? c.users.avatar_url
+                            : null) ||
                           `https://api.dicebear.com/7.x/identicon/svg?seed=${c.user_id}`
                         }
                         className={`${isReply ? "w-7 h-7" : "w-10 h-10"} rounded-full border object-cover flex-shrink-0`}
@@ -2364,7 +2386,9 @@ export default function FanpageProfile({
                   <div className="flex flex-col items-center justify-center py-4 mb-2">
                     <img
                       src={
-                        pageInfo.avatar_url ||
+                        (pageInfo.avatar_url && pageInfo.avatar_url !== "null"
+                          ? pageInfo.avatar_url
+                          : null) ||
                         `https://api.dicebear.com/7.x/identicon/svg?seed=${pageInfo.id}`
                       }
                       className="w-20 h-20 rounded-full border-4 border-white dark:border-[#262626] shadow-md object-cover mb-3"
@@ -2403,7 +2427,10 @@ export default function FanpageProfile({
                           src={
                             editAvatarFile
                               ? URL.createObjectURL(editAvatarFile)
-                              : pageInfo.avatar_url
+                              : pageInfo.avatar_url &&
+                                  pageInfo.avatar_url !== "null"
+                                ? pageInfo.avatar_url
+                                : `https://api.dicebear.com/7.x/identicon/svg?seed=${pageInfo.id}`
                           }
                           className="w-full h-full object-cover"
                         />
@@ -2553,7 +2580,9 @@ export default function FanpageProfile({
                           <div className="flex items-center gap-3">
                             <img
                               src={
-                                u.avatar_url ||
+                                (u.avatar_url && u.avatar_url !== "null"
+                                  ? u.avatar_url
+                                  : null) ||
                                 `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
                               }
                               className="w-8 h-8 rounded-full border"
@@ -2585,7 +2614,10 @@ export default function FanpageProfile({
                         <div className="flex items-center gap-3">
                           <img
                             src={
-                              admin.users.avatar_url ||
+                              (admin.users.avatar_url &&
+                              admin.users.avatar_url !== "null"
+                                ? admin.users.avatar_url
+                                : null) ||
                               `https://api.dicebear.com/7.x/identicon/svg?seed=${admin.users.id}`
                             }
                             className="w-10 h-10 rounded-full object-cover border"
@@ -2633,7 +2665,10 @@ export default function FanpageProfile({
                           <div className="flex items-center gap-3">
                             <img
                               src={
-                                member.users?.avatar_url ||
+                                (member.users?.avatar_url &&
+                                member.users.avatar_url !== "null"
+                                  ? member.users.avatar_url
+                                  : null) ||
                                 `https://api.dicebear.com/7.x/identicon/svg?seed=${member.users?.id}`
                               }
                               className="w-10 h-10 rounded-full object-cover border"

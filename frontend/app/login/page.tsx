@@ -11,8 +11,7 @@ export default function AuthPage() {
   );
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [name, setName] = useState("");
-  const [dob, setDob] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
 
@@ -24,6 +23,11 @@ export default function AuthPage() {
     if (search.includes("view=update") || hash.includes("type=recovery"))
       setView("update");
   }, []);
+
+  useEffect(() => {
+    setPassword("");
+    setConfirmPassword("");
+  }, [view]);
 
   const handleAuthAction = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,15 +51,16 @@ export default function AuthPage() {
       }
     } else if (view === "register") {
       // === SIGN UP LOGIC ===
+      if (password !== confirmPassword) {
+        toast.error("Mật khẩu xác nhận không khớp.");
+        setLoading(false);
+        return;
+      }
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
         options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            name: name,
-            dob: dob,
-          },
+          emailRedirectTo: `${window.location.origin}/setup-profile`,
         },
       });
       if (error) {
@@ -67,8 +72,8 @@ export default function AuthPage() {
       } else {
         if (data.session) {
           // Đăng ký thành công và Confirm Email đã tắt -> tự động đăng nhập luôn
-          toast.success("Đăng ký thành công!");
-          window.location.href = "/";
+          toast.success("Đăng ký thành công! Vui lòng hoàn tất hồ sơ.");
+          window.location.href = "/setup-profile";
         } else {
           // Đăng ký thành công nhưng Confirm Email vẫn bật -> Báo người dùng check email
           toast.success(
@@ -90,6 +95,11 @@ export default function AuthPage() {
       }
     } else if (view === "update") {
       // === UPDATE PASSWORD LOGIC ===
+      if (password !== confirmPassword) {
+        toast.error("Mật khẩu xác nhận không khớp.");
+        setLoading(false);
+        return;
+      }
       const { error } = await supabase.auth.updateUser({
         password: password,
       });
@@ -124,34 +134,6 @@ export default function AuthPage() {
           </h2>
 
           <form onSubmit={handleAuthAction}>
-            {view === "register" && (
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
-                  Tên hiển thị
-                </label>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                  className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors"
-                />
-              </div>
-            )}
-            {view === "register" && (
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
-                  Ngày sinh
-                </label>
-                <input
-                  type="date"
-                  value={dob}
-                  onChange={(e) => setDob(e.target.value)}
-                  required
-                  className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors"
-                />
-              </div>
-            )}
             {view !== "update" && (
               <div className="mb-4">
                 <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
@@ -175,6 +157,24 @@ export default function AuthPage() {
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  required
+                  minLength={6}
+                  className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors"
+                />
+              </div>
+            )}
+
+            {(view === "register" || view === "update") && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-600 dark:text-gray-300 mb-1">
+                  {view === "update"
+                    ? "Xác nhận mật khẩu mới"
+                    : "Xác nhận mật khẩu"}
+                </label>
+                <input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                   minLength={6}
                   className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors"

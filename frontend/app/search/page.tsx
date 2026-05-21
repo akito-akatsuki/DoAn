@@ -317,8 +317,14 @@ function SearchContent() {
                 <div className="flex items-center gap-3 mb-2">
                   <img
                     src={
-                      item.pages?.avatar_url ||
-                      item.users?.avatar_url ||
+                      (item.pages?.avatar_url &&
+                      item.pages.avatar_url !== "null"
+                        ? item.pages.avatar_url
+                        : null) ||
+                      (item.users?.avatar_url &&
+                      item.users.avatar_url !== "null"
+                        ? item.users.avatar_url
+                        : null) ||
                       `https://api.dicebear.com/7.x/identicon/svg?seed=${item.pages?.id || item.users?.id}`
                     }
                     className="w-10 h-10 rounded-full object-cover cursor-pointer hover:opacity-80"
@@ -387,7 +393,9 @@ function SearchContent() {
                 <div className="flex items-center gap-4">
                   <img
                     src={
-                      item.avatar_url ||
+                      (item.avatar_url && item.avatar_url !== "null"
+                        ? item.avatar_url
+                        : null) ||
                       `https://api.dicebear.com/7.x/identicon/svg?seed=${item.id}`
                     }
                     className="w-12 h-12 rounded-full object-cover ring-1 ring-gray-200 dark:ring-neutral-700 shadow-sm"

@@ -119,7 +119,10 @@ export default function MessagesPage() {
   useEffect(() => {
     const loadUser = async () => {
       try {
-        const { data } = await supabase.auth.getUser();
+        const { data, error } = await supabase.auth.getUser();
+        if (error && error.message.includes("Refresh Token Not Found")) {
+          await supabase.auth.signOut();
+        }
         if (data?.user) {
           const { data: dbUser } = await supabase
             .from("users")
@@ -214,7 +217,9 @@ export default function MessagesPage() {
               id: c.id,
               name: c.group_name || "Nhóm chưa đặt tên",
               avatar_url:
-                c.group_avatar ||
+                (c.group_avatar && c.group_avatar !== "null"
+                  ? c.group_avatar
+                  : null) ||
                 `https://api.dicebear.com/7.x/identicon/svg?seed=${c.id}`,
               is_group: true,
             };
@@ -1071,7 +1076,9 @@ export default function MessagesPage() {
                         <div className="flex items-center gap-3">
                           <img
                             src={
-                              u.avatar_url ||
+                              (u.avatar_url && u.avatar_url !== "null"
+                                ? u.avatar_url
+                                : null) ||
                               `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
                             }
                             className="w-10 h-10 rounded-full border border-gray-200 dark:border-neutral-700 shadow-sm object-cover"
@@ -1102,7 +1109,9 @@ export default function MessagesPage() {
                       <div className="relative flex-shrink-0">
                         <img
                           src={
-                            u.avatar_url ||
+                            (u.avatar_url && u.avatar_url !== "null"
+                              ? u.avatar_url
+                              : null) ||
                             `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
                           }
                           className="w-12 h-12 rounded-full border border-gray-200 dark:border-neutral-700 shadow-sm object-cover"
@@ -1137,7 +1146,10 @@ export default function MessagesPage() {
                         <div className="relative flex-shrink-0">
                           <img
                             src={
-                              c.otherUser?.avatar_url ||
+                              (c.otherUser?.avatar_url &&
+                              c.otherUser.avatar_url !== "null"
+                                ? c.otherUser.avatar_url
+                                : null) ||
                               `https://api.dicebear.com/7.x/identicon/svg?seed=${c.otherUser?.id}`
                             }
                             className="w-14 h-14 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shadow-sm flex-shrink-0"
@@ -1211,10 +1223,13 @@ export default function MessagesPage() {
                       <div className="relative flex-shrink-0">
                         <img
                           src={
-                            targetUser?.avatar_url ||
+                            (targetUser?.avatar_url &&
+                            targetUser.avatar_url !== "null"
+                              ? targetUser.avatar_url
+                              : null) ||
                             `https://api.dicebear.com/7.x/identicon/svg?seed=${targetUser.id}`
                           }
-                          className="w-11 h-11 rounded-full border border-gray-200 dark:border-neutral-700 shadow-sm object-cover flex-shrink-0"
+                          className="w-11 h-11 rounded-full border border-gray-200 dark:border-neutral-700 shadow-sm object-cover shrink-0"
                         />
                         {!targetUser?.is_group &&
                           targetUser &&
@@ -1733,10 +1748,13 @@ export default function MessagesPage() {
                         <div className="flex flex-col items-center justify-center py-6">
                           <img
                             src={
-                              targetUser?.avatar_url ||
+                              (targetUser?.avatar_url &&
+                              targetUser.avatar_url !== "null"
+                                ? targetUser.avatar_url
+                                : null) ||
                               `https://api.dicebear.com/7.x/identicon/svg?seed=${targetUser?.id}`
                             }
-                            className="w-24 h-24 rounded-full mb-3 shadow-md object-cover"
+                            className="w-24 h-24 rounded-full mb-3 shadow-md object-cover shrink-0"
                           />
                           <span className="font-bold text-2xl text-center">
                             {targetUser?.name}
@@ -1916,10 +1934,12 @@ export default function MessagesPage() {
                                   <div className="flex items-center gap-3">
                                     <img
                                       src={
-                                        u.avatar_url ||
+                                        (u.avatar_url && u.avatar_url !== "null"
+                                          ? u.avatar_url
+                                          : null) ||
                                         `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
                                       }
-                                      className="w-8 h-8 rounded-full"
+                                      className="w-8 h-8 rounded-full object-cover shrink-0"
                                     />
                                     <span className="text-sm font-semibold">
                                       {u.name}
@@ -1946,10 +1966,13 @@ export default function MessagesPage() {
                               <div className="flex items-center gap-3">
                                 <img
                                   src={
-                                    member.avatar_url ||
+                                    (member.avatar_url &&
+                                    member.avatar_url !== "null"
+                                      ? member.avatar_url
+                                      : null) ||
                                     `https://api.dicebear.com/7.x/identicon/svg?seed=${member.id}`
                                   }
-                                  className="w-10 h-10 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shadow-sm"
+                                  className="w-10 h-10 rounded-full object-cover shrink-0 border border-gray-200 dark:border-neutral-700 shadow-sm"
                                 />
                                 <span className="font-semibold text-[15px]">
                                   {member.name}{" "}
@@ -1976,10 +1999,13 @@ export default function MessagesPage() {
                             src={
                               newGroupAvatar
                                 ? URL.createObjectURL(newGroupAvatar)
-                                : targetUser?.avatar_url ||
+                                : (targetUser?.avatar_url &&
+                                  targetUser.avatar_url !== "null"
+                                    ? targetUser.avatar_url
+                                    : null) ||
                                   `https://api.dicebear.com/7.x/identicon/svg?seed=${targetUser?.id}`
                             }
-                            className="w-24 h-24 rounded-full object-cover shadow-sm"
+                            className="w-24 h-24 rounded-full object-cover shrink-0 shadow-sm"
                             alt="Group Avatar"
                           />
                           <label className="text-blue-500 font-semibold text-sm cursor-pointer hover:text-blue-600 transition-colors">
@@ -2017,10 +2043,13 @@ export default function MessagesPage() {
                         <div className="flex flex-col items-center gap-3">
                           <img
                             src={
-                              targetUser?.avatar_url ||
+                              (targetUser?.avatar_url &&
+                              targetUser.avatar_url !== "null"
+                                ? targetUser.avatar_url
+                                : null) ||
                               `https://api.dicebear.com/7.x/identicon/svg?seed=${targetUser?.id}`
                             }
-                            className="w-24 h-24 rounded-full object-cover shadow-sm"
+                            className="w-24 h-24 rounded-full object-cover shrink-0 shadow-sm"
                           />
                         </div>
                         <div className="bg-white dark:bg-[#262626] rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 shadow-sm p-1">
@@ -2076,7 +2105,10 @@ export default function MessagesPage() {
                 <div className="bg-white dark:bg-[#262626] rounded-3xl p-8 flex flex-col items-center gap-6 text-center max-w-sm w-full shadow-2xl">
                   <img
                     src={
-                      callUserInfo?.avatar_url ||
+                      (callUserInfo?.avatar_url &&
+                      callUserInfo.avatar_url !== "null"
+                        ? callUserInfo.avatar_url
+                        : null) ||
                       `https://api.dicebear.com/7.x/identicon/svg?seed=${callUserInfo?.id}`
                     }
                     className="w-28 h-28 rounded-full border-4 border-blue-500 animate-bounce object-cover shadow-lg"
@@ -2115,7 +2147,10 @@ export default function MessagesPage() {
                 <div className="bg-white dark:bg-[#262626] rounded-3xl p-8 flex flex-col items-center gap-6 text-center max-w-sm w-full shadow-2xl">
                   <img
                     src={
-                      callUserInfo?.avatar_url ||
+                      (callUserInfo?.avatar_url &&
+                      callUserInfo.avatar_url !== "null"
+                        ? callUserInfo.avatar_url
+                        : null) ||
                       `https://api.dicebear.com/7.x/identicon/svg?seed=${callUserInfo?.id}`
                     }
                     className="w-28 h-28 rounded-full border-4 border-gray-200 dark:border-neutral-700 animate-pulse object-cover shadow-lg"

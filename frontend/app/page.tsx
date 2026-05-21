@@ -334,7 +334,12 @@ export default function HomePage() {
     try {
       const { data, error } = await supabase.auth.getUser();
       if (error) {
-        console.warn("Lỗi xác thực Supabase:", error.message);
+        if (!error.message.includes("Auth session missing!")) {
+          console.warn("Lỗi xác thực Supabase:", error.message);
+        }
+        if (error.message.includes("Refresh Token Not Found")) {
+          await supabase.auth.signOut();
+        }
         return;
       }
       if (data?.user) {
@@ -1057,11 +1062,21 @@ export default function HomePage() {
                   src={
                     (selectedPageId
                       ? userPages.find((p) => p.id === selectedPageId)
-                          ?.avatar_url
-                      : user?.avatar_url || user?.user_metadata?.avatar_url) ||
+                          ?.avatar_url &&
+                        userPages.find((p) => p.id === selectedPageId)
+                          ?.avatar_url !== "null"
+                        ? userPages.find((p) => p.id === selectedPageId)
+                            ?.avatar_url
+                        : null
+                      : user?.avatar_url && user.avatar_url !== "null"
+                        ? user.avatar_url
+                        : user?.user_metadata?.avatar_url &&
+                            user.user_metadata.avatar_url !== "null"
+                          ? user.user_metadata.avatar_url
+                          : null) ||
                     `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPageId || user?.id}`
                   }
-                  className="w-10 h-10 rounded-full ring-1 ring-border flex-shrink-0 mt-1 cursor-pointer hover:opacity-80 transition-opacity"
+                  className="w-10 h-10 rounded-full ring-1 ring-border shrink-0 mt-1 cursor-pointer hover:opacity-80 transition-opacity object-cover"
                   onClick={() =>
                     router.push(
                       selectedPageId
@@ -1257,11 +1272,17 @@ export default function HomePage() {
 
                 {/* HEADER */}
                 <div className="flex items-center justify-between p-4 pb-2 relative">
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
                     <img
                       src={
-                        post.pages?.avatar_url ||
-                        post.users?.avatar_url ||
+                        (post.pages?.avatar_url &&
+                        post.pages.avatar_url !== "null"
+                          ? post.pages.avatar_url
+                          : null) ||
+                        (post.users?.avatar_url &&
+                        post.users.avatar_url !== "null"
+                          ? post.users.avatar_url
+                          : null) ||
                         `https://api.dicebear.com/7.x/identicon/svg?seed=${post.pages?.id || post.user_id}`
                       }
                       onClick={() =>
@@ -1271,7 +1292,7 @@ export default function HomePage() {
                             : `/profile/${post.user_id}`,
                         )
                       }
-                      className="w-10 h-10 rounded-full ring-1 ring-border cursor-pointer hover:brightness-105 object-cover"
+                      className="w-10 h-10 rounded-full ring-1 ring-border cursor-pointer hover:brightness-105 object-cover shrink-0"
                     />
                     <div>
                       <span
@@ -1720,8 +1741,13 @@ export default function HomePage() {
                   <div className="flex items-center gap-3 pt-3 mt-2 border-t border-border">
                     <img
                       src={
-                        user?.avatar_url ||
-                        user?.user_metadata?.avatar_url ||
+                        (user?.avatar_url && user.avatar_url !== "null"
+                          ? user.avatar_url
+                          : null) ||
+                        (user?.user_metadata?.avatar_url &&
+                        user.user_metadata.avatar_url !== "null"
+                          ? user.user_metadata.avatar_url
+                          : null) ||
                         (user
                           ? `https://api.dicebear.com/7.x/identicon/svg?seed=${user.id}`
                           : "/sukhoi.jpg")
@@ -1821,18 +1847,20 @@ export default function HomePage() {
               {suggestedUsers.map((u) => (
                 <div key={u.id} className="flex items-center justify-between">
                   <div
-                    className="flex items-center gap-3 cursor-pointer"
+                    className="flex items-center gap-3 cursor-pointer min-w-0"
                     onClick={() => router.push(`/profile/${u.id}`)}
                   >
                     <img
                       src={
-                        u.avatar_url ||
+                        (u.avatar_url && u.avatar_url !== "null"
+                          ? u.avatar_url
+                          : null) ||
                         `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
                       }
-                      className="w-10 h-10 rounded-full border border-gray-200 dark:border-neutral-700 object-cover shadow-sm"
+                      className="w-10 h-10 rounded-full border border-gray-200 dark:border-neutral-700 object-cover shadow-sm shrink-0"
                       alt={u.name}
                     />
-                    <div className="flex flex-col">
+                    <div className="flex flex-col min-w-0">
                       <span className="font-semibold text-[14px] truncate max-w-[130px]">
                         {u.name}
                       </span>
@@ -1960,8 +1988,14 @@ export default function HomePage() {
                   <div className="flex items-center gap-3">
                     <img
                       src={
-                        selectedPost.pages?.avatar_url ||
-                        selectedPost.users?.avatar_url ||
+                        (selectedPost.pages?.avatar_url &&
+                        selectedPost.pages.avatar_url !== "null"
+                          ? selectedPost.pages.avatar_url
+                          : null) ||
+                        (selectedPost.users?.avatar_url &&
+                        selectedPost.users.avatar_url !== "null"
+                          ? selectedPost.users.avatar_url
+                          : null) ||
                         `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPost.pages?.id || selectedPost.users?.id}`
                       }
                       className="w-10 h-10 rounded-full border object-cover cursor-pointer hover:opacity-80"
@@ -2127,7 +2161,9 @@ export default function HomePage() {
                     >
                       <img
                         src={
-                          c.users?.avatar_url ||
+                          (c.users?.avatar_url && c.users.avatar_url !== "null"
+                            ? c.users.avatar_url
+                            : null) ||
                           `https://api.dicebear.com/7.x/identicon/svg?seed=${c.user_id}`
                         }
                         className={`${

@@ -15,6 +15,8 @@ import {
   ChevronRight,
   Flag,
   Maximize,
+  Briefcase,
+  MapPin,
   ZoomIn,
   ZoomOut,
 } from "lucide-react";
@@ -39,7 +41,79 @@ type UserProfile = {
   cover_url?: string | null;
   cover_position_y?: number | null;
   dob?: string | null;
+  address?: string | null;
+  gender?: string | null;
+  marital_status?: string | null;
+  hobbies?: string | null;
+  work?: string | null;
+  phone?: string | null;
 };
+
+const PROVINCES = [
+  "An Giang",
+  "Bà Rịa - Vũng Tàu",
+  "Bắc Giang",
+  "Bắc Kạn",
+  "Bạc Liêu",
+  "Bắc Ninh",
+  "Bến Tre",
+  "Bình Định",
+  "Bình Dương",
+  "Bình Phước",
+  "Bình Thuận",
+  "Cà Mau",
+  "Cần Thơ",
+  "Cao Bằng",
+  "Đà Nẵng",
+  "Đắk Lắk",
+  "Đắk Nông",
+  "Điện Biên",
+  "Đồng Nai",
+  "Đồng Tháp",
+  "Gia Lai",
+  "Hà Giang",
+  "Hà Nam",
+  "Hà Nội",
+  "Hà Tĩnh",
+  "Hải Dương",
+  "Hải Phòng",
+  "Hậu Giang",
+  "Hòa Bình",
+  "Hưng Yên",
+  "Khánh Hòa",
+  "Kiên Giang",
+  "Kon Tum",
+  "Lai Châu",
+  "Lâm Đồng",
+  "Lạng Sơn",
+  "Lào Cai",
+  "Long An",
+  "Nam Định",
+  "Nghệ An",
+  "Ninh Bình",
+  "Ninh Thuận",
+  "Phú Thọ",
+  "Phú Yên",
+  "Quảng Bình",
+  "Quảng Nam",
+  "Quảng Ngãi",
+  "Quảng Ninh",
+  "Quảng Trị",
+  "Sóc Trăng",
+  "Sơn La",
+  "Tây Ninh",
+  "Thái Bình",
+  "Thái Nguyên",
+  "Thanh Hóa",
+  "Thừa Thiên Huế",
+  "Tiền Giang",
+  "TP. Hồ Chí Minh",
+  "Trà Vinh",
+  "Tuyên Quang",
+  "Vĩnh Long",
+  "Vĩnh Phúc",
+  "Yên Bái",
+];
 
 export default function ProfilePage({
   params,
@@ -67,6 +141,8 @@ export default function ProfilePage({
   // ================= MODAL STATES =================
   const modalInputRef = useRef<HTMLInputElement | null>(null);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
+  const addressRef = useRef<HTMLDivElement | null>(null);
+  const [showAddressDropdown, setShowAddressDropdown] = useState(false);
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
   const [modalComments, setModalComments] = useState<any[]>([]);
   const [modalCommentText, setModalCommentText] = useState("");
@@ -96,6 +172,12 @@ export default function ProfilePage({
   const [editBio, setEditBio] = useState("");
   const [editDob, setEditDob] = useState("");
   const [editAvatar, setEditAvatar] = useState<File | null>(null);
+  const [editAddress, setEditAddress] = useState("");
+  const [editGender, setEditGender] = useState("");
+  const [editMaritalStatus, setEditMaritalStatus] = useState("");
+  const [editHobbies, setEditHobbies] = useState("");
+  const [editWork, setEditWork] = useState("");
+  const [editPhone, setEditPhone] = useState("");
   const [editCover, setEditCover] = useState<File | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState<
     Record<string, number>
@@ -119,6 +201,13 @@ export default function ProfilePage({
       ) {
         setShowEmojiPicker(false);
       }
+
+      if (
+        addressRef.current &&
+        !addressRef.current.contains(e.target as Node)
+      ) {
+        setShowAddressDropdown(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => {
@@ -129,7 +218,10 @@ export default function ProfilePage({
   // ================= LOAD CURRENT USER =================
   useEffect(() => {
     const loadUser = async () => {
-      const { data } = await supabase.auth.getUser();
+      const { data, error } = await supabase.auth.getUser();
+      if (error && error.message.includes("Refresh Token Not Found")) {
+        await supabase.auth.signOut();
+      }
       if (data.user) {
         const { data: dbUser } = await supabase
           .from("users")
@@ -527,6 +619,12 @@ export default function ProfilePage({
     setEditName(profile?.name || "");
     setEditBio(profile?.bio || "");
     setEditDob(profile?.dob || "");
+    setEditAddress(profile?.address || "");
+    setEditGender(profile?.gender || "");
+    setEditMaritalStatus(profile?.marital_status || "");
+    setEditHobbies(profile?.hobbies || "");
+    setEditWork(profile?.work || "");
+    setEditPhone(profile?.phone || "");
     setEditAvatar(null);
     setEditCover(null);
     setEditCoverPositionY(profile?.cover_position_y ?? 50);
@@ -579,6 +677,12 @@ export default function ProfilePage({
           cover_url: newCoverUrl,
           cover_position_y: editCoverPositionY,
           dob: editDob ? editDob : null,
+          address: editAddress,
+          gender: editGender,
+          marital_status: editMaritalStatus,
+          hobbies: editHobbies,
+          work: editWork,
+          phone: editPhone,
         })
         .eq("id", currentUser.id);
 
@@ -599,6 +703,12 @@ export default function ProfilePage({
         cover_url: newCoverUrl,
         cover_position_y: editCoverPositionY,
         dob: editDob ? editDob : null,
+        address: editAddress,
+        gender: editGender,
+        marital_status: editMaritalStatus,
+        hobbies: editHobbies,
+        work: editWork,
+        phone: editPhone,
       });
       if (currentUser && currentUser.id === profile.id) {
         setCurrentUser((prev: any) => ({
@@ -669,10 +779,12 @@ export default function ProfilePage({
         </div>
 
         <div className="max-w-[935px] mx-auto px-4 -mt-16 relative z-10 pb-24 md:pb-10">
-          <div className="flex flex-col md:flex-row items-center md:items-end gap-6 bg-white dark:bg-[#262626] p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-neutral-800 mb-8 text-center md:text-left">
+          <div className="flex flex-col md:flex-row items-center gap-6 bg-white dark:bg-[#262626] p-6 rounded-2xl shadow-sm border border-gray-200 dark:border-neutral-800 mb-8 text-center md:text-left">
             <img
               src={
-                profile.avatar_url ||
+                (profile.avatar_url && profile.avatar_url !== "null"
+                  ? profile.avatar_url
+                  : null) ||
                 `https://api.dicebear.com/7.x/identicon/svg?seed=${profile.id}`
               }
               className="w-32 h-32 rounded-full border-4 border-white dark:border-[#262626] bg-white shadow-md object-cover flex-shrink-0"
@@ -729,6 +841,42 @@ export default function ProfilePage({
                   🎂 Sinh nhật:{" "}
                   {new Date(profile.dob).toLocaleDateString("vi-VN")}
                 </p>
+              )}
+
+              <div className="mt-3 text-sm text-muted-foreground space-y-1 text-center md:text-left">
+                {profile.work && (
+                  <p className="flex items-center justify-center md:justify-start gap-2">
+                    <Briefcase size={14} /> Làm việc tại <b>{profile.work}</b>
+                  </p>
+                )}
+                {profile.address && (
+                  <p className="flex items-center justify-center md:justify-start gap-2">
+                    <MapPin size={14} /> Sống tại <b>{profile.address}</b>
+                  </p>
+                )}
+                {profile.marital_status && (
+                  <p className="flex items-center justify-center md:justify-start gap-2">
+                    <Heart size={14} /> <b>{profile.marital_status}</b>
+                  </p>
+                )}
+              </div>
+              {(profile.phone ||
+                (currentUser?.id === profile.id && currentUser.email)) && (
+                <div className="mt-4 pt-4 border-t border-gray-100 dark:border-neutral-800 text-center md:text-left">
+                  <h3 className="font-bold text-sm mb-2">Thông tin liên hệ</h3>
+                  <div className="text-sm text-muted-foreground space-y-1">
+                    {currentUser?.id === profile.id && currentUser.email && (
+                      <p>
+                        📧 Email: <b>{currentUser.email}</b>
+                      </p>
+                    )}
+                    {profile.phone && (
+                      <p>
+                        📞 Điện thoại: <b>{profile.phone}</b>
+                      </p>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -947,7 +1095,9 @@ export default function ProfilePage({
                     >
                       <img
                         src={
-                          c.users?.avatar_url ||
+                          (c.users?.avatar_url && c.users.avatar_url !== "null"
+                            ? c.users.avatar_url
+                            : null) ||
                           `https://api.dicebear.com/7.x/identicon/svg?seed=${c.user_id}`
                         }
                         className={`${
@@ -1221,10 +1371,10 @@ export default function ProfilePage({
           onClick={() => setIsEditProfileOpen(false)}
         >
           <div
-            className="text-gray-900 dark:text-gray-100 w-full max-w-md rounded-xl shadow-2xl dark:shadow-black/60 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-gray-200 dark:border-neutral-800 transition-colors duration-500 bg-white dark:bg-[#262626]"
+            className="text-gray-900 dark:text-gray-100 w-full max-w-md max-h-[90vh] rounded-xl shadow-2xl dark:shadow-black/60 flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-gray-200 dark:border-neutral-800 transition-colors duration-500 bg-white dark:bg-[#262626]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-neutral-800">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-neutral-800 shrink-0">
               <h2 className="font-bold text-lg">Sửa thông tin</h2>
               <button
                 onClick={() => setIsEditProfileOpen(false)}
@@ -1234,7 +1384,7 @@ export default function ProfilePage({
               </button>
             </div>
 
-            <div className="p-4 space-y-4">
+            <div className="p-4 space-y-4 overflow-y-auto flex-1">
               <div className="flex flex-col gap-4 items-center">
                 {/* COVER UPLOAD */}
                 <div
@@ -1292,7 +1442,9 @@ export default function ProfilePage({
                     src={
                       editAvatar
                         ? URL.createObjectURL(editAvatar)
-                        : profile?.avatar_url ||
+                        : (profile?.avatar_url && profile.avatar_url !== "null"
+                            ? profile.avatar_url
+                            : null) ||
                           `https://api.dicebear.com/7.x/identicon/svg?seed=${profile?.id}`
                     }
                     className="w-20 h-20 rounded-full object-cover border-4 border-white dark:border-[#262626] shadow-sm bg-white dark:bg-neutral-800"
@@ -1345,6 +1497,125 @@ export default function ProfilePage({
                   value={editDob}
                   onChange={(e) => setEditDob(e.target.value)}
                   className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none transition-colors bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626]"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1">
+                  Giới tính
+                </label>
+                <select
+                  value={editGender}
+                  onChange={(e) => setEditGender(e.target.value)}
+                  className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none transition-colors bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626]"
+                >
+                  <option value="">Không muốn tiết lộ</option>
+                  <option value="Nam">Nam</option>
+                  <option value="Nữ">Nữ</option>
+                  <option value="Khác">Khác</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-1">
+                  Tình trạng hôn nhân
+                </label>
+                <select
+                  value={editMaritalStatus}
+                  onChange={(e) => setEditMaritalStatus(e.target.value)}
+                  className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none transition-colors bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626]"
+                >
+                  <option value="">Không muốn tiết lộ</option>
+                  <option value="Độc thân">Độc thân</option>
+                  <option value="Hẹn hò">Hẹn hò</option>
+                  <option value="Đã kết hôn">Đã kết hôn</option>
+                  <option value="Phức tạp">Phức tạp</option>
+                </select>
+              </div>
+
+              <div ref={addressRef} className="relative">
+                <label className="block text-sm font-semibold mb-1">
+                  Địa chỉ
+                </label>
+                <input
+                  value={editAddress}
+                  onChange={(e) => {
+                    setEditAddress(e.target.value);
+                    setShowAddressDropdown(true);
+                  }}
+                  onFocus={() => setShowAddressDropdown(true)}
+                  className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none transition-colors bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626]"
+                  placeholder="VD: Đông Hưng, Thái Bình"
+                />
+                {showAddressDropdown && (
+                  <div className="absolute z-50 w-full mt-1 max-h-48 overflow-y-auto bg-white dark:bg-[#333333] border border-gray-200 dark:border-neutral-700 rounded-lg shadow-lg">
+                    {(() => {
+                      const parts = editAddress.split(",");
+                      const lastPart = parts[parts.length - 1]
+                        .trim()
+                        .toLowerCase();
+                      const filtered = PROVINCES.filter((p) =>
+                        p.toLowerCase().includes(lastPart),
+                      );
+                      if (filtered.length > 0) {
+                        return filtered.map((province) => (
+                          <div
+                            key={province}
+                            className="px-3 py-2 cursor-pointer hover:bg-secondary text-sm"
+                            onClick={() => {
+                              const newParts = [...parts];
+                              newParts[newParts.length - 1] =
+                                parts.length === 1 ? province : " " + province;
+                              setEditAddress(newParts.join(",").trim());
+                              setShowAddressDropdown(false);
+                            }}
+                          >
+                            {province}
+                          </div>
+                        ));
+                      }
+                      return (
+                        <div className="px-3 py-2 text-sm text-muted-foreground italic">
+                          Không tìm thấy tỉnh thành
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-1">
+                  Công việc
+                </label>
+                <input
+                  value={editWork}
+                  onChange={(e) => setEditWork(e.target.value)}
+                  className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none transition-colors bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626]"
+                  placeholder="VD: Kỹ sư phần mềm tại Gemini"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-1">
+                  Sở thích
+                </label>
+                <input
+                  value={editHobbies}
+                  onChange={(e) => setEditHobbies(e.target.value)}
+                  className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none transition-colors bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626]"
+                  placeholder="VD: Đọc sách, bơi lội, du lịch"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-1">
+                  Số điện thoại liên hệ
+                </label>
+                <input
+                  value={editPhone}
+                  onChange={(e) => setEditPhone(e.target.value)}
+                  className="w-full border border-gray-200 dark:border-neutral-700 shadow-inner rounded-lg px-3 py-2 outline-none transition-colors bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#262626]"
+                  placeholder="Số điện thoại công khai (tùy chọn)"
                 />
               </div>
 
@@ -1436,7 +1707,7 @@ export default function ProfilePage({
               )}
             </div>
 
-            <div className="p-4 border-t border-gray-200 dark:border-neutral-800 flex justify-end gap-2">
+            <div className="p-4 border-t border-gray-200 dark:border-neutral-800 flex justify-end gap-2 shrink-0">
               <button
                 onClick={() => setIsEditProfileOpen(false)}
                 className="px-4 py-2 rounded-lg font-semibold text-sm hover:bg-secondary transition-colors"
@@ -1548,7 +1819,9 @@ export default function ProfilePage({
                   >
                     <img
                       src={
-                        u.avatar_url ||
+                        (u.avatar_url && u.avatar_url !== "null"
+                          ? u.avatar_url
+                          : null) ||
                         `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
                       }
                       className="w-10 h-10 rounded-full border border-gray-200 dark:border-neutral-700 object-cover shadow-sm"
@@ -1603,7 +1876,9 @@ export default function ProfilePage({
                   >
                     <img
                       src={
-                        u.avatar_url ||
+                        (u.avatar_url && u.avatar_url !== "null"
+                          ? u.avatar_url
+                          : null) ||
                         `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
                       }
                       className="w-10 h-10 rounded-full border border-gray-200 dark:border-neutral-700 object-cover shadow-sm"

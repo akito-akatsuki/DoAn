@@ -111,7 +111,10 @@ export default function NotificationsPage() {
 
   const init = async () => {
     try {
-      const { data } = await supabase.auth.getUser();
+      const { data, error } = await supabase.auth.getUser();
+      if (error && error.message.includes("Refresh Token Not Found")) {
+        await supabase.auth.signOut();
+      }
       const currentUser = data?.user;
 
       if (currentUser) {
@@ -578,7 +581,9 @@ export default function NotificationsPage() {
                 <div className="relative">
                   <img
                     src={
-                      n.users?.avatar_url ||
+                      (n.users?.avatar_url && n.users.avatar_url !== "null"
+                        ? n.users.avatar_url
+                        : null) ||
                       `https://api.dicebear.com/7.x/identicon/svg?seed=${n.user_id}`
                     }
                     className="w-11 h-11 rounded-full object-cover ring-1 ring-gray-200 dark:ring-neutral-700 shadow-sm"
@@ -705,7 +710,10 @@ export default function NotificationsPage() {
                 <div className="flex items-center gap-3 p-4 pb-2">
                   <img
                     src={
-                      selectedPost.users?.avatar_url ||
+                      (selectedPost.users?.avatar_url &&
+                      selectedPost.users.avatar_url !== "null"
+                        ? selectedPost.users.avatar_url
+                        : null) ||
                       `https://api.dicebear.com/7.x/identicon/svg?seed=${selectedPost.users?.id}`
                     }
                     className="w-10 h-10 rounded-full border object-cover"
@@ -773,7 +781,9 @@ export default function NotificationsPage() {
                     >
                       <img
                         src={
-                          c.users?.avatar_url ||
+                          (c.users?.avatar_url && c.users.avatar_url !== "null"
+                            ? c.users.avatar_url
+                            : null) ||
                           `https://api.dicebear.com/7.x/identicon/svg?seed=${c.user_id}`
                         }
                         className={`${
