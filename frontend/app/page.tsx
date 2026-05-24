@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 import ChatBox from "@/components/ChatBox";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import toast from "react-hot-toast";
 
 import {
@@ -255,15 +256,6 @@ export default function HomePage() {
       supabase.removeChannel(channel);
     };
   }, [user?.id]);
-
-  // ================= TỰ ĐỘNG TẢI LẠI KHI ẤN NÚT QUAY LẠI (MOUSE 4) =================
-  useEffect(() => {
-    const handlePopState = () => {
-      loadFeed(); // Chỉ tải lại bảng tin cho mượt mà (không bị chớp trắng trang)
-    };
-    window.addEventListener("popstate", handlePopState);
-    return () => window.removeEventListener("popstate", handlePopState);
-  }, []);
 
   // ================= TỰ ĐỘNG TẢI LẠI BẢNG TIN KHI BẤM NÚT HOME LẦN NỮA =================
   useEffect(() => {
@@ -967,36 +959,30 @@ export default function HomePage() {
           <div className="sticky top-[100px] w-[240px] h-fit">
             <div className="text-[13px] text-muted-foreground space-y-4">
               <div className="flex flex-col gap-y-4 font-medium">
-                <a
-                  href="#"
+                <Link
+                  href="/about"
                   className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
                 >
                   Giới thiệu
-                </a>
-                <a
-                  href="#"
+                </Link>
+                <Link
+                  href="/help"
                   className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
                 >
                   Trợ giúp
-                </a>
-                <a
+                </Link>
+                <Link
                   href="#"
                   className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
                 >
                   API
-                </a>
-                <a
-                  href="#"
+                </Link>
+                <Link
+                  href="/terms"
                   className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
                 >
-                  Quyền riêng tư
-                </a>
-                <a
-                  href="#"
-                  className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
-                >
-                  Điều khoản
-                </a>
+                  Điều khoản & Quyền riêng tư
+                </Link>
               </div>
               <p className="pt-4 mt-4 border-t border-gray-200 dark:border-neutral-800 text-[12px]">
                 © 2026 INSTAMINI BY akitø
