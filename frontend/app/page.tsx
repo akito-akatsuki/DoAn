@@ -25,6 +25,7 @@ import {
   Maximize,
   ZoomIn,
   ZoomOut,
+  Loader2,
 } from "lucide-react";
 import {
   getFeed,
@@ -51,6 +52,7 @@ export default function HomePage() {
   const [files, setFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(true);
   const [placeholder, setPlaceholder] = useState("Bạn đang nghĩ gì?");
+  const [isPosting, setIsPosting] = useState(false);
 
   const [commentsMap, setCommentsMap] = useState<Record<string, any[]>>({});
   const [commentInput, setCommentInput] = useState<Record<string, string>>({});
@@ -1129,6 +1131,9 @@ export default function HomePage() {
                     <button
                       onClick={async () => {
                         if (!content && files.length === 0) return;
+                        if (isPosting) return;
+
+                        setIsPosting(true);
 
                         try {
                           let imageUrls: string[] = [];
@@ -1195,6 +1200,7 @@ export default function HomePage() {
                                   .remove(uploadedFileNames);
                               }
                             }
+                            setIsPosting(false);
                             return; // Dừng lại ngay lập tức, không cho phép chạy lệnh createPost()
                           }
 
@@ -1222,12 +1228,14 @@ export default function HomePage() {
                           setSelectedPageId(null);
                         } catch (err) {
                           console.error("LỖI ĐĂNG BÀI:", err);
+                        } finally {
+                          setIsPosting(false);
                         }
                       }}
-                      disabled={!content && files.length === 0}
-                      className="bg-gradient-to-r from-primary to-accent text-primary-fg px-5 py-1.5 rounded-full font-semibold text-sm shadow-ig hover:brightness-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      disabled={(!content && files.length === 0) || isPosting}
+                      className="bg-gradient-to-r from-primary to-accent text-primary-fg px-5 py-1.5 rounded-full font-semibold text-sm shadow-ig hover:brightness-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[70px]"
                     >
-                      Đăng
+                      {isPosting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Đăng"}
                     </button>
                   </div>
                 </div>
