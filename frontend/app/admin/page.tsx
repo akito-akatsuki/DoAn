@@ -117,7 +117,9 @@ export default function AdminReportsPage() {
       );
       toast.success(
         action === "delete"
-          ? "Đã gỡ bài và gửi thông báo!"
+          ? commentData
+            ? "Đã xóa bình luận và gửi thông báo!"
+            : "Đã gỡ bài và gửi thông báo!"
           : "Đã bỏ qua báo cáo!",
       );
       setSelectedReport(null);

@@ -19,6 +19,8 @@ import {
   MapPin,
   ZoomIn,
   ZoomOut,
+  Bookmark,
+  Pencil,
 } from "lucide-react";
 import { useRef } from "react";
 import {
@@ -29,6 +31,7 @@ import {
   toggleLike,
   reportPost,
   reportComment,
+  toggleSavePost,
 } from "@/lib/api";
 import { showConfirm } from "@/components/GlobalConfirm";
 import { useRouter } from "next/navigation";
@@ -154,6 +157,8 @@ export default function ProfilePage({
   const [openPostMenu, setOpenPostMenu] = useState(false);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editCommentText, setEditCommentText] = useState("");
+  const [editingPostId, setEditingPostId] = useState<string | null>(null);
+  const [editPostContent, setEditPostContent] = useState("");
   const [expandedReplies, setExpandedReplies] = useState<
     Record<string, boolean>
   >({});
@@ -365,6 +370,7 @@ export default function ProfilePage({
       users: profile,
       likes_count: 0,
       is_liked: false,
+      is_saved: false,
     });
 
     const { data: fullPost } = await supabase
@@ -379,6 +385,7 @@ export default function ProfilePage({
       .eq("post_id", post.id);
 
     let isLiked = false;
+    let isSaved = false;
     if (currentUser) {
       const { data: likeData } = await supabase
         .from("likes")
@@ -387,12 +394,21 @@ export default function ProfilePage({
         .eq("user_id", currentUser.id)
         .maybeSingle();
       isLiked = !!likeData;
+
+      const { data: saveData } = await supabase
+        .from("saved_posts")
+        .select("id")
+        .eq("post_id", post.id)
+        .eq("user_id", currentUser.id)
+        .maybeSingle();
+      isSaved = !!saveData;
     }
 
     setSelectedPost({
       ...fullPost,
       likes_count: likeCount || 0,
       is_liked: isLiked,
+      is_saved: isSaved,
     });
 
     const data = await getComments(post.id);
@@ -574,6 +590,27 @@ export default function ProfilePage({
         toast.error("Xóa bài viết thất bại.");
       }
     });
+  };
+
+  // ================= SAVE POST =================
+  const handleSavePost = async (postId: string) => {
+    if (!currentUser) {
+      toast.error("Vui lòng đăng nhập!");
+      return;
+    }
+    try {
+      const { is_saved } = await toggleSavePost(postId);
+      if (selectedPost && selectedPost.id === postId) {
+        setSelectedPost((prev: any) => ({ ...prev, is_saved }));
+      }
+      toast.success(
+        is_saved ? "Đã lưu bài viết thành công!" : "Đã bỏ lưu bài viết!",
+      );
+      setOpenPostMenu(false);
+    } catch (err) {
+      console.error("LỖI LƯU BÀI VIẾT:", err);
+      toast.error("Đã xảy ra lỗi khi lưu bài viết.");
+    }
   };
 
   // ================= UNLINK GOOGLE =================
@@ -1026,39 +1063,134 @@ export default function ProfilePage({
                     </span>
                   </div>
 
-                  {currentUser?.id === selectedPost.user_id && (
-                    <div className="relative">
-                      <MoreHorizontal
-                        className="w-5 h-5 cursor-pointer text-gray-900 dark:text-gray-100 hover:text-gray-500 transition-colors"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setOpenPostMenu(!openPostMenu);
-                        }}
-                      />
-                      {openPostMenu && (
-                        <div className="absolute right-0 mt-2 w-44 border border-gray-200 dark:border-neutral-700 rounded-xl shadow-xl dark:shadow-black/50 py-1 z-[100] transition-colors duration-500 bg-white dark:bg-[#333333]">
-                          <button
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleDeletePost(selectedPost.id);
-                            }}
-                            className="flex items-center gap-3 px-4 py-2 text-red-500 hover:bg-secondary w-full text-sm font-semibold transition-all"
-                          >
-                            <Trash2 size={18} />
-                            Xóa bài viết
-                          </button>
-                        </div>
-                      )}
-                    </div>
-                  )}
+                  <div className="relative">
+                    <MoreHorizontal
+                      className="w-5 h-5 cursor-pointer text-gray-900 dark:text-gray-100 hover:text-gray-500 transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenPostMenu(!openPostMenu);
+                      }}
+                    />
+                    {openPostMenu && (
+                      <div className="absolute right-0 mt-2 w-44 border border-gray-200 dark:border-neutral-700 rounded-xl shadow-xl dark:shadow-black/50 py-1 z-[100] transition-colors duration-500 bg-white dark:bg-[#333333]">
+                        <button
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleSavePost(selectedPost.id);
+                          }}
+                          className="flex items-center gap-3 px-4 py-2 hover:bg-secondary w-full text-sm font-semibold transition-all"
+                        >
+                          <Bookmark
+                            size={18}
+                            className={
+                              selectedPost.is_saved ? "fill-current" : ""
+                            }
+                          />
+                          {selectedPost.is_saved
+                            ? "Bỏ lưu bài viết"
+                            : "Lưu bài viết"}
+                        </button>
+
+                        <button
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleReportPost(selectedPost.id);
+                          }}
+                          className="flex items-center gap-3 px-4 py-2 hover:bg-secondary w-full text-sm font-semibold transition-all"
+                        >
+                          <Flag size={18} />
+                          Báo cáo
+                        </button>
+
+                        {currentUser?.id === selectedPost.user_id && (
+                          <>
+                            <button
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setEditingPostId(selectedPost.id);
+                                setEditPostContent(selectedPost.content || "");
+                                setOpenPostMenu(false);
+                              }}
+                              className="flex items-center gap-3 px-4 py-2 hover:bg-secondary w-full text-sm font-semibold transition-all"
+                            >
+                              <Pencil size={18} />
+                              Sửa bài viết
+                            </button>
+                            <button
+                              onMouseDown={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                handleDeletePost(selectedPost.id);
+                              }}
+                              className="flex items-center gap-3 px-4 py-2 text-red-500 hover:bg-red-500/10 w-full text-sm font-semibold transition-all"
+                            >
+                              <Trash2 size={18} />
+                              Xóa bài viết
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Caption */}
-                {selectedPost.content && (
-                  <div className="px-4 pb-4 text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-300">
-                    {selectedPost.content}
+                {editingPostId === selectedPost.id ? (
+                  <div className="px-4 pb-4 text-sm">
+                    <textarea
+                      className="w-full border border-border bg-secondary/30 rounded-lg p-2 outline-none focus:bg-background transition-colors resize-none"
+                      value={editPostContent}
+                      onChange={(e) => setEditPostContent(e.target.value)}
+                      rows={3}
+                    />
+                    <div className="flex justify-end gap-3 mt-2">
+                      <button
+                        onClick={() => setEditingPostId(null)}
+                        className="text-xs font-semibold text-muted-foreground hover:text-gray-900 dark:hover:text-gray-100"
+                      >
+                        Hủy
+                      </button>
+                      <button
+                        onClick={async () => {
+                          try {
+                            const { error } = await supabase
+                              .from("posts")
+                              .update({ content: editPostContent })
+                              .eq("id", selectedPost.id);
+                            if (error) throw error;
+
+                            setSelectedPost((prev: any) => ({
+                              ...prev,
+                              content: editPostContent,
+                            }));
+                            setPosts((prev) =>
+                              prev.map((p) =>
+                                p.id === selectedPost.id
+                                  ? { ...p, content: editPostContent }
+                                  : p,
+                              ),
+                            );
+                            setEditingPostId(null);
+                            toast.success("Đã cập nhật bài viết!");
+                          } catch (err) {
+                            toast.error("Cập nhật thất bại.");
+                          }
+                        }}
+                        className="text-xs font-semibold text-blue-500 hover:text-blue-600"
+                      >
+                        Lưu
+                      </button>
+                    </div>
                   </div>
+                ) : (
+                  selectedPost.content && (
+                    <div className="px-4 pb-4 text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-300">
+                      {selectedPost.content}
+                    </div>
+                  )
                 )}
               </div>
 
