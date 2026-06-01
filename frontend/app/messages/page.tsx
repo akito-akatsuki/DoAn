@@ -1334,13 +1334,13 @@ export default function MessagesPage() {
                                       }}
                                     />
                                     {openMessageMenuId === m.id && (
-                                      <div className="absolute right-0 bottom-full mb-2 w-28 bg-white dark:bg-[#333333] border border-gray-200 dark:border-neutral-700 rounded-lg shadow-xl z-[999] overflow-hidden">
+                                      <div className="absolute left-1/2 -translate-x-1/2 bottom-full mb-2 w-max min-w-[90px] bg-white dark:bg-[#333333] border border-gray-200 dark:border-neutral-700 rounded-lg shadow-xl z-[999] overflow-hidden">
                                         <button
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             handleDeleteMessage(m.id);
                                           }}
-                                          className="w-full text-left px-3 py-2 text-[14px] text-red-500 hover:bg-secondary font-medium transition-colors"
+                                          className="w-full text-center px-4 py-2 text-[14px] text-red-500 hover:bg-secondary font-medium transition-colors whitespace-nowrap"
                                         >
                                           Thu hồi
                                         </button>
@@ -1427,37 +1427,88 @@ export default function MessagesPage() {
                                   })()}
                                 </div>
                               )}
-                              {m.image_urls?.length > 1 ? (
-                                <div className="flex flex-wrap gap-1 mb-1">
-                                  {m.image_urls.map(
-                                    (url: string, idx: number) => (
+                              {(() => {
+                                const isSharedPost =
+                                  m.content?.startsWith("http") &&
+                                  m.content?.includes("/post/");
+
+                                if (isSharedPost) {
+                                  const [postUrl, ...rest] =
+                                    m.content.split("\n\n");
+                                  const previewQuote = rest.join("\n\n");
+                                  return (
+                                    <div className="flex flex-col w-full min-w-[200px]">
+                                      <a
+                                        href={postUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className={`hover:underline truncate mb-2 text-[13px] block max-w-[200px] sm:max-w-[300px] ${m.sender_id === user?.id ? "text-blue-100" : "text-blue-500"}`}
+                                      >
+                                        {postUrl}
+                                      </a>
+                                      <div
+                                        className={`flex flex-col items-center justify-center p-3 rounded-xl w-full text-center ${m.sender_id === user?.id ? "bg-black/10" : "bg-white dark:bg-[#262626] shadow-sm border border-gray-200 dark:border-neutral-700"}`}
+                                      >
+                                        {m.image_url && (
+                                          <img
+                                            src={m.image_url}
+                                            alt="preview"
+                                            className="max-h-32 w-auto rounded-lg object-contain mb-2 cursor-pointer"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setViewingImage(m.image_url);
+                                              setImageScale(1);
+                                            }}
+                                          />
+                                        )}
+                                        {previewQuote && (
+                                          <span
+                                            className={`text-[13px] italic break-words w-full ${m.sender_id === user?.id ? "opacity-90" : "text-gray-700 dark:text-gray-300"}`}
+                                          >
+                                            {previewQuote}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                }
+
+                                return (
+                                  <>
+                                    {m.image_urls?.length > 1 ? (
+                                      <div className="flex flex-wrap gap-1 mb-1">
+                                        {m.image_urls.map(
+                                          (url: string, idx: number) => (
+                                            <img
+                                              key={idx}
+                                              src={url}
+                                              alt="chat-img"
+                                              className="max-h-32 w-auto rounded-lg object-cover cursor-pointer"
+                                              onClick={() => {
+                                                setViewingImage(url);
+                                                setImageScale(1);
+                                              }}
+                                            />
+                                          ),
+                                        )}
+                                      </div>
+                                    ) : m.image_urls?.[0] || m.image_url ? (
                                       <img
-                                        key={idx}
-                                        src={url}
+                                        src={m.image_urls?.[0] || m.image_url}
                                         alt="chat-img"
-                                        className="max-h-32 w-auto rounded-lg object-cover cursor-pointer"
+                                        className="max-w-full rounded-lg mb-1 object-cover cursor-pointer"
                                         onClick={() => {
-                                          setViewingImage(url);
+                                          setViewingImage(
+                                            m.image_urls?.[0] || m.image_url,
+                                          );
                                           setImageScale(1);
                                         }}
                                       />
-                                    ),
-                                  )}
-                                </div>
-                              ) : m.image_urls?.[0] || m.image_url ? (
-                                <img
-                                  src={m.image_urls?.[0] || m.image_url}
-                                  alt="chat-img"
-                                  className="max-w-full rounded-lg mb-1 object-cover cursor-pointer"
-                                  onClick={() => {
-                                    setViewingImage(
-                                      m.image_urls?.[0] || m.image_url,
-                                    );
-                                    setImageScale(1);
-                                  }}
-                                />
-                              ) : null}
-                              {m.content}
+                                    ) : null}
+                                    {m.content}
+                                  </>
+                                );
+                              })()}
                               {m.file_url && (
                                 <a
                                   href={m.file_url}

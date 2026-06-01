@@ -72,13 +72,6 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
-      if (
-        isChatOpen &&
-        chatContainerRef.current &&
-        !chatContainerRef.current.contains(e.target as Node)
-      ) {
-        setIsChatOpen(false);
-      }
       setOpenCommentMenuId(null);
 
       if (

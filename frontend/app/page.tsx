@@ -26,6 +26,8 @@ import {
   ZoomIn,
   ZoomOut,
   Loader2,
+  Link as LinkIcon,
+  Share,
 } from "lucide-react";
 import {
   getFeed,
@@ -78,6 +80,11 @@ export default function HomePage() {
   const [showHeartId, setShowHeartId] = useState<string | null>(null);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [unreadMsgCount, setUnreadMsgCount] = useState(0);
+
+  // ================= SHARE POST =================
+  const [sharePost, setSharePost] = useState<any | null>(null);
+  const [shareFriends, setShareFriends] = useState<any[]>([]);
+  const [isSharing, setIsSharing] = useState(false);
 
   // ================= MODAL POST =================
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
@@ -306,6 +313,111 @@ export default function HomePage() {
     };
   }, []);
 
+  // ================= LOAD SHARE FRIENDS =================
+  useEffect(() => {
+    if (sharePost && user?.id) {
+      const fetchFriends = async () => {
+        const { data: follows } = await supabase
+          .from("follows")
+          .select("following_id")
+          .eq("follower_id", user.id);
+        if (follows && follows.length > 0) {
+          const ids = follows.map((f: any) => f.following_id);
+          const { data: users } = await supabase
+            .from("users")
+            .select("id, name, avatar_url")
+            .in("id", ids)
+            .limit(10); // Lấy tối đa 10 người bạn để hiển thị gợi ý gửi
+          setShareFriends(users || []);
+        } else {
+          setShareFriends([]);
+        }
+      };
+      fetchFriends();
+    }
+  }, [sharePost, user?.id]);
+
+  const handleSendToFriend = async (friendId: string) => {
+    if (!user || isSharing) return;
+    setIsSharing(true);
+    try {
+      // Tìm xem đã có cuộc trò chuyện riêng giữa 2 người chưa
+      const { data: myParts } = await supabase
+        .from("conversation_participants")
+        .select("conversation_id")
+        .eq("user_id", user.id);
+      let convId = null;
+      if (myParts && myParts.length > 0) {
+        const convIds = myParts.map((p) => p.conversation_id);
+        const { data: friendParts } = await supabase
+          .from("conversation_participants")
+          .select("conversation_id")
+          .eq("user_id", friendId)
+          .in("conversation_id", convIds);
+
+        if (friendParts && friendParts.length > 0) {
+          const commonConvIds = friendParts.map((p) => p.conversation_id);
+          const { data: convs } = await supabase
+            .from("conversations")
+            .select("id")
+            .in("id", commonConvIds)
+            .eq("is_group", false)
+            .limit(1);
+          if (convs && convs.length > 0) convId = convs[0].id;
+        }
+      }
+
+      // Nếu chưa có phòng chat, tiến hành tạo mới
+      if (!convId) {
+        const { data: newConv } = await supabase
+          .from("conversations")
+          .insert({ is_group: false })
+          .select("id")
+          .single();
+        if (newConv) {
+          convId = newConv.id;
+          await supabase.from("conversation_participants").insert([
+            { conversation_id: convId, user_id: user.id },
+            { conversation_id: convId, user_id: friendId },
+          ]);
+        }
+      }
+
+      if (convId) {
+        const postUrl = `${window.location.origin}/post/${sharePost.id}`;
+
+        // Tạo nội dung preview từ bài viết
+        let previewText = `${postUrl}`;
+        if (sharePost.content) {
+          const truncatedContent =
+            sharePost.content.length > 50
+              ? sharePost.content.substring(0, 50) + "..."
+              : sharePost.content;
+          previewText += `\n\n"${truncatedContent}"`;
+        }
+        const previewImage =
+          sharePost.image_urls?.[0] || sharePost.image_url || null;
+
+        await supabase.from("messages").insert({
+          conversation_id: convId,
+          sender_id: user.id,
+          content: previewText,
+          image_url: previewImage,
+        });
+        await supabase
+          .from("conversations")
+          .update({ last_message: `Hãy xem bài viết này...` })
+          .eq("id", convId);
+        toast.success("Đã gửi cho bạn bè!");
+        setSharePost(null);
+      }
+    } catch (err) {
+      toast.error("Đã xảy ra lỗi khi gửi");
+    } finally {
+      setIsSharing(false);
+    }
+  };
+
   // ================= LẮNG NGHE TIN NHẮN CHƯA ĐỌC =================
   useEffect(() => {
     if (!user?.id) return;
@@ -369,14 +481,6 @@ export default function HomePage() {
       }
       setOpenCommentMenuId(null); // Đóng menu bình luận khi bấm ra ngoài
       setOpenPostMenu(false);
-
-      if (
-        isChatOpen &&
-        chatContainerRef.current &&
-        !chatContainerRef.current.contains(e.target as Node)
-      ) {
-        setIsChatOpen(false);
-      }
 
       if (
         showEmojiPicker &&
@@ -1697,7 +1801,10 @@ export default function HomePage() {
                       onClick={() => openPostModal(post)}
                       className="w-7 h-7 cursor-pointer stroke-[2px]"
                     />
-                    <Send className="w-7 h-7 cursor-pointer stroke-[2px]" />
+                    <Send
+                      onClick={() => setSharePost(post)}
+                      className="w-7 h-7 cursor-pointer stroke-[2px] hover:scale-110 transition-transform"
+                    />
                   </div>
 
                   <p className="text-sm font-bold mt-1">
@@ -2862,6 +2969,108 @@ export default function HomePage() {
                 Đóng
               </button>
             </div>
+          </div>
+        </div>
+      )}
+      {/* ================= MODAL CHIA SẺ BÀI VIẾT ================= */}
+      {sharePost && (
+        <div
+          className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/60 backdrop-blur-[2px] p-4 animate-in fade-in duration-200"
+          onClick={() => setSharePost(null)}
+        >
+          <div
+            className="bg-white dark:bg-[#262626] rounded-2xl shadow-2xl w-full max-w-[340px] overflow-hidden animate-in zoom-in-95 duration-200 border border-gray-200 dark:border-neutral-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex justify-between items-center">
+              <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100">
+                Chia sẻ bài viết
+              </h3>
+              <button
+                onClick={() => setSharePost(null)}
+                className="hover:text-gray-500 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 flex flex-col gap-3">
+              {/* Nút Copy Link */}
+              <button
+                onClick={() => {
+                  const url = `${window.location.origin}/post/${sharePost.id}`;
+                  navigator.clipboard.writeText(url);
+                  toast.success("Đã sao chép liên kết bài viết!");
+                  setSharePost(null);
+                }}
+                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-[#333333] hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-xl transition-colors text-left"
+              >
+                <div className="bg-blue-100 dark:bg-blue-900/30 p-2.5 rounded-full text-blue-600 dark:text-blue-400 shrink-0">
+                  <LinkIcon className="w-5 h-5" />
+                </div>
+                <span className="font-semibold text-sm text-gray-900 dark:text-gray-100">
+                  Sao chép liên kết
+                </span>
+              </button>
+
+              {/* Nút Chia sẻ qua ứng dụng khác (Web Share API) */}
+              <button
+                onClick={async () => {
+                  const url = `${window.location.origin}/post/${sharePost.id}`;
+                  if (navigator.share) {
+                    try {
+                      await navigator.share({
+                        title: "InstaMini",
+                        text: "Hãy xem bài viết này trên InstaMini!",
+                        url: url,
+                      });
+                      setSharePost(null);
+                    } catch (e) {
+                      console.log(e);
+                    }
+                  } else {
+                    toast.error("Trình duyệt không hỗ trợ tính năng này");
+                  }
+                }}
+                className="flex items-center gap-3 p-3 bg-gray-50 dark:bg-[#333333] hover:bg-gray-100 dark:hover:bg-neutral-700 rounded-xl transition-colors text-left"
+              >
+                <div className="bg-green-100 dark:bg-green-900/30 p-2.5 rounded-full text-green-600 dark:text-green-400 shrink-0">
+                  <Share className="w-5 h-5" />
+                </div>
+                <span className="font-semibold text-sm text-gray-900 dark:text-gray-100">
+                  Chia sẻ qua ứng dụng khác...
+                </span>
+              </button>
+            </div>
+
+            {/* Danh sách bạn bè */}
+            {shareFriends.length > 0 && (
+              <div className="px-4 pb-4">
+                <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-3 block">
+                  Gửi trực tiếp
+                </span>
+                <div className="flex gap-4 overflow-x-auto pb-2 snap-x [&::-webkit-scrollbar]:hidden">
+                  {shareFriends.map((friend) => (
+                    <div
+                      key={friend.id}
+                      onClick={() => handleSendToFriend(friend.id)}
+                      className={`flex flex-col items-center gap-1.5 cursor-pointer shrink-0 w-[60px] snap-start transition-opacity ${isSharing ? "opacity-50 pointer-events-none" : "hover:opacity-80"}`}
+                    >
+                      <img
+                        src={
+                          friend.avatar_url && friend.avatar_url !== "null"
+                            ? friend.avatar_url
+                            : `https://api.dicebear.com/7.x/identicon/svg?seed=${friend.id}`
+                        }
+                        className="w-12 h-12 rounded-full object-cover border border-gray-200 dark:border-neutral-700 shadow-sm"
+                      />
+                      <span className="text-[11px] font-semibold text-center truncate w-full text-gray-900 dark:text-gray-100">
+                        {friend.name}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
