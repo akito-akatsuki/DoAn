@@ -200,6 +200,89 @@ export default function HomePage() {
     };
   }, []);
 
+  // ================= LẮNG NGHE BÌNH LUẬN REALTIME =================
+  useEffect(() => {
+    const channel = supabase
+      .channel("realtime_comments")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "comments" },
+        async (payload) => {
+          if (payload.eventType === "INSERT") {
+            const postId = payload.new.post_id;
+            const { data: newCmt } = await supabase
+              .from("comments")
+              .select("*, users(id, name, avatar_url)")
+              .eq("id", payload.new.id)
+              .single();
+
+            if (newCmt) {
+              setCommentsMap((prev) => {
+                const exists = prev[postId]?.some(
+                  (c) =>
+                    c.id === newCmt.id ||
+                    (c.user_id === newCmt.user_id &&
+                      c.content === newCmt.content),
+                );
+                if (exists) return prev;
+                return { ...prev, [postId]: [...(prev[postId] || []), newCmt] };
+              });
+              // Chỉ tự động chèn vào Modal nếu người dùng đang mở đúng bài viết đó
+              if (selectedPostRef.current?.id === postId) {
+                setModalComments((prev) => {
+                  const exists = prev.some(
+                    (c) =>
+                      c.id === newCmt.id ||
+                      (c.user_id === newCmt.user_id &&
+                        c.content === newCmt.content),
+                  );
+                  if (exists) return prev;
+                  return [...prev, newCmt];
+                });
+              }
+            }
+          } else if (payload.eventType === "DELETE") {
+            const deletedId = payload.old.id;
+            setCommentsMap((prev) => {
+              const next = { ...prev };
+              for (const pid in next) {
+                next[pid] = next[pid].filter((c: any) => c.id !== deletedId);
+              }
+              return next;
+            });
+            setModalComments((prev) =>
+              prev.filter((c: any) => c.id !== deletedId),
+            );
+          } else if (payload.eventType === "UPDATE") {
+            const updatedCmt = payload.new;
+            setCommentsMap((prev) => {
+              const next = { ...prev };
+              for (const pid in next) {
+                next[pid] = next[pid].map((c: any) =>
+                  c.id === updatedCmt.id
+                    ? { ...c, content: updatedCmt.content }
+                    : c,
+                );
+              }
+              return next;
+            });
+            setModalComments((prev) =>
+              prev.map((c: any) =>
+                c.id === updatedCmt.id
+                  ? { ...c, content: updatedCmt.content }
+                  : c,
+              ),
+            );
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   // ================= XỬ LÝ LỖI "URL STALE" (Xóa hash sau khi đăng nhập) =================
   useEffect(() => {
     const {
@@ -1235,7 +1318,11 @@ export default function HomePage() {
                       disabled={(!content && files.length === 0) || isPosting}
                       className="bg-gradient-to-r from-primary to-accent text-primary-fg px-5 py-1.5 rounded-full font-semibold text-sm shadow-ig hover:brightness-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[70px]"
                     >
-                      {isPosting ? <Loader2 className="w-4 h-4 animate-spin" /> : "Đăng"}
+                      {isPosting ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        "Đăng"
+                      )}
                     </button>
                   </div>
                 </div>
@@ -2419,10 +2506,15 @@ export default function HomePage() {
         </div>
       )}
       {/* FIXED CHAT UI */}
-      <div ref={chatContainerRef} className="hidden md:flex fixed bottom-6 right-6 z-[999] flex-col items-end gap-4">
+      <div
+        ref={chatContainerRef}
+        className="hidden md:flex fixed bottom-6 right-6 z-[999] flex-col items-end gap-4"
+      >
         {/* Khung ChatBox hiện lên khi nhấn nút */}
         {user && (
-          <div className={`w-[380px] h-[550px] bg-white dark:bg-[#262626] text-gray-900 dark:text-gray-100 rounded-2xl shadow-2xl dark:shadow-black/50 border border-gray-200 dark:border-neutral-800 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300 transition-colors duration-500 ${isChatOpen ? "flex flex-col" : "hidden"}`}>
+          <div
+            className={`w-[380px] h-[550px] bg-white dark:bg-[#262626] text-gray-900 dark:text-gray-100 rounded-2xl shadow-2xl dark:shadow-black/50 border border-gray-200 dark:border-neutral-800 overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300 transition-colors duration-500 ${isChatOpen ? "flex flex-col" : "hidden"}`}
+          >
             <ChatBox userId={user.id} onClose={() => setIsChatOpen(false)} />
           </div>
         )}

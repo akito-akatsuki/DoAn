@@ -109,6 +109,32 @@ export default function NotificationsPage() {
     init();
   }, []);
 
+  // ================= LẮNG NGHE THÔNG BÁO REALTIME =================
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel("realtime_notifications")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "notifications",
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          toast.success("Bạn có thông báo mới!", { icon: "🔔" });
+          loadNotifications(user.id);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
   const init = async () => {
     try {
       const { data, error } = await supabase.auth.getUser();
