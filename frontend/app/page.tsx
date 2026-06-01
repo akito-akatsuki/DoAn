@@ -1529,7 +1529,27 @@ export default function HomePage() {
                         Hủy
                       </button>
                       <button
-                        onClick={() => handleSavePost(post.id)}
+                        onClick={async () => {
+                          try {
+                            const { error } = await supabase
+                              .from("posts")
+                              .update({ content: editPostContent })
+                              .eq("id", post.id);
+                            if (error) throw error;
+
+                            setPosts((prev) =>
+                              prev.map((p) =>
+                                p.id === post.id
+                                  ? { ...p, content: editPostContent }
+                                  : p,
+                              ),
+                            );
+                            setEditingPostId(null);
+                            toast.success("Đã cập nhật bài viết!");
+                          } catch (err) {
+                            toast.error("Cập nhật thất bại.");
+                          }
+                        }}
                         className="text-xs font-semibold text-blue-500 hover:text-blue-600"
                       >
                         Lưu
