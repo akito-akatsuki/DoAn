@@ -81,6 +81,11 @@ export default function HomePage() {
 
   // ================= MODAL POST =================
   const [selectedPost, setSelectedPost] = useState<any | null>(null);
+  const selectedPostRef = useRef<any>(null);
+
+  useEffect(() => {
+    selectedPostRef.current = selectedPost;
+  }, [selectedPost]);
   const [modalComments, setModalComments] = useState<any[]>([]);
   const [modalCommentText, setModalCommentText] = useState("");
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
