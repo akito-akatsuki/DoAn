@@ -1341,7 +1341,7 @@ export default function FanpageProfile({
             {posts.map((post) => (
               <div
                 key={post.id}
-                className="shadow-md hover:shadow-lg dark:shadow-black/40 rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 relative transition-all duration-500 bg-white dark:bg-[#262626]"
+                className="virtual-post shadow-md hover:shadow-lg dark:shadow-black/40 rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 relative transition-all duration-500 bg-white dark:bg-[#262626]"
                 onDoubleClick={() => handleLike(post.id, true)}
               >
                 {showHeartId === String(post.id) && (
@@ -2782,6 +2782,12 @@ export default function FanpageProfile({
         }
         .animate-heart-pop {
           animation: heart-pop 0.8s ease-out forwards;
+        }
+        .virtual-post {
+          will-change: transform, opacity;
+          transform: translateZ(
+            0
+          ); /* Ép trình duyệt sử dụng GPU phần cứng để render khung hình */
         }
       `}</style>
     </div>

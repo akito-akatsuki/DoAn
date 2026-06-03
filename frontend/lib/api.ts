@@ -11,47 +11,34 @@ const handleError = (error: any, label: string) => {
 /* =========================
    GET FEED
 ========================= */
-export const getFeed = async () => {
-  const { data: userData } = await supabase.auth.getUser();
-  const userId = userData.user?.id || null;
-
-  // 1. Get hot post IDs from RPC
-  const { data: rpcData, error: rpcError } = await supabase.rpc(
-    "get_hot_feed",
-    {
-      current_user_id: userId,
-    },
-  );
-  if (rpcError) {
-    console.warn("getFeed RPC Error, falling back to recent posts:", rpcError);
+export const getFeed = async (
+  page: number = 1,
+  limit: number = 10,
+  customUserId?: string | null,
+) => {
+  let userId = customUserId;
+  if (userId === undefined) {
+    const { data: userData } = await supabase.auth.getUser();
+    userId = userData.user?.id || null;
   }
 
-  const postIdsFromRpc = (rpcData || []).map((p: any) => p.id);
+  // Tính toán khoảng dữ liệu cần lấy (offset & limit)
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
 
-  // 2. Fetch fallback post IDs if needed
-  let fallbackPostIds: string[] = [];
-  if (postIdsFromRpc.length < 10) {
-    const { data: fallbackPosts, error: fallbackError } = await supabase
-      .from("posts")
-      .select("id")
-      .order("created_at", { ascending: false })
-      .limit(30);
+  // 1. Phân trang bình thường theo thời gian mới nhất (dùng range)
+  const { data: latestPosts, error: fetchError } = await supabase
+    .from("posts")
+    .select("id")
+    .order("created_at", { ascending: false })
+    .range(from, to);
 
-    if (fallbackError) {
-      console.warn("getFeed fallback error:", fallbackError);
-    }
-    if (fallbackPosts) {
-      fallbackPostIds = fallbackPosts
-        .map((p) => p.id)
-        .filter((id) => !postIdsFromRpc.includes(id));
-    }
-  }
+  if (fetchError) handleError(fetchError, "getFeed fetch ids");
+  if (!latestPosts || latestPosts.length === 0) return [];
 
-  const allPostIds = [...new Set([...postIdsFromRpc, ...fallbackPostIds])];
+  const allPostIds = latestPosts.map((p) => p.id);
 
-  if (allPostIds.length === 0) return [];
-
-  // 3. Fetch all data in parallel
+  // 2. Fetch all data in parallel
   const [postsRes, savedRes] = await Promise.all([
     supabase
       .from("posts")
@@ -71,24 +58,18 @@ export const getFeed = async () => {
 
   const allPosts = postsRes.data || [];
   const savedSet = new Set((savedRes.data || []).map((s: any) => s.post_id));
-  const rpcDataMap = new Map((rpcData || []).map((p: any) => [p.id, p]));
 
   // 4. Enrich and sort
   let enrichedData = allPosts
     .map((post) => {
-      const rpcInfo = rpcDataMap.get(post.id);
       return {
         ...post,
-        ...(rpcInfo || {}), // Add score etc. from RPC
         is_saved: savedSet.has(post.id),
       };
     })
     .filter((post) => !post.is_flagged || post.user_id === userId);
 
-  // 5. Sắp xếp lại theo thứ tự ưu tiên
-  const now = Date.now();
-  const NEW_THRESHOLD = 2 * 60 * 60 * 1000; // 2 tiếng (được coi là bài mới đăng)
-
+  // 5. Sắp xếp lại theo thứ tự thời gian tạo giảm dần
   enrichedData.sort((a, b) => {
     const timeA = new Date(
       a.created_at.includes("Z") || a.created_at.includes("+")
@@ -101,28 +82,6 @@ export const getFeed = async () => {
         : `${b.created_at}Z`,
     ).getTime();
 
-    const isNewA = now - timeA < NEW_THRESHOLD;
-    const isNewB = now - timeB < NEW_THRESHOLD;
-
-    // Đặc biệt: Bài mới đăng (trong vòng 2h) được đẩy lên trên cùng tuyệt đối
-    if (isNewA && !isNewB) return -1;
-    if (!isNewA && isNewB) return 1;
-
-    // Phân loại mức độ ưu tiên
-    const getPriority = (post: any) => {
-      if (post.page_id) return 1; // Ưu tiên 1: Fanpage
-      if (post.user_id !== userId) return 2; // Ưu tiên 2: Người khác
-      return 3; // Ưu tiên 3: Bản thân
-    };
-
-    const prioA = getPriority(a);
-    const prioB = getPriority(b);
-
-    if (prioA !== prioB) {
-      return prioA - prioB; // Xếp theo 1 -> 2 -> 3
-    }
-
-    // Nếu cùng mức độ ưu tiên -> Bài nào mới hơn xếp trên
     return timeB - timeA;
   });
 

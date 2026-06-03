@@ -56,6 +56,12 @@ export default function HomePage() {
   const [placeholder, setPlaceholder] = useState("Bạn đang nghĩ gì?");
   const [isPosting, setIsPosting] = useState(false);
 
+  // States cho Infinite Scroll
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const loadMoreRef = useRef<HTMLDivElement | null>(null);
+
   const [commentsMap, setCommentsMap] = useState<Record<string, any[]>>({});
   const [commentInput, setCommentInput] = useState<Record<string, string>>({});
   const [commentFileMap, setCommentFileMap] = useState<
@@ -190,8 +196,8 @@ export default function HomePage() {
     // Gọi tuần tự để tránh lỗi kẹt (deadlock) của Supabase khi tải lại trang
     const init = async () => {
       try {
-        await loadUser();
-        await loadFeed();
+        const loadedUser = await loadUser();
+        await loadFeed(loadedUser);
       } catch (err) {
         console.error("Lỗi khởi tạo trang chủ:", err);
       }
@@ -211,6 +217,36 @@ export default function HomePage() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  // ================= INFINITE SCROLL: LẮNG NGHE KHI CUỘN TỚI CUỐI =================
+  useEffect(() => {
+    if (!hasMore || loading || loadingMore) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          setPage((prev) => prev + 1);
+        }
+      },
+      {
+        rootMargin: "1500px", // Tải trước khi cuộn còn cách phần tử cuối cùng 1500px (khoảng 2-3 bài viết)
+        threshold: 0.1,
+      },
+    );
+
+    if (loadMoreRef.current) {
+      observer.observe(loadMoreRef.current);
+    }
+
+    return () => observer.disconnect();
+  }, [hasMore, loading, loadingMore]);
+
+  // Gọi API lấy thêm dữ liệu khi biến page thay đổi
+  useEffect(() => {
+    if (page > 1) {
+      loadMoreFeed(page);
+    }
+  }, [page]);
 
   // ================= LẮNG NGHE BÌNH LUẬN REALTIME =================
   useEffect(() => {
@@ -614,7 +650,9 @@ export default function HomePage() {
 
         const pages = await getUserPages();
         setUserPages(pages || []);
+        return { ...data.user, ...(dbUser || {}) };
       }
+      return null;
     } catch (err) {
       console.error("Lỗi mạng khi tải user ở Home:", err);
     }
@@ -644,12 +682,17 @@ export default function HomePage() {
     window.location.reload();
   };
 
-  const loadFeed = async () => {
+  const loadFeed = async (activeUser?: any) => {
     try {
       setLoading(true);
-      const data = await getFeed();
+      setPage(1); // Bắt đầu từ trang 1
 
-      const currentUser = (await supabase.auth.getUser()).data?.user;
+      const currentUserObj = activeUser || user;
+      const data = await getFeed(1, 10, currentUserObj?.id || null); // Truyền userId để tránh gọi lại getUser()
+
+      if (!data || data.length < 10)
+        setHasMore(false); // Giả sử mỗi trang tải 10 bài
+      else setHasMore(true);
 
       const postIds = (data || []).map((p: any) => p.id);
 
@@ -679,7 +722,7 @@ export default function HomePage() {
 
         likesRes.data?.forEach((l) => {
           likesCountByPost[l.post_id] = (likesCountByPost[l.post_id] || 0) + 1;
-          if (currentUser && l.user_id === currentUser.id) {
+          if (currentUserObj && l.user_id === currentUserObj.id) {
             userLikedPosts.add(l.post_id);
           }
         });
@@ -706,6 +749,83 @@ export default function HomePage() {
       console.error("Lỗi tải bảng tin:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadMoreFeed = async (currentPage: number) => {
+    try {
+      setLoadingMore(true);
+      const data = await getFeed(currentPage, 10, user?.id || null); // Dùng user từ state
+
+      if (!data || data.length === 0) {
+        setHasMore(false);
+        return;
+      }
+
+      // Nếu dữ liệu trả về ít hơn 10 (limit mặc định), thì không còn bài viết nào để tải thêm
+      if (data.length < 10) {
+        setHasMore(false);
+      }
+
+      const postIds = data.map((p: any) => p.id);
+
+      if (postIds.length > 0) {
+        const [commentsRes, likesRes] = await Promise.all([
+          supabase
+            .from("comments")
+            .select("*, users (id, name, avatar_url)")
+            .in("post_id", postIds)
+            .order("created_at", { ascending: true }),
+          supabase
+            .from("likes")
+            .select("post_id, user_id")
+            .in("post_id", postIds),
+        ]);
+
+        const commentsByPost: Record<string, any[]> = {};
+        commentsRes.data?.forEach((c) => {
+          if (!commentsByPost[c.post_id]) commentsByPost[c.post_id] = [];
+          commentsByPost[c.post_id].push(c);
+        });
+        setCommentsMap((prev) => ({ ...prev, ...commentsByPost }));
+
+        const likesCountByPost: Record<string, number> = {};
+        const userLikedPosts = new Set<string>();
+
+        likesRes.data?.forEach((l) => {
+          likesCountByPost[l.post_id] = (likesCountByPost[l.post_id] || 0) + 1;
+          if (user && l.user_id === user.id) {
+            userLikedPosts.add(l.post_id);
+          }
+        });
+
+        const enrichedData = data.map((post: any) => {
+          const likesCount =
+            likesCountByPost[post.id] !== undefined
+              ? likesCountByPost[post.id]
+              : post.likes_count || 0;
+          const isLiked = userLikedPosts.has(post.id) || post.is_liked;
+
+          return {
+            ...post,
+            likes_count: likesCount,
+            is_liked: isLiked,
+          };
+        });
+
+        setPosts((prev) => {
+          // Lọc bỏ các bài viết đã có sẵn (tránh trùng lặp UI khi có bài viết mới được người khác chèn vào)
+          const existingIds = new Set(prev.map((p) => p.id));
+          const newPosts = enrichedData.filter(
+            (p: any) => !existingIds.has(p.id),
+          );
+          return [...prev, ...newPosts];
+        });
+      }
+    } catch (err) {
+      console.error("Lỗi tải thêm bảng tin:", err);
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -1450,7 +1570,8 @@ export default function HomePage() {
             {posts.map((post) => (
               <div
                 key={post.id}
-                className="shadow-md hover:shadow-lg dark:shadow-black/40 rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 relative transition-all duration-500 bg-white dark:bg-[#262626]"
+                // Lớp "virtual-post" dùng để kích hoạt Native Virtual List
+                className="virtual-post shadow-md hover:shadow-lg dark:shadow-black/40 rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 relative transition-all duration-500 bg-white dark:bg-[#262626]"
                 onDoubleClick={() => handleLike(post.id, true)}
               >
                 {/* BIG HEART POP ANIMATION */}
@@ -2035,6 +2156,28 @@ export default function HomePage() {
                 </div>
               </div>
             ))}
+
+            {/* PHẦN HIỂN THỊ TRẠNG THÁI LOADING VÀ OBSERVER BẮT SỰ KIỆN TẢI THÊM BÀI VIẾT (INFINITE SCROLL) */}
+            {hasMore && posts.length > 0 && (
+              <div
+                ref={loadMoreRef}
+                className="py-6 flex justify-center items-center"
+              >
+                {loadingMore ? (
+                  <Loader2 className="w-8 h-8 animate-spin text-blue-500" />
+                ) : (
+                  <span className="text-sm text-transparent">
+                    Cuộn để tải thêm...
+                  </span>
+                )}
+              </div>
+            )}
+
+            {!hasMore && posts.length > 0 && (
+              <div className="py-6 text-center text-sm font-medium text-gray-500">
+                Bạn đã xem hết bài viết! 🎉
+              </div>
+            )}
           </div>
         </div>
 
@@ -3103,6 +3246,13 @@ export default function HomePage() {
         }
         html {
           scroll-behavior: smooth;
+        }
+        .virtual-post {
+          will-change:
+            transform, opacity; /* Báo cho trình duyệt biết phần tử sẽ thay đổi */
+          transform: translateZ(
+            0
+          ); /* Ép trình duyệt sử dụng GPU phần cứng để render khung hình, triệt tiêu giật lag */
         }
       `}</style>
     </div>
