@@ -204,7 +204,7 @@ export default function SetupProfilePage() {
         </h2>
         <p className="text-center text-sm text-gray-500 dark:text-gray-400 mb-6">
           Vui lòng cung cấp thêm một số thông tin cá nhân để bắt đầu sử dụng
-          InstaMini.
+          Apex.
         </p>
 
         <form

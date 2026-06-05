@@ -26,8 +26,8 @@ export default function TermsPage() {
               Chính sách & Điều khoản sử dụng
             </h2>
             <p className="text-muted-foreground text-center max-w-md">
-              Những điều bạn cần biết khi sử dụng InstaMini để đảm bảo an toàn
-              và quyền lợi cho bản thân cũng như cộng đồng.
+              Những điều bạn cần biết khi sử dụng Apex để đảm bảo an toàn và
+              quyền lợi cho bản thân cũng như cộng đồng.
             </p>
           </div>
 
@@ -38,8 +38,8 @@ export default function TermsPage() {
 
             <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
               <p>
-                Bằng việc đăng ký và sử dụng InstaMini, bạn đồng ý tuân thủ các
-                quy định dưới đây:
+                Bằng việc đăng ký và sử dụng Apex, bạn đồng ý tuân thủ các quy
+                định dưới đây:
               </p>
               <ul className="list-disc pl-5 space-y-2">
                 <li>
@@ -52,9 +52,9 @@ export default function TermsPage() {
                   tuyên truyền thông tin sai lệch.
                 </li>
                 <li>
-                  <b>Xử lý vi phạm:</b> InstaMini có quyền xóa nội dung vi phạm
-                  tiêu chuẩn cộng đồng mà không cần báo trước, đồng thời có thể
-                  tạm khóa hoặc khóa vĩnh viễn tài khoản của bạn.
+                  <b>Xử lý vi phạm:</b> Apex có quyền xóa nội dung vi phạm tiêu
+                  chuẩn cộng đồng mà không cần báo trước, đồng thời có thể tạm
+                  khóa hoặc khóa vĩnh viễn tài khoản của bạn.
                 </li>
               </ul>
             </div>
@@ -97,8 +97,8 @@ export default function TermsPage() {
 
             <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
               <p>
-                Hệ thống InstaMini có tích hợp AI để kiểm duyệt nội dung tự
-                động. Bằng cách sử dụng nền tảng, bạn đồng ý:
+                Hệ thống Apex có tích hợp AI để kiểm duyệt nội dung tự động.
+                Bằng cách sử dụng nền tảng, bạn đồng ý:
               </p>
               <ul className="list-disc pl-5 space-y-2">
                 <li>
@@ -122,9 +122,9 @@ export default function TermsPage() {
               <ul className="list-disc pl-5 space-y-2">
                 <li>
                   <b>Bản quyền nội dung:</b> Bạn giữ toàn bộ bản quyền đối với
-                  những nội dung bạn tạo ra và chia sẻ trên InstaMini. Tuy
-                  nhiên, bằng việc đăng tải, bạn cấp cho chúng tôi quyền lưu
-                  trữ, hiển thị và phân phối nội dung đó trên nền tảng.
+                  những nội dung bạn tạo ra và chia sẻ trên Apex. Tuy nhiên,
+                  bằng việc đăng tải, bạn cấp cho chúng tôi quyền lưu trữ, hiển
+                  thị và phân phối nội dung đó trên nền tảng.
                 </li>
                 <li>
                   <b>Tôn trọng bản quyền:</b> Bạn không được phép đăng tải các
@@ -148,9 +148,9 @@ export default function TermsPage() {
                   thống bất cứ lúc nào.
                 </li>
                 <li>
-                  <b>Độ tuổi sử dụng:</b> InstaMini yêu cầu người dùng phải đủ
-                  13 tuổi trở lên. Nếu phát hiện tài khoản của người dưới độ
-                  tuổi quy định, chúng tôi có quyền chấm dứt dịch vụ.
+                  <b>Độ tuổi sử dụng:</b> Apex yêu cầu người dùng phải đủ 13
+                  tuổi trở lên. Nếu phát hiện tài khoản của người dưới độ tuổi
+                  quy định, chúng tôi có quyền chấm dứt dịch vụ.
                 </li>
               </ul>
             </div>
@@ -170,9 +170,9 @@ export default function TermsPage() {
                 </li>
                 <li>
                   <b>Giải quyết tranh chấp:</b> Mọi tranh chấp phát sinh từ việc
-                  sử dụng InstaMini sẽ được ưu tiên giải quyết thông qua thương
-                  lượng và hòa giải. Trong trường hợp không thể thỏa thuận, vụ
-                  việc sẽ được xử lý theo luật pháp hiện hành.
+                  sử dụng Apex sẽ được ưu tiên giải quyết thông qua thương lượng
+                  và hòa giải. Trong trường hợp không thể thỏa thuận, vụ việc sẽ
+                  được xử lý theo luật pháp hiện hành.
                 </li>
               </ul>
             </div>
@@ -180,7 +180,7 @@ export default function TermsPage() {
 
           <div className="pt-6 border-t border-gray-200 dark:border-neutral-800 text-center">
             <p className="text-sm text-muted-foreground">
-              © 2026 INSTAMINI BY akitø. Mọi quyền được bảo lưu.
+              © 2026 APEX BY akitø. Mọi quyền được bảo lưu.
             </p>
           </div>
         </div>

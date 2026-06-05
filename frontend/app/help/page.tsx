@@ -27,7 +27,7 @@ export default function HelpPage() {
             </h2>
             <p className="text-muted-foreground text-center max-w-md">
               Tìm kiếm câu trả lời cho các vấn đề thường gặp hoặc liên hệ trực
-              tiếp với đội ngũ hỗ trợ của InstaMini.
+              tiếp với đội ngũ hỗ trợ của Apex.
             </p>
           </div>
 
@@ -77,13 +77,13 @@ export default function HelpPage() {
             </p>
             <div className="flex items-center gap-2 text-blue-500 font-semibold bg-blue-50 dark:bg-blue-500/10 p-4 rounded-xl">
               <Mail className="w-5 h-5" />
-              <a href="mailto:support@instamini.com">support@instamini.com</a>
+              <a href="mailto:support@apex.com">support@apex.com</a>
             </div>
           </div>
 
           <div className="pt-6 border-t border-gray-200 dark:border-neutral-800 text-center">
             <p className="text-sm text-muted-foreground">
-              © 2026 INSTAMINI BY akitø. Mọi quyền được bảo lưu.
+              © 2026 APEX BY akitø. Mọi quyền được bảo lưu.
             </p>
           </div>
         </div>

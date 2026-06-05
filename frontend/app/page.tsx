@@ -640,7 +640,7 @@ export default function HomePage() {
               ...suggestions,
               ...newUsers.map((u) => ({
                 ...u,
-                reason: "Mới tham gia InstaMini",
+                reason: "Mới tham gia Apex",
               })),
             ];
           }
@@ -1299,7 +1299,7 @@ export default function HomePage() {
                 </Link>
               </div>
               <p className="pt-4 mt-4 border-t border-gray-200 dark:border-neutral-800 text-[12px] px-2 w-full text-right">
-                © 2026 INSTAMINI BY akitø
+                © 2026 APEX BY akitø
               </p>
             </div>
           </div>
@@ -3162,8 +3162,8 @@ export default function HomePage() {
                   if (navigator.share) {
                     try {
                       await navigator.share({
-                        title: "InstaMini",
-                        text: "Hãy xem bài viết này trên InstaMini!",
+                        title: "Apex",
+                        text: "Hãy xem bài viết này trên Apex!",
                         url: url,
                       });
                       setSharePost(null);

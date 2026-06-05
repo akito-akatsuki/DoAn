@@ -742,7 +742,7 @@ export default function Navbar({ user: propUser }: any) {
             }
           }}
         >
-          InstaMini
+          Apex
         </h1>
 
         {/* ICONS */}
