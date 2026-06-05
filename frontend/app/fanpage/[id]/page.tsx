@@ -1086,7 +1086,7 @@ export default function FanpageProfile({
   return (
     <div className="min-h-screen text-gray-900 dark:text-gray-100 transition-colors duration-500 bg-gray-50 dark:bg-neutral-900 pb-20">
       {/* Ảnh Bìa (Cover) */}
-      <div className="w-full h-[200px] md:h-[300px] bg-gradient-to-r from-blue-400 to-cyan-500 relative group">
+      <div className="w-full h-[250px] md:h-[400px] bg-gradient-to-r from-blue-400 to-cyan-500 relative group">
         {pageInfo.cover_url && (
           <img
             src={pageInfo.cover_url}
@@ -1485,7 +1485,7 @@ export default function FanpageProfile({
                 {/* IMAGE */}
                 {(post.image_urls?.length > 0 || post.image_url) && (
                   <div
-                    className={`relative flex items-stretch justify-between bg-gray-100 dark:bg-[#1a1a1a] w-full overflow-hidden ${post.image_urls?.length > 1 ? "h-[350px] sm:h-[450px] md:h-[550px]" : "min-h-[250px] max-h-[650px]"}`}
+                    className={`relative flex items-stretch justify-between bg-gray-100 dark:bg-[#1a1a1a] w-full overflow-hidden ${post.image_urls?.length > 1 ? "h-[350px] sm:h-[450px] md:h-[550px]" : "max-h-[650px]"}`}
                   >
                     {post.image_urls?.length > 1 ? (
                       <div
@@ -1515,7 +1515,7 @@ export default function FanpageProfile({
                           post.image_urls?.[currentImageIndex[post.id] || 0] ||
                           post.image_url
                         }
-                        className={`max-w-full max-h-[650px] w-auto h-auto object-contain transition-all duration-300 select-none pointer-events-none ${post.is_flagged ? "blur-xl scale-110" : ""}`}
+                        className={`w-full object-cover ${post.image_urls?.length > 1 ? "h-full" : "h-auto max-h-[650px]"} transition-all duration-300 select-none pointer-events-none ${post.is_flagged ? "blur-xl scale-110" : ""}`}
                         alt="Post content"
                       />
                       {!post.is_flagged && (

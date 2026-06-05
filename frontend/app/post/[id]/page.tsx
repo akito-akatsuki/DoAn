@@ -376,14 +376,12 @@ export default function SinglePostPage({
         const previewImage =
           sharePost.image_urls?.[0] || sharePost.image_url || null;
 
-        await supabase
-          .from("messages")
-          .insert({
-            conversation_id: convId,
-            sender_id: user.id,
-            content: previewText,
-            image_url: previewImage,
-          });
+        await supabase.from("messages").insert({
+          conversation_id: convId,
+          sender_id: user.id,
+          content: previewText,
+          image_url: previewImage,
+        });
         await supabase
           .from("conversations")
           .update({ last_message: `Hãy xem bài viết này...` })
@@ -472,7 +470,7 @@ export default function SinglePostPage({
             >
               <img
                 src={post.image_urls?.[currentImageIndex] || post.image_url}
-                className={`max-w-full max-h-full w-auto h-auto object-contain transition-all duration-300 select-none pointer-events-none ${post.is_flagged ? "blur-xl scale-110" : ""}`}
+                className={`w-full h-full object-cover transition-all duration-300 select-none pointer-events-none ${post.is_flagged ? "blur-xl scale-110" : ""}`}
                 alt="Post"
               />
               {!post.is_flagged && (

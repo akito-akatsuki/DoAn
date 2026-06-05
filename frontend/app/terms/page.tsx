@@ -114,6 +114,70 @@ export default function TermsPage() {
             </div>
           </div>
 
+          <div className="space-y-6 pt-6 border-t border-gray-200 dark:border-neutral-800">
+            <h3 className="text-xl font-bold text-orange-600 dark:text-orange-400">
+              4. Quyền sở hữu trí tuệ
+            </h3>
+            <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+              <ul className="list-disc pl-5 space-y-2">
+                <li>
+                  <b>Bản quyền nội dung:</b> Bạn giữ toàn bộ bản quyền đối với
+                  những nội dung bạn tạo ra và chia sẻ trên InstaMini. Tuy
+                  nhiên, bằng việc đăng tải, bạn cấp cho chúng tôi quyền lưu
+                  trữ, hiển thị và phân phối nội dung đó trên nền tảng.
+                </li>
+                <li>
+                  <b>Tôn trọng bản quyền:</b> Bạn không được phép đăng tải các
+                  nội dung vi phạm bản quyền hoặc quyền sở hữu trí tuệ của người
+                  khác. Chúng tôi sẽ xử lý các khiếu nại về bản quyền theo quy
+                  định của pháp luật.
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="space-y-6 pt-6 border-t border-gray-200 dark:border-neutral-800">
+            <h3 className="text-xl font-bold text-teal-600 dark:text-teal-400">
+              5. Quyền và nghĩa vụ của người dùng
+            </h3>
+            <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+              <ul className="list-disc pl-5 space-y-2">
+                <li>
+                  <b>Quản lý tài khoản:</b> Bạn có quyền yêu cầu trích xuất dữ
+                  liệu cá nhân hoặc xóa vĩnh viễn tài khoản của mình khỏi hệ
+                  thống bất cứ lúc nào.
+                </li>
+                <li>
+                  <b>Độ tuổi sử dụng:</b> InstaMini yêu cầu người dùng phải đủ
+                  13 tuổi trở lên. Nếu phát hiện tài khoản của người dưới độ
+                  tuổi quy định, chúng tôi có quyền chấm dứt dịch vụ.
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="space-y-6 pt-6 border-t border-gray-200 dark:border-neutral-800">
+            <h3 className="text-xl font-bold text-rose-600 dark:text-rose-400">
+              6. Cập nhật điều khoản & Giải quyết tranh chấp
+            </h3>
+            <div className="space-y-4 text-sm text-gray-700 dark:text-gray-300 leading-relaxed">
+              <ul className="list-disc pl-5 space-y-2">
+                <li>
+                  <b>Thay đổi điều khoản:</b> Chúng tôi có quyền sửa đổi và cập
+                  nhật các điều khoản này bất kỳ lúc nào. Những thay đổi quan
+                  trọng sẽ được thông báo trực tiếp qua email hoặc hệ thống
+                  thông báo trên ứng dụng.
+                </li>
+                <li>
+                  <b>Giải quyết tranh chấp:</b> Mọi tranh chấp phát sinh từ việc
+                  sử dụng InstaMini sẽ được ưu tiên giải quyết thông qua thương
+                  lượng và hòa giải. Trong trường hợp không thể thỏa thuận, vụ
+                  việc sẽ được xử lý theo luật pháp hiện hành.
+                </li>
+              </ul>
+            </div>
+          </div>
+
           <div className="pt-6 border-t border-gray-200 dark:border-neutral-800 text-center">
             <p className="text-sm text-muted-foreground">
               © 2026 INSTAMINI BY akitø. Mọi quyền được bảo lưu.

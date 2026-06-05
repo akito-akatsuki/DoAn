@@ -13,7 +13,9 @@ function SearchContent() {
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-  const [filter, setFilter] = useState<"all" | "user" | "page" | "post">("all");
+  const [filter, setFilter] = useState<
+    "all" | "user" | "page" | "group" | "post"
+  >("all");
   const [suggestedName, setSuggestedName] = useState<string | null>(null);
   const [loadingSuggestion, setLoadingSuggestion] = useState(false);
   const [searchHistory, setSearchHistory] = useState<any[]>([]);
@@ -89,6 +91,8 @@ function SearchContent() {
 
       let pageQuery = supabase.from("pages").select("id, name, avatar_url");
 
+      let groupQuery = supabase.from("groups").select("id, name, cover_url");
+
       let postQuery = supabase
         .from("posts")
         .select(
@@ -99,6 +103,7 @@ function SearchContent() {
       words.forEach((word) => {
         dbQuery = dbQuery.ilike("name", `%${word}%`);
         pageQuery = pageQuery.ilike("name", `%${word}%`);
+        groupQuery = groupQuery.ilike("name", `%${word}%`);
         postQuery = postQuery.ilike("content", `%${word}%`);
       });
 
@@ -106,9 +111,10 @@ function SearchContent() {
         dbQuery = dbQuery.neq("id", currentUserId);
       }
 
-      const [userRes, pageRes, postRes] = await Promise.all([
+      const [userRes, pageRes, groupRes, postRes] = await Promise.all([
         dbQuery.limit(10),
         pageQuery.limit(10),
+        groupQuery.limit(10),
         postQuery.order("created_at", { ascending: false }).limit(10),
       ]);
 
@@ -120,12 +126,22 @@ function SearchContent() {
         ...p,
         type: "page",
       }));
+      const groupsData = (groupRes.data || []).map((g) => ({
+        ...g,
+        avatar_url: g.cover_url, // Gán cover_url thành avatar_url để đồng nhất giao diện hiển thị
+        type: "group",
+      }));
       const postsData = (postRes.data || []).map((p) => ({
         ...p,
         type: "post",
       }));
 
-      const totalResults = [...usersData, ...pagesData, ...postsData];
+      const totalResults = [
+        ...usersData,
+        ...pagesData,
+        ...groupsData,
+        ...postsData,
+      ];
       setResults(totalResults);
       setLoading(false);
 
@@ -265,6 +281,12 @@ function SearchContent() {
               Trang cộng đồng
             </button>
             <button
+              onClick={() => setFilter("group")}
+              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${filter === "group" ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 shadow-md" : "bg-gray-200 text-gray-700 dark:bg-neutral-800 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-neutral-700"}`}
+            >
+              Nhóm cộng đồng
+            </button>
+            <button
               onClick={() => setFilter("post")}
               className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-colors whitespace-nowrap ${filter === "post" ? "bg-gray-900 text-white dark:bg-gray-100 dark:text-gray-900 shadow-md" : "bg-gray-200 text-gray-700 dark:bg-neutral-800 dark:text-gray-400 hover:bg-gray-300 dark:hover:bg-neutral-700"}`}
             >
@@ -384,6 +406,8 @@ function SearchContent() {
                   saveToHistory(item.name, item.avatar_url);
                   if (item.type === "page") {
                     router.push(`/fanpage/${item.id}`);
+                  } else if (item.type === "group") {
+                    router.push(`/groups/${item.id}`);
                   } else {
                     router.push(`/profile/${item.id}`);
                   }
@@ -405,6 +429,11 @@ function SearchContent() {
                     {item.type === "page" && (
                       <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                         Trang cộng đồng
+                      </span>
+                    )}
+                    {item.type === "group" && (
+                      <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                        Nhóm cộng đồng
                       </span>
                     )}
                   </div>

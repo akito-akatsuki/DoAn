@@ -4,6 +4,7 @@ import { useEffect, useState, useRef } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabaseClient";
 import { getUserPages } from "@/lib/api";
+import { getMyGroups } from "@/lib/groupApi";
 import {
   Sun,
   Moon,
@@ -36,6 +37,7 @@ export default function Navbar({ user: propUser }: any) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [userPages, setUserPages] = useState<any[]>([]);
+  const [userGroups, setUserGroups] = useState<any[]>([]);
   const [searchHistory, setSearchHistory] = useState<any[]>([]);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
 
@@ -239,18 +241,22 @@ export default function Navbar({ user: propUser }: any) {
     fetchUser();
   }, [propUser]);
 
-  // ================= LOAD FANPAGES CỦA USER =================
+  // ================= LOAD FANPAGES & GROUPS CỦA USER =================
   useEffect(() => {
     if (!user?.id) return;
-    const fetchPages = async () => {
+    const fetchData = async () => {
       try {
-        const pages = await getUserPages();
+        const [pages, groups] = await Promise.all([
+          getUserPages(),
+          getMyGroups(user.id),
+        ]);
         setUserPages(pages || []);
+        setUserGroups(groups || []);
       } catch (err) {
-        console.error("Lỗi tải danh sách fanpage:", err);
+        console.error("Lỗi tải danh sách fanpage/nhóm:", err);
       }
     };
-    fetchPages();
+    fetchData();
   }, [user?.id]);
 
   // ================= LẮNG NGHE THÔNG BÁO CHƯA ĐỌC =================
@@ -823,7 +829,7 @@ export default function Navbar({ user: propUser }: any) {
                 />
 
                 {open && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white/85 dark:bg-[#262626]/85 backdrop-blur-md border border-gray-200 dark:border-neutral-700 rounded-xl shadow-lg dark:shadow-black/50 py-2 transition-colors duration-500">
+                  <div className="absolute right-0 mt-2 w-48 bg-white/85 dark:bg-[#262626]/85 backdrop-blur-md border border-gray-200 dark:border-neutral-700 rounded-xl shadow-lg dark:shadow-black/50 py-2 transition-colors duration-500 max-h-[85vh] overflow-y-auto">
                     <div className="px-3 py-2 text-sm border-b">
                       {user.name || user.user_metadata?.name || user.email}
                     </div>
@@ -843,6 +849,16 @@ export default function Navbar({ user: propUser }: any) {
                       className="w-full text-left px-3 py-2 hover:bg-secondary"
                     >
                       Tạo Fanpage
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setOpen(false);
+                        router.push("/groups");
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-secondary"
+                    >
+                      Tạo Nhóm
                     </button>
 
                     {/* NÚT LIÊN KẾT GOOGLE (Chỉ hiện nếu tài khoản chưa liên kết Google) */}
@@ -895,7 +911,7 @@ export default function Navbar({ user: propUser }: any) {
                         <div className="px-3 py-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                           Trang của bạn
                         </div>
-                        {userPages.map((p) => (
+                        {userPages.slice(0, 3).map((p) => (
                           <button
                             key={p.id}
                             onClick={() => {
@@ -919,6 +935,60 @@ export default function Navbar({ user: propUser }: any) {
                             </span>
                           </button>
                         ))}
+                        {userPages.length > 3 && (
+                          <button
+                            onClick={() => {
+                              setOpen(false);
+                              router.push("/fanpage");
+                            }}
+                            className="w-full text-center px-3 py-1.5 text-xs text-blue-500 hover:bg-secondary font-semibold transition-colors mt-1"
+                          >
+                            Xem tất cả ({userPages.length})
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {userGroups.length > 0 && (
+                      <div className="border-t border-gray-200 dark:border-neutral-700 my-1 pt-1 pb-1">
+                        <div className="px-3 py-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                          Nhóm của bạn
+                        </div>
+                        {userGroups.slice(0, 3).map((g) => (
+                          <button
+                            key={g.id}
+                            onClick={() => {
+                              setOpen(false);
+                              router.push(`/groups/${g.id}`);
+                            }}
+                            className="w-full text-left flex items-center gap-2 px-3 py-2 hover:bg-secondary text-sm transition-colors"
+                          >
+                            <img
+                              src={
+                                (g.cover_url && g.cover_url !== "null"
+                                  ? g.cover_url
+                                  : null) ||
+                                `https://api.dicebear.com/7.x/identicon/svg?seed=${g.id}`
+                              }
+                              className="w-6 h-6 rounded-md object-cover border border-gray-200 dark:border-neutral-700 shrink-0"
+                              alt="group cover"
+                            />
+                            <span className="truncate font-medium text-gray-900 dark:text-gray-100">
+                              {g.name}
+                            </span>
+                          </button>
+                        ))}
+                        {userGroups.length > 3 && (
+                          <button
+                            onClick={() => {
+                              setOpen(false);
+                              router.push("/groups");
+                            }}
+                            className="w-full text-center px-3 py-1.5 text-xs text-blue-500 hover:bg-secondary font-semibold transition-colors mt-1"
+                          >
+                            Xem tất cả ({userGroups.length})
+                          </button>
+                        )}
                       </div>
                     )}
 
@@ -1047,12 +1117,28 @@ export default function Navbar({ user: propUser }: any) {
                       </span>
                     </button>
 
+                    <button
+                      onClick={() => {
+                        router.push("/groups");
+                        setIsMobileMenuOpen(false);
+                      }}
+                      className="flex items-center gap-3 px-4 py-3 hover:bg-secondary w-full text-left border-t border-gray-100 dark:border-neutral-800"
+                    >
+                      <Users
+                        size={20}
+                        className="text-gray-900 dark:text-gray-100"
+                      />
+                      <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                        Tạo Nhóm
+                      </span>
+                    </button>
+
                     {userPages.length > 0 && (
                       <div className="border-t border-gray-100 dark:border-neutral-800 my-1 pt-1 pb-2">
                         <div className="px-4 py-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
                           Trang của bạn
                         </div>
-                        {userPages.map((p) => (
+                        {userPages.slice(0, 3).map((p) => (
                           <button
                             key={p.id}
                             onClick={() => {
@@ -1076,6 +1162,60 @@ export default function Navbar({ user: propUser }: any) {
                             </span>
                           </button>
                         ))}
+                        {userPages.length > 3 && (
+                          <button
+                            onClick={() => {
+                              setIsMobileMenuOpen(false);
+                              router.push("/fanpage");
+                            }}
+                            className="w-full text-center px-4 py-2 text-sm text-blue-500 hover:bg-secondary font-semibold transition-colors mt-1"
+                          >
+                            Xem tất cả ({userPages.length})
+                          </button>
+                        )}
+                      </div>
+                    )}
+
+                    {userGroups.length > 0 && (
+                      <div className="border-t border-gray-100 dark:border-neutral-800 my-1 pt-1 pb-2">
+                        <div className="px-4 py-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                          Nhóm của bạn
+                        </div>
+                        {userGroups.slice(0, 3).map((g) => (
+                          <button
+                            key={g.id}
+                            onClick={() => {
+                              setIsMobileMenuOpen(false);
+                              router.push(`/groups/${g.id}`);
+                            }}
+                            className="w-full text-left flex items-center gap-3 px-4 py-2 hover:bg-secondary text-sm transition-colors"
+                          >
+                            <img
+                              src={
+                                (g.cover_url && g.cover_url !== "null"
+                                  ? g.cover_url
+                                  : null) ||
+                                `https://api.dicebear.com/7.x/identicon/svg?seed=${g.id}`
+                              }
+                              className="w-8 h-8 rounded-md object-cover border border-gray-200 dark:border-neutral-700 shrink-0"
+                              alt="group cover"
+                            />
+                            <span className="truncate font-medium text-gray-900 dark:text-gray-100">
+                              {g.name}
+                            </span>
+                          </button>
+                        ))}
+                        {userGroups.length > 3 && (
+                          <button
+                            onClick={() => {
+                              setIsMobileMenuOpen(false);
+                              router.push("/groups");
+                            }}
+                            className="w-full text-center px-4 py-2 text-sm text-blue-500 hover:bg-secondary font-semibold transition-colors mt-1"
+                          >
+                            Xem tất cả ({userGroups.length})
+                          </button>
+                        )}
                       </div>
                     )}
 

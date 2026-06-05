@@ -1267,45 +1267,45 @@ export default function HomePage() {
     <div className="min-h-screen transition-colors duration-500 bg-gray-50 dark:bg-neutral-900 text-gray-900 dark:text-gray-100">
       {" "}
       {/* select-none ở root để mượt hơn khi double click */}
-      <main className="pt-24 max-w-[1200px] mx-auto px-4 pb-24 md:pb-10 flex justify-center gap-8">
+      <main className="pt-24 w-full mx-auto px-4 pb-24 md:pb-10 flex justify-center gap-8">
         {/* ================= CỘT TRÁI: THÔNG TIN ================= */}
-        <div className="hidden xl:flex w-[320px] shrink-0 justify-end items-start">
-          <div className="sticky top-[100px] w-[240px] h-fit">
-            <div className="text-[13px] text-muted-foreground space-y-4">
-              <div className="flex flex-col gap-y-4 font-medium">
+        <div className="hidden xl:flex w-[360px] shrink-0 justify-end">
+          <div className="sticky top-[100px] w-full max-w-[280px] h-fit pr-4">
+            <div className="text-[13px] text-muted-foreground space-y-4 flex flex-col items-end text-right">
+              <div className="flex flex-col items-end gap-y-2 font-medium w-full">
                 <Link
                   href="/about"
-                  className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                  className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors p-2 hover:bg-secondary rounded-lg w-fit"
                 >
                   Giới thiệu
                 </Link>
                 <Link
                   href="/help"
-                  className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                  className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors p-2 hover:bg-secondary rounded-lg w-fit"
                 >
                   Trợ giúp
                 </Link>
                 <Link
                   href="#"
-                  className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                  className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors p-2 hover:bg-secondary rounded-lg w-fit"
                 >
                   API
                 </Link>
                 <Link
                   href="/terms"
-                  className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+                  className="hover:text-gray-900 dark:hover:text-gray-100 transition-colors p-2 hover:bg-secondary rounded-lg w-fit"
                 >
                   Điều khoản & Quyền riêng tư
                 </Link>
               </div>
-              <p className="pt-4 mt-4 border-t border-gray-200 dark:border-neutral-800 text-[12px]">
+              <p className="pt-4 mt-4 border-t border-gray-200 dark:border-neutral-800 text-[12px] px-2 w-full text-right">
                 © 2026 INSTAMINI BY akitø
               </p>
             </div>
           </div>
         </div>
 
-        <div className="w-full max-w-[470px]">
+        <div className="w-full max-w-[590px] min-w-0">
           {/* CREATE POST */}
           {!user ? (
             <div
@@ -1807,7 +1807,7 @@ export default function HomePage() {
                 {/* IMAGES WITH DOUBLE CLICK LIKE */}
                 {(post.image_urls?.length > 0 || post.image_url) && (
                   <div
-                    className={`relative flex items-stretch justify-between bg-gray-100 dark:bg-[#1a1a1a] w-full overflow-hidden ${post.image_urls?.length > 1 ? "h-[350px] sm:h-[450px] md:h-[550px]" : "min-h-[250px] max-h-[650px]"}`}
+                    className={`relative flex items-stretch justify-between bg-gray-100 dark:bg-[#1a1a1a] w-full overflow-hidden ${post.image_urls?.length > 1 ? "h-[350px] sm:h-[450px] md:h-[550px]" : "max-h-[650px]"}`}
                   >
                     {post.image_urls?.length > 1 ? (
                       <div
@@ -1837,7 +1837,7 @@ export default function HomePage() {
                           post.image_urls?.[currentImageIndex[post.id] || 0] ||
                           post.image_url
                         }
-                        className={`max-w-full max-h-[650px] w-auto h-auto object-contain transition-all duration-300 select-none pointer-events-none ${post.is_flagged ? "blur-xl scale-110" : ""}`}
+                        className={`w-full object-cover ${post.image_urls?.length > 1 ? "h-full" : "h-auto max-h-[650px]"} transition-all duration-300 select-none pointer-events-none ${post.is_flagged ? "blur-xl scale-110" : ""}`}
                         alt="Post content"
                       />
                       {!post.is_flagged && (
@@ -2181,9 +2181,9 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* ================= CỘT PHẢI: GỢI Ý KẾT BẠN ================= */}
-        <div className="hidden lg:block w-[320px] shrink-0">
-          <div className="sticky top-[100px]">
+        {/* ================= CỘT PHẢI: GỢI Ý KẾT BẠN (Fixed width on large screens) ================= */}
+        <div className="hidden lg:block w-[360px] shrink-0">
+          <div className="sticky top-[100px] w-full pl-4">
             {/* PROFILE MINI CỦA MÌNH */}
 
             {/* DANH SÁCH GỢI Ý */}
@@ -2295,7 +2295,7 @@ export default function HomePage() {
                         currentImageIndex[selectedPost.id] || 0
                       ] || selectedPost.image_url
                     }
-                    className="max-w-full max-h-full w-auto h-auto object-contain transition-all duration-300 select-none pointer-events-none"
+                    className="w-full h-full object-cover transition-all duration-300 select-none pointer-events-none"
                     alt="Post"
                   />
                 </div>

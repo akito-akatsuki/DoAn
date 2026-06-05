@@ -298,13 +298,11 @@ export default function ProfilePage({
 
       if (convId) {
         const postUrl = `${window.location.origin}/post/${sharePost.id}`;
-        await supabase
-          .from("messages")
-          .insert({
-            conversation_id: convId,
-            sender_id: currentUser.id,
-            content: `Hãy xem bài viết này: ${postUrl}`,
-          });
+        await supabase.from("messages").insert({
+          conversation_id: convId,
+          sender_id: currentUser.id,
+          content: `Hãy xem bài viết này: ${postUrl}`,
+        });
         await supabase
           .from("conversations")
           .update({ last_message: `Hãy xem bài viết này...` })
@@ -1103,7 +1101,7 @@ export default function ProfilePage({
                         currentImageIndex[selectedPost.id] || 0
                       ] || selectedPost.image_url
                     }
-                    className="max-w-full max-h-full w-auto h-auto object-contain transition-all duration-300 select-none pointer-events-none"
+                    className="w-full h-full object-cover transition-all duration-300 select-none pointer-events-none"
                     alt="Post"
                   />
                 </div>
