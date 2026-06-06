@@ -542,7 +542,7 @@ export default function Navbar({ user: propUser }: any) {
 
   return (
     <nav className="fixed top-0 w-full z-[9999] shadow-sm dark:shadow-black/30 border-b border-gray-200 dark:border-neutral-800 transition-colors duration-500 bg-white dark:bg-[#262626] text-gray-900 dark:text-gray-100">
-      <div className="max-w-[935px] mx-auto flex items-center justify-between h-[60px] px-4">
+      <div className="w-full flex items-center justify-between h-[60px] px-4 md:px-6 relative">
         {/* SEARCH */}
         <div className="hidden md:block relative" ref={searchRef}>
           <input
@@ -735,7 +735,7 @@ export default function Navbar({ user: propUser }: any) {
 
         {/* LOGO */}
         <h1
-          className="font-bold text-xl cursor-pointer hover:opacity-80 transition-opacity"
+          className="font-bold text-xl cursor-pointer hover:opacity-80 transition-opacity md:absolute md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2"
           onClick={() => {
             if (pathname === "/") {
               window.dispatchEvent(new CustomEvent("reload_feed"));
