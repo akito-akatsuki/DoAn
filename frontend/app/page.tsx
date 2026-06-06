@@ -29,6 +29,8 @@ import {
   Link as LinkIcon,
   Share,
 } from "lucide-react";
+import { FFmpeg } from "@ffmpeg/ffmpeg";
+import { fetchFile, toBlobURL } from "@ffmpeg/util";
 import {
   getFeed,
   createPost,
@@ -52,9 +54,26 @@ export default function HomePage() {
   const [posts, setPosts] = useState<any[]>([]);
   const [content, setContent] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [videoPreview, setVideoPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [placeholder, setPlaceholder] = useState("Bạn đang nghĩ gì?");
   const [isPosting, setIsPosting] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
+  const [compressProgress, setCompressProgress] = useState(0);
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const ffmpegRef = useRef<any>(null);
+
+  // State lưu tạm thông tin bài đang đăng để hiển thị ở Feed (Optimistic UI)
+  const [tempPost, setTempPost] = useState<{
+    content: string;
+    files: File[];
+    videoFile: File | null;
+    imagePreviews: string[];
+    videoPreview: string | null;
+    page: any | null;
+  } | null>(null);
 
   // States cho Infinite Scroll
   const [page, setPage] = useState(1);
@@ -126,6 +145,23 @@ export default function HomePage() {
   // ================= APPEAL POST =================
   const [appealPostId, setAppealPostId] = useState<string | null>(null);
   const [appealReason, setAppealReason] = useState("");
+
+  // ================= PREVIEW URLS (FIX FLICKER KHI GÕ PHÍM) =================
+  useEffect(() => {
+    const urls = files.map((f) => URL.createObjectURL(f));
+    setImagePreviews(urls);
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, [files]);
+
+  useEffect(() => {
+    if (videoFile) {
+      const url = URL.createObjectURL(videoFile);
+      setVideoPreview(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setVideoPreview(null);
+    }
+  }, [videoFile]);
 
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const [imageScale, setImageScale] = useState(1);
@@ -1396,7 +1432,7 @@ export default function HomePage() {
                   />
 
                   {/* IMAGES PREVIEW */}
-                  {files.length > 0 && (
+                  {(files.length > 0 || videoFile) && (
                     <div className="flex gap-2 overflow-x-auto pb-2 mb-3 mt-2 snap-x [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                       {files.map((f, i) => (
                         <div
@@ -1404,7 +1440,7 @@ export default function HomePage() {
                           className="relative inline-block shrink-0 snap-center"
                         >
                           <img
-                            src={URL.createObjectURL(f)}
+                            src={imagePreviews[i]}
                             alt="Preview"
                             className="h-32 w-auto rounded-lg object-contain border border-border shadow-sm"
                           />
@@ -1420,39 +1456,117 @@ export default function HomePage() {
                           </button>
                         </div>
                       ))}
+                      {videoFile && videoPreview && (
+                        <div className="relative inline-block shrink-0 snap-center overflow-hidden rounded-lg">
+                          <video
+                            src={videoPreview}
+                            className="h-32 w-auto object-contain border border-border shadow-sm"
+                            controls
+                          />
+                          {!isPosting && !isCompressing && (
+                            <button
+                              onClick={() => setVideoFile(null)}
+                              className="absolute -top-2 -right-2 bg-white dark:bg-[#262626] border border-gray-200 dark:border-neutral-700 text-gray-900 dark:text-gray-100 rounded-full p-1 shadow-md hover:bg-secondary transition-colors z-10"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
                   <div className="flex items-center justify-between pt-1">
                     <label className="flex items-center gap-1 text-primary text-sm cursor-pointer hover:underline">
-                      📷 Ảnh
+                      📷 Ảnh/Video
                       <input
                         type="file"
                         onChange={(e) => {
-                          if (e.target.files) {
-                            setFiles((prev) => [
-                              ...prev,
-                              ...Array.from(e.target.files as FileList),
-                            ]);
+                          if (e.target.files && e.target.files.length > 0) {
+                            const selectedFiles = Array.from(e.target.files);
+                            const vFiles = selectedFiles.filter((f) =>
+                              f.type.startsWith("video/"),
+                            );
+                            const iFiles = selectedFiles.filter((f) =>
+                              f.type.startsWith("image/"),
+                            );
+
+                            if (vFiles.length > 0) {
+                              if (
+                                files.length > 0 ||
+                                vFiles.length > 1 ||
+                                videoFile
+                              ) {
+                                toast.error(
+                                  "Chỉ được chọn 1 video và không thể chọn cùng với ảnh.",
+                                );
+                                return;
+                              }
+                              if (vFiles[0].size > 2000 * 1024 * 1024) {
+                                toast.error(
+                                  "Vui lòng chọn video có dung lượng dưới 2GB",
+                                );
+                                return;
+                              }
+                              setVideoFile(vFiles[0]);
+                            } else if (iFiles.length > 0) {
+                              if (videoFile) {
+                                toast.error(
+                                  "Không thể chọn ảnh cùng với video.",
+                                );
+                                return;
+                              }
+                              setFiles((prev) => [...prev, ...iFiles]);
+                            }
                           }
                         }}
                         className="hidden"
-                        accept="image/*"
+                        accept="image/*,video/*"
                         multiple
                       />
                     </label>
                     <button
                       onClick={async () => {
-                        if (!content && files.length === 0) return;
+                        if (!content && files.length === 0 && !videoFile)
+                          return;
                         if (isPosting) return;
 
+                        // ================= CAPTURE CURRENT STATE =================
+                        const currentContent = content;
+                        const currentFiles = [...files];
+                        const currentVideoFile = videoFile;
+                        const currentPage = selectedPageId
+                          ? userPages.find((p) => p.id === selectedPageId)
+                          : null;
+
+                        // Tạo objectURL riêng cho tempPost để không bị xóa khi reset Form
+                        const tempImageUrls = currentFiles.map((f) => URL.createObjectURL(f));
+                        const tempVideoUrl = currentVideoFile ? URL.createObjectURL(currentVideoFile) : null;
+
+                        setTempPost({
+                          content: currentContent,
+                          files: currentFiles,
+                          videoFile: currentVideoFile,
+                          imagePreviews: tempImageUrls,
+                          videoPreview: tempVideoUrl,
+                          page: currentPage,
+                        });
+
+                        // ================= RESET INPUTS & SHOW TEMP POST =================
+                        setContent("");
+                        setFiles([]);
+                        setVideoFile(null);
+                        setSelectedPageId(null);
                         setIsPosting(true);
+                        setUploadProgress(0);
+                        setCompressProgress(0);
+                        setIsCompressing(false);
 
                         try {
                           let imageUrls: string[] = [];
 
                           // ================= UPLOAD IMAGES =================
-                          if (files.length > 0) {
-                            for (const f of files) {
+                          if (currentFiles.length > 0) {
+                            for (const f of currentFiles) {
                               const cleanName = f.name.replace(
                                 /[^a-zA-Z0-9.]/g,
                                 "_",
@@ -1478,12 +1592,12 @@ export default function HomePage() {
 
                           // ================= KIỂM DUYỆT AI =================
                           let is_flagged = false;
-                          if (content) {
+                          if (currentContent) {
                             try {
                               const modRes = await fetch("/api/moderate", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ content }),
+                                body: JSON.stringify({ content: currentContent }),
                               });
                               const modData = await modRes.json();
                               is_flagged = modData.flagged;
@@ -1513,38 +1627,184 @@ export default function HomePage() {
                               }
                             }
                             setIsPosting(false);
+                            setTempPost(null);
                             return; // Dừng lại ngay lập tức, không cho phép chạy lệnh createPost()
+                          }
+
+                          let cloudinaryVideoUrl = null;
+                          if (currentVideoFile) {
+                            let uploadFile = currentVideoFile;
+                            // Nén nếu video lớn hơn 20MB
+                            if (currentVideoFile.size > 20 * 1024 * 1024) {
+                              setIsCompressing(true);
+                              try {
+                                if (!ffmpegRef.current)
+                                  ffmpegRef.current = new FFmpeg();
+                                const ffmpeg = ffmpegRef.current;
+                                if (!ffmpeg.loaded) {
+                                  // Tải các core của FFmpeg từ CDN (Không cần cài đặt backend phức tạp)
+                                  const baseURL =
+                                    "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+                                  await ffmpeg.load({
+                                    coreURL: await toBlobURL(
+                                      `${baseURL}/ffmpeg-core.js`,
+                                      "text/javascript",
+                                    ),
+                                    wasmURL: await toBlobURL(
+                                      `${baseURL}/ffmpeg-core.wasm`,
+                                      "application/wasm",
+                                    ),
+                                  });
+                                }
+                                ffmpeg.on("progress", ({ progress }: any) =>
+                                  setCompressProgress(
+                                    Math.round(progress * 100),
+                                  ),
+                                );
+                                await ffmpeg.writeFile(
+                                  "input.mp4",
+                                  await fetchFile(currentVideoFile),
+                                );
+
+                                // Thuật toán giảm phân giải xuống 720p, nén băng thông bằng libx264 để tối ưu dung lượng nhất
+                                await ffmpeg.exec([
+                                  "-i",
+                                  "input.mp4",
+                                  "-vf",
+                                  "scale='min(720,iw)':-2",
+                                  "-c:v",
+                                  "libx264",
+                                  "-crf",
+                                  "28",
+                                  "-preset",
+                                  "ultrafast",
+                                  "-c:a",
+                                  "aac",
+                                  "output.mp4",
+                                ]);
+                                const fileData =
+                                  await ffmpeg.readFile("output.mp4");
+                                const data = new Uint8Array(
+                                  fileData as ArrayBuffer,
+                                );
+                                uploadFile = new File(
+                                  [data],
+                                  "compressed.mp4",
+                                  { type: "video/mp4" },
+                                );
+                              } catch (err) {
+                                console.error("Lỗi nén video:", err);
+                                toast.error(
+                                  "Không thể nén video. Đang thử tải lên file gốc...",
+                                );
+                              } finally {
+                                setIsCompressing(false);
+                                setCompressProgress(0);
+                              }
+                            }
+
+                            try {
+                              const cloudName =
+                                process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ||
+                                "dgdwsra8c";
+                              const uploadPreset =
+                                process.env
+                                  .NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET ||
+                                "apex_reels";
+
+                              cloudinaryVideoUrl = await new Promise<string>(
+                                (resolve, reject) => {
+                                  const xhr = new XMLHttpRequest();
+                                  const url = `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
+                                  xhr.open("POST", url, true);
+                                  xhr.upload.onprogress = (event) => {
+                                    if (event.lengthComputable) {
+                                      setUploadProgress(
+                                        Math.round(
+                                          (event.loaded / event.total) * 100,
+                                        ),
+                                      );
+                                    }
+                                  };
+                                  xhr.onload = () => {
+                                    if (xhr.status === 200) {
+                                      const response = JSON.parse(
+                                        xhr.responseText,
+                                      );
+                                      if (response.secure_url) {
+                                        resolve(
+                                          response.secure_url.replace(
+                                            "/upload/",
+                                            "/upload/q_auto,f_auto/",
+                                          ),
+                                        );
+                                      } else
+                                        reject(
+                                          new Error("Lỗi không lấy được URL"),
+                                        );
+                                    } else reject(new Error("Upload thất bại"));
+                                  };
+                                  xhr.onerror = () =>
+                                    reject(
+                                      new Error("Lỗi mạng khi upload video"),
+                                    );
+                                  const formData = new FormData();
+                                  formData.append("file", uploadFile);
+                                  formData.append(
+                                    "upload_preset",
+                                    uploadPreset,
+                                  );
+                                  xhr.send(formData);
+                                },
+                              );
+                            } catch (err) {
+                              toast.error(
+                                "Đã xảy ra lỗi khi tải video lên máy chủ.",
+                              );
+                              setIsPosting(false);
+                              setTempPost(null);
+                              setUploadProgress(0);
+                              return;
+                            }
                           }
 
                           // ================= CREATE POST =================
                           const newPost = await createPost({
-                            content,
+                            content: currentContent,
                             image_url:
                               imageUrls.length > 0 ? imageUrls[0] : null,
                             image_urls: imageUrls.length > 0 ? imageUrls : null,
+                            video_url: cloudinaryVideoUrl,
+                            post_type: cloudinaryVideoUrl ? "reel" : "post",
                             is_flagged,
-                            page_id: selectedPageId,
+                            page_id: currentPage?.id || null,
                           });
 
                           if (!newPost) {
                             console.error("TẠO BÀI VIẾT THẤT BẠI");
+                            setIsPosting(false);
+                            setTempPost(null);
                             return;
                           }
 
                           // ================= UPDATE UI =================
                           setPosts((prev) => [newPost, ...prev]);
-
-                          // ================= RESET =================
-                          setContent("");
-                          setFiles([]);
-                          setSelectedPageId(null);
                         } catch (err) {
                           console.error("LỖI ĐĂNG BÀI:", err);
                         } finally {
+                          // Giải phóng bộ nhớ RAM cho các link ảnh/video tạm thời
+                          tempImageUrls.forEach((url) => URL.revokeObjectURL(url));
+                          if (tempVideoUrl) URL.revokeObjectURL(tempVideoUrl);
                           setIsPosting(false);
+                          setTempPost(null);
+                          setUploadProgress(0);
+                          setCompressProgress(0);
                         }
                       }}
-                      disabled={(!content && files.length === 0) || isPosting}
+                      disabled={
+                        (!content && files.length === 0 && !videoFile) ||
+                        isPosting
+                      }
                       className="bg-gradient-to-r from-primary to-accent text-primary-fg px-5 py-1.5 rounded-full font-semibold text-sm shadow-ig hover:brightness-105 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center min-w-[70px]"
                     >
                       {isPosting ? (
@@ -1561,6 +1821,58 @@ export default function HomePage() {
 
           {/* FEED */}
           <div className="space-y-3">
+            {/* ================= TEMP POST UPLOADING ================= */}
+            {tempPost && isPosting && (
+              <div className="virtual-post shadow-md rounded-xl overflow-hidden border border-gray-200 dark:border-neutral-800 relative transition-all duration-500 bg-white dark:bg-[#262626] opacity-80 mb-4">
+                <div className="flex items-center justify-between p-4 pb-2 relative">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <img
+                      src={
+                        tempPost.page?.avatar_url ||
+                        user?.avatar_url ||
+                        `https://api.dicebear.com/7.x/identicon/svg?seed=${user?.id}`
+                      }
+                      className="w-10 h-10 rounded-full ring-1 ring-border object-cover shrink-0"
+                      alt="avatar"
+                    />
+                    <div>
+                      <span className="font-semibold text-sm block leading-tight">
+                        {tempPost.page?.name || user?.name || "Bạn"}
+                      </span>
+                      <span className="text-xs text-blue-500 leading-tight mt-0.5 block font-medium">
+                        Đang đăng tải...
+                      </span>
+                    </div>
+                  </div>
+                  <Loader2 className="w-5 h-5 text-blue-500 animate-spin" />
+                </div>
+
+                {tempPost.content && (
+                  <div className="px-4 pb-3 text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-300">
+                    {tempPost.content}
+                  </div>
+                )}
+
+                {(tempPost.imagePreviews.length > 0 || tempPost.videoPreview) && (
+                  <div className="relative w-full bg-black max-h-[650px] overflow-hidden flex justify-center items-center">
+                    {tempPost.videoPreview ? (
+                      <video src={tempPost.videoPreview} className="w-full max-h-[650px] object-contain opacity-50" />
+                    ) : (
+                      <img src={tempPost.imagePreviews[0]} className="w-full max-h-[650px] object-cover opacity-50" alt="preview" />
+                    )}
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/40 backdrop-blur-sm z-20">
+                      <span className="text-sm font-bold mb-3 px-4 py-1.5 bg-black/50 rounded-full shadow-lg">
+                        {isCompressing ? `Đang nén video... ${compressProgress}%` : uploadProgress === 100 ? "Đang xử lý..." : `Đang tải lên... ${uploadProgress}%`}
+                      </span>
+                      <div className="w-2/3 max-w-[250px] h-2 bg-gray-300/30 rounded-full overflow-hidden shadow-inner">
+                        <div className="h-full bg-blue-500 transition-all duration-300 relative" style={{ width: `${isCompressing ? compressProgress : uploadProgress}%` }}><div className="absolute inset-0 bg-white/20 animate-pulse"></div></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
             {loading && (
               <div className="flex justify-center py-8">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -1802,6 +2114,18 @@ export default function HomePage() {
                       )}
                     </div>
                   )
+                )}
+
+                {/* VIDEO DISPLAY */}
+                {post.video_url && (
+                  <div className="relative flex items-center justify-center bg-black w-full overflow-hidden max-h-[650px]">
+                    <video
+                      src={post.video_url}
+                      controls
+                      controlsList="nodownload"
+                      className="w-full max-h-[650px] object-contain"
+                    />
+                  </div>
                 )}
 
                 {/* IMAGES WITH DOUBLE CLICK LIKE */}
@@ -2256,65 +2580,78 @@ export default function HomePage() {
           >
             {/* Phần Ảnh Modal */}
             {(selectedPost.image_urls?.length > 0 ||
-              selectedPost.image_url) && (
+              selectedPost.image_url ||
+              selectedPost.video_url) && (
               <div
                 className={`flex-1 bg-[#1a1a1a] flex items-stretch justify-between relative ${selectedPost.image_urls?.length > 1 ? "h-[40vh] md:h-[85vh]" : "min-h-[300px] md:min-h-[500px]"}`}
               >
-                {selectedPost.image_urls?.length > 1 && (
-                  <div
-                    className="w-[12%] md:w-16 shrink-0 flex items-center justify-center z-10 cursor-pointer hover:bg-black/20 transition-colors"
-                    onClick={(e) =>
-                      handlePrevImage(
-                        e,
-                        selectedPost.id,
-                        selectedPost.image_urls.length - 1,
-                      )
-                    }
-                    onDoubleClick={(e) => e.stopPropagation()}
-                  >
-                    <button className="p-2 bg-white/80 hover:bg-white dark:bg-black/50 dark:hover:bg-black/80 rounded-full shadow hover:scale-105 transition-transform">
-                      <ChevronLeft className="w-6 h-6 text-gray-900 dark:text-gray-100" />
-                    </button>
+                {selectedPost.video_url ? (
+                  <div className="flex-1 flex items-center justify-center w-full h-full bg-black">
+                    <video
+                      src={selectedPost.video_url}
+                      controls
+                      className="max-w-full max-h-[85vh] object-contain"
+                    />
                   </div>
-                )}
-                <div
-                  className="flex-1 overflow-hidden flex items-center justify-center h-full relative group cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setViewingImage(
-                      selectedPost.image_urls?.[
-                        currentImageIndex[selectedPost.id] || 0
-                      ] || selectedPost.image_url,
-                    );
-                    setImageScale(1);
-                  }}
-                >
-                  <img
-                    src={
-                      selectedPost.image_urls?.[
-                        currentImageIndex[selectedPost.id] || 0
-                      ] || selectedPost.image_url
-                    }
-                    className="w-full h-full object-cover transition-all duration-300 select-none pointer-events-none"
-                    alt="Post"
-                  />
-                </div>
-                {selectedPost.image_urls?.length > 1 && (
-                  <div
-                    className="w-[12%] md:w-16 shrink-0 flex items-center justify-center z-10 cursor-pointer hover:bg-black/20 transition-colors"
-                    onClick={(e) =>
-                      handleNextImage(
-                        e,
-                        selectedPost.id,
-                        selectedPost.image_urls.length - 1,
-                      )
-                    }
-                    onDoubleClick={(e) => e.stopPropagation()}
-                  >
-                    <button className="p-2 bg-white/80 hover:bg-white dark:bg-black/50 dark:hover:bg-black/80 rounded-full shadow hover:scale-105 transition-transform">
-                      <ChevronRight className="w-6 h-6 text-gray-900 dark:text-gray-100" />
-                    </button>
-                  </div>
+                ) : (
+                  <>
+                    {selectedPost.image_urls?.length > 1 && (
+                      <div
+                        className="w-[12%] md:w-16 shrink-0 flex items-center justify-center z-10 cursor-pointer hover:bg-black/20 transition-colors"
+                        onClick={(e) =>
+                          handlePrevImage(
+                            e,
+                            selectedPost.id,
+                            selectedPost.image_urls.length - 1,
+                          )
+                        }
+                        onDoubleClick={(e) => e.stopPropagation()}
+                      >
+                        <button className="p-2 bg-white/80 hover:bg-white dark:bg-black/50 dark:hover:bg-black/80 rounded-full shadow hover:scale-105 transition-transform">
+                          <ChevronLeft className="w-6 h-6 text-gray-900 dark:text-gray-100" />
+                        </button>
+                      </div>
+                    )}
+                    <div
+                      className="flex-1 overflow-hidden flex items-center justify-center h-full relative group cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setViewingImage(
+                          selectedPost.image_urls?.[
+                            currentImageIndex[selectedPost.id] || 0
+                          ] || selectedPost.image_url,
+                        );
+                        setImageScale(1);
+                      }}
+                    >
+                      <img
+                        src={
+                          selectedPost.image_urls?.[
+                            currentImageIndex[selectedPost.id] || 0
+                          ] || selectedPost.image_url
+                        }
+                        className="w-full h-full object-cover transition-all duration-300 select-none pointer-events-none"
+                        alt="Post"
+                      />
+                    </div>
+                    {selectedPost.image_urls?.length > 1 && (
+                      <div
+                        className="w-[12%] md:w-16 shrink-0 flex items-center justify-center z-10 cursor-pointer hover:bg-black/20 transition-colors"
+                        onClick={(e) =>
+                          handleNextImage(
+                            e,
+                            selectedPost.id,
+                            selectedPost.image_urls.length - 1,
+                          )
+                        }
+                        onDoubleClick={(e) => e.stopPropagation()}
+                      >
+                        <button className="p-2 bg-white/80 hover:bg-white dark:bg-black/50 dark:hover:bg-black/80 rounded-full shadow hover:scale-105 transition-transform">
+                          <ChevronRight className="w-6 h-6 text-gray-900 dark:text-gray-100" />
+                        </button>
+                      </div>
+                    )}
+                  </>
                 )}
                 {selectedPost.image_urls?.length > 1 && (
                   <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5 z-20 pointer-events-none">
@@ -2335,7 +2672,7 @@ export default function HomePage() {
 
             {/* Phần Thông tin / Bình luận */}
             <div
-              className={`w-full flex flex-col h-[50vh] md:h-auto transition-colors duration-500 bg-white dark:bg-[#262626] ${selectedPost.image_urls?.length > 0 || selectedPost.image_url ? "md:w-[400px] border-l border-gray-200 dark:border-neutral-800" : "md:min-h-[500px]"}`}
+              className={`w-full flex flex-col h-[50vh] md:h-auto transition-colors duration-500 bg-white dark:bg-[#262626] ${selectedPost.image_urls?.length > 0 || selectedPost.image_url || selectedPost.video_url ? "md:w-[400px] border-l border-gray-200 dark:border-neutral-800" : "md:min-h-[500px]"}`}
             >
               {/* Header & Content */}
               <div className="flex flex-col border-b border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-[#333333]">

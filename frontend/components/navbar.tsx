@@ -20,6 +20,7 @@ import {
   Key,
   X,
   ShieldAlert,
+  Video,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -519,6 +520,7 @@ export default function Navbar({ user: propUser }: any) {
   const desktopTabs = [
     { path: "/", icon: Home },
     { path: "/suggested", icon: Users },
+    { path: "/reels", icon: Video },
     { path: "/messages", icon: MessageCircle },
     { path: "/notifications", icon: Heart },
     { path: "/saved", icon: Bookmark },
@@ -529,7 +531,7 @@ export default function Navbar({ user: propUser }: any) {
 
   const mobileTabs = [
     { id: "home", path: "/", icon: Home },
-    { id: "suggested", path: "/suggested", icon: Users },
+    { id: "reels", path: "/reels", icon: Video },
     { id: "messages", path: "/messages", icon: MessageCircle },
     { id: "notifications", path: "/notifications", icon: Heart },
     { id: "profile", path: user ? `/profile/${user.id}` : "#", icon: null },
@@ -1080,6 +1082,22 @@ export default function Navbar({ user: propUser }: any) {
                   )}
                   <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
                     {isDark ? "Chế độ sáng" : "Chế độ tối"}
+                  </span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    router.push("/suggested");
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="flex items-center gap-3 px-4 py-3 hover:bg-secondary w-full text-left border-t border-gray-100 dark:border-neutral-800"
+                >
+                  <Users
+                    size={20}
+                    className="text-gray-900 dark:text-gray-100"
+                  />
+                  <span className="font-medium text-sm text-gray-900 dark:text-gray-100">
+                    Khám phá người dùng
                   </span>
                 </button>
 
