@@ -100,6 +100,7 @@ export default function HomePage() {
   const menuRef = useRef<HTMLDivElement | null>(null);
   const chatContainerRef = useRef<HTMLDivElement | null>(null);
   const emojiPickerRef = useRef<HTMLDivElement | null>(null);
+  const videoRefs = useRef<(HTMLVideoElement | null)[]>([]);
 
   // State cho hiệu ứng tim bay khi double click
   const [showHeartId, setShowHeartId] = useState<string | null>(null);
@@ -253,6 +254,32 @@ export default function HomePage() {
       supabase.removeChannel(channel);
     };
   }, []);
+
+  // ================= AUTO PLAY VIDEO =================
+  useEffect(() => {
+    const observerOptions = {
+      root: null,
+      rootMargin: "0px",
+      threshold: 0.6, // Tự động phát khi video hiển thị 60% trên màn hình
+    };
+
+    const handleIntersect = (entries: IntersectionObserverEntry[]) => {
+      entries.forEach((entry) => {
+        const video = entry.target as HTMLVideoElement;
+        if (entry.isIntersecting) {
+          video.play().catch(() => {});
+        } else {
+          video.pause();
+        }
+      });
+    };
+
+    const observer = new IntersectionObserver(handleIntersect, observerOptions);
+    videoRefs.current.forEach((video) => {
+      if (video) observer.observe(video);
+    });
+    return () => observer.disconnect();
+  }, [posts]);
 
   // ================= INFINITE SCROLL: LẮNG NGHE KHI CUỘN TỚI CUỐI =================
   useEffect(() => {
@@ -1360,11 +1387,14 @@ export default function HomePage() {
           ) : (
             <div className="shadow-md hover:shadow-lg dark:shadow-black/40 rounded-[12px] p-4 mb-4 border border-gray-200 dark:border-neutral-800 transition-all duration-500 bg-white dark:bg-[#262626]">
               {userPages.length > 0 && (
-                <div className="flex items-center gap-2 mb-3 pb-3 border-b border-gray-100 dark:border-neutral-800">
-                  <span className="text-xs text-muted-foreground font-medium">
-                    Đăng bài dưới tư cách:
+                <div className="flex items-center justify-between sm:justify-start gap-2 mb-3 pb-3 border-b border-gray-100 dark:border-neutral-800">
+                  <span className="text-xs text-muted-foreground font-medium shrink-0">
+                    <span className="hidden sm:inline">
+                      Đăng bài dưới tư cách:
+                    </span>
+                    <span className="sm:hidden">Đăng với:</span>
                   </span>
-                  <div className="relative">
+                  <div className="relative flex-1 sm:flex-none max-w-[200px] sm:max-w-none">
                     <select
                       value={selectedPageId || "user"}
                       onChange={(e) =>
@@ -1372,7 +1402,7 @@ export default function HomePage() {
                           e.target.value === "user" ? null : e.target.value,
                         )
                       }
-                      className="appearance-none cursor-pointer text-sm border border-gray-200 dark:border-neutral-700 rounded-full pl-3 pr-8 py-1.5 bg-gray-50 hover:bg-gray-100 dark:bg-[#333333] dark:hover:bg-[#3a3a3a] outline-none font-bold text-gray-800 dark:text-gray-100 transition-colors shadow-sm"
+                      className="appearance-none w-full truncate cursor-pointer text-sm border border-gray-200 dark:border-neutral-700 rounded-full pl-3 pr-8 py-1.5 bg-gray-50 hover:bg-gray-100 dark:bg-[#333333] dark:hover:bg-[#3a3a3a] outline-none font-bold text-gray-800 dark:text-gray-100 transition-colors shadow-sm"
                     >
                       <option value="user">{user?.name || "Cá nhân"}</option>
                       {userPages.map((p) => (
@@ -1539,8 +1569,12 @@ export default function HomePage() {
                           : null;
 
                         // Tạo objectURL riêng cho tempPost để không bị xóa khi reset Form
-                        const tempImageUrls = currentFiles.map((f) => URL.createObjectURL(f));
-                        const tempVideoUrl = currentVideoFile ? URL.createObjectURL(currentVideoFile) : null;
+                        const tempImageUrls = currentFiles.map((f) =>
+                          URL.createObjectURL(f),
+                        );
+                        const tempVideoUrl = currentVideoFile
+                          ? URL.createObjectURL(currentVideoFile)
+                          : null;
 
                         setTempPost({
                           content: currentContent,
@@ -1597,7 +1631,9 @@ export default function HomePage() {
                               const modRes = await fetch("/api/moderate", {
                                 method: "POST",
                                 headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ content: currentContent }),
+                                body: JSON.stringify({
+                                  content: currentContent,
+                                }),
                               });
                               const modData = await modRes.json();
                               is_flagged = modData.flagged;
@@ -1793,7 +1829,9 @@ export default function HomePage() {
                           console.error("LỖI ĐĂNG BÀI:", err);
                         } finally {
                           // Giải phóng bộ nhớ RAM cho các link ảnh/video tạm thời
-                          tempImageUrls.forEach((url) => URL.revokeObjectURL(url));
+                          tempImageUrls.forEach((url) =>
+                            URL.revokeObjectURL(url),
+                          );
                           if (tempVideoUrl) URL.revokeObjectURL(tempVideoUrl);
                           setIsPosting(false);
                           setTempPost(null);
@@ -1853,19 +1891,38 @@ export default function HomePage() {
                   </div>
                 )}
 
-                {(tempPost.imagePreviews.length > 0 || tempPost.videoPreview) && (
+                {(tempPost.imagePreviews.length > 0 ||
+                  tempPost.videoPreview) && (
                   <div className="relative w-full bg-black max-h-[650px] overflow-hidden flex justify-center items-center">
                     {tempPost.videoPreview ? (
-                      <video src={tempPost.videoPreview} className="w-full max-h-[650px] object-contain opacity-50" />
+                      <video
+                        src={tempPost.videoPreview}
+                        className="w-full max-h-[650px] object-contain opacity-50"
+                      />
                     ) : (
-                      <img src={tempPost.imagePreviews[0]} className="w-full max-h-[650px] object-cover opacity-50" alt="preview" />
+                      <img
+                        src={tempPost.imagePreviews[0]}
+                        className="w-full max-h-[650px] object-cover opacity-50"
+                        alt="preview"
+                      />
                     )}
                     <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/40 backdrop-blur-sm z-20">
                       <span className="text-sm font-bold mb-3 px-4 py-1.5 bg-black/50 rounded-full shadow-lg">
-                        {isCompressing ? `Đang nén video... ${compressProgress}%` : uploadProgress === 100 ? "Đang xử lý..." : `Đang tải lên... ${uploadProgress}%`}
+                        {isCompressing
+                          ? `Đang nén video... ${compressProgress}%`
+                          : uploadProgress === 100
+                            ? "Đang xử lý..."
+                            : `Đang tải lên... ${uploadProgress}%`}
                       </span>
                       <div className="w-2/3 max-w-[250px] h-2 bg-gray-300/30 rounded-full overflow-hidden shadow-inner">
-                        <div className="h-full bg-blue-500 transition-all duration-300 relative" style={{ width: `${isCompressing ? compressProgress : uploadProgress}%` }}><div className="absolute inset-0 bg-white/20 animate-pulse"></div></div>
+                        <div
+                          className="h-full bg-blue-500 transition-all duration-300 relative"
+                          style={{
+                            width: `${isCompressing ? compressProgress : uploadProgress}%`,
+                          }}
+                        >
+                          <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1879,7 +1936,7 @@ export default function HomePage() {
               </div>
             )}
 
-            {posts.map((post) => (
+            {posts.map((post, index) => (
               <div
                 key={post.id}
                 // Lớp "virtual-post" dùng để kích hoạt Native Virtual List
@@ -2120,8 +2177,14 @@ export default function HomePage() {
                 {post.video_url && (
                   <div className="relative flex items-center justify-center bg-black w-full overflow-hidden max-h-[650px]">
                     <video
+                      ref={(el) => {
+                        videoRefs.current[index] = el;
+                      }}
                       src={post.video_url}
                       controls
+                      muted
+                      loop
+                      playsInline
                       controlsList="nodownload"
                       className="w-full max-h-[650px] object-contain"
                     />
