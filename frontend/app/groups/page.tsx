@@ -189,7 +189,12 @@ export default function GroupsPage() {
               >
                 <img
                   src={
-                    group.cover_url ||
+                    (group.avatar_url && group.avatar_url !== "null"
+                      ? group.avatar_url
+                      : null) ||
+                    (group.cover_url && group.cover_url !== "null"
+                      ? group.cover_url
+                      : null) ||
                     `https://api.dicebear.com/7.x/identicon/svg?seed=${group.id}`
                   }
                   alt={group.name}

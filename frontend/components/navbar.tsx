@@ -967,13 +967,16 @@ export default function Navbar({ user: propUser }: any) {
                           >
                             <img
                               src={
+                                (g.avatar_url && g.avatar_url !== "null"
+                                  ? g.avatar_url
+                                  : null) ||
                                 (g.cover_url && g.cover_url !== "null"
                                   ? g.cover_url
                                   : null) ||
                                 `https://api.dicebear.com/7.x/identicon/svg?seed=${g.id}`
                               }
                               className="w-6 h-6 rounded-md object-cover border border-gray-200 dark:border-neutral-700 shrink-0"
-                              alt="group cover"
+                              alt="group avatar"
                             />
                             <span className="truncate font-medium text-gray-900 dark:text-gray-100">
                               {g.name}
@@ -1210,13 +1213,16 @@ export default function Navbar({ user: propUser }: any) {
                           >
                             <img
                               src={
+                                (g.avatar_url && g.avatar_url !== "null"
+                                  ? g.avatar_url
+                                  : null) ||
                                 (g.cover_url && g.cover_url !== "null"
                                   ? g.cover_url
                                   : null) ||
                                 `https://api.dicebear.com/7.x/identicon/svg?seed=${g.id}`
                               }
                               className="w-8 h-8 rounded-md object-cover border border-gray-200 dark:border-neutral-700 shrink-0"
-                              alt="group cover"
+                              alt="group avatar"
                             />
                             <span className="truncate font-medium text-gray-900 dark:text-gray-100">
                               {g.name}
