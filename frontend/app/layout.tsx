@@ -9,8 +9,8 @@ import GlobalConfirm from "@/components/GlobalConfirm";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "InstaMini",
-  description: "Một ứng dụng mạng xã hội nhỏ gọn.",
+  title: "Apex",
+  description: "Mạng xã hội Apex",
 };
 
 export default async function RootLayout({
