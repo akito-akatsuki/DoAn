@@ -174,11 +174,11 @@ export default function ReelsViewer({
   return (
     <div
       ref={containerRef}
-      className="h-[calc(100dvh-120px)] md:h-[calc(100dvh-60px)] mt-[60px] w-full bg-black overflow-y-scroll snap-y snap-mandatory relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]"
+      className="h-[calc(100dvh-120px)] md:h-[calc(100dvh-60px)] mt-[60px] w-full bg-gray-50 dark:bg-neutral-900 overflow-y-scroll snap-y snap-mandatory relative [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] transition-colors duration-500"
     >
       <button
         onClick={() => router.push("/")}
-        className="fixed top-[76px] left-4 z-[60] p-3 bg-black/40 rounded-full text-white hover:bg-black/60 transition-colors hidden sm:block"
+        className="fixed top-[76px] left-4 z-[60] p-3 bg-gray-200/80 dark:bg-black/40 rounded-full text-gray-900 dark:text-white hover:bg-gray-300 dark:hover:bg-black/60 transition-colors hidden sm:block backdrop-blur-md shadow-lg"
       >
         <ArrowLeft size={24} />
       </button>
@@ -187,13 +187,13 @@ export default function ReelsViewer({
       <div className="fixed right-2 sm:right-6 top-1/2 -translate-y-1/2 hidden sm:flex flex-col gap-4 z-[50] pointer-events-auto">
         <button
           onClick={() => scrollToReel("prev")}
-          className="p-3 bg-black/40 hover:bg-black/60 text-white rounded-full transition-colors backdrop-blur-md shadow-lg"
+          className="p-3 bg-gray-200/80 dark:bg-black/40 hover:bg-gray-300 dark:hover:bg-black/60 text-gray-900 dark:text-white rounded-full transition-colors backdrop-blur-md shadow-lg"
         >
           <ChevronUp size={24} />
         </button>
         <button
           onClick={() => scrollToReel("next")}
-          className="p-3 bg-black/40 hover:bg-black/60 text-white rounded-full transition-colors backdrop-blur-md shadow-lg"
+          className="p-3 bg-gray-200/80 dark:bg-black/40 hover:bg-gray-300 dark:hover:bg-black/60 text-gray-900 dark:text-white rounded-full transition-colors backdrop-blur-md shadow-lg"
         >
           <ChevronDown size={24} />
         </button>
@@ -202,13 +202,13 @@ export default function ReelsViewer({
       {reels.map((reel, index) => (
         <div
           key={reel.id}
-          className="h-[calc(100dvh-120px)] md:h-[calc(100dvh-60px)] w-full snap-start relative flex items-center justify-center bg-black overflow-hidden"
+          className="h-[calc(100dvh-120px)] md:h-[calc(100dvh-60px)] w-full snap-start relative flex items-center justify-center bg-gray-50 dark:bg-neutral-900 overflow-hidden transition-colors duration-500"
         >
           <div className="flex w-full sm:w-auto h-full py-0 sm:py-4 justify-center items-center transition-all duration-500 ease-out">
             {/* Khung Video + Action */}
             <div className="flex w-full h-full sm:w-[450px] md:w-[500px] shrink-0 relative transition-all duration-500">
               {/* Video container */}
-              <div className="relative w-full h-full bg-black sm:bg-[#1a1a1a] sm:rounded-2xl overflow-hidden flex items-center justify-center shadow-lg group">
+              <div className="relative w-full h-full bg-black sm:bg-black sm:rounded-2xl overflow-hidden flex items-center justify-center shadow-lg group">
                 <video
                   ref={(el) => {
                     videoRefs.current[index] = el;
@@ -428,7 +428,7 @@ export default function ReelsViewer({
         </div>
       ))}
       {reels.length === 0 && (
-        <div className="h-screen flex items-center justify-center text-white">
+        <div className="h-screen flex items-center justify-center text-gray-900 dark:text-gray-100 transition-colors duration-500">
           Chưa có video Reels nào!
         </div>
       )}

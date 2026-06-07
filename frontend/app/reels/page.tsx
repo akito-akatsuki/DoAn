@@ -65,7 +65,7 @@ export default function ReelsPage() {
 
   if (loading)
     return (
-      <div className="h-screen bg-black flex items-center justify-center text-white">
+      <div className="h-screen bg-gray-50 dark:bg-neutral-900 flex items-center justify-center text-gray-900 dark:text-gray-100 transition-colors duration-500">
         Đang tải Reels...
       </div>
     );
