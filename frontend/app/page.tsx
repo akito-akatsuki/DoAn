@@ -1702,20 +1702,22 @@ export default function HomePage() {
                                   await fetchFile(currentVideoFile),
                                 );
 
-                                // Thuật toán giảm phân giải xuống 720p, nén băng thông bằng libx264 để tối ưu dung lượng nhất
+                                // Cân bằng giữa chất lượng (1080p, CRF 23) và tốc độ nén trên trình duyệt
                                 await ffmpeg.exec([
                                   "-i",
                                   "input.mp4",
                                   "-vf",
-                                  "scale='min(720,iw)':-2",
+                                  "scale='min(1080,iw)':-2",
                                   "-c:v",
                                   "libx264",
                                   "-crf",
-                                  "28",
+                                  "23",
                                   "-preset",
-                                  "ultrafast",
+                                  "veryfast",
                                   "-c:a",
                                   "aac",
+                                  "-b:a",
+                                  "128k",
                                   "output.mp4",
                                 ]);
                                 const fileData =
