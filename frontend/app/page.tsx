@@ -147,6 +147,28 @@ export default function HomePage() {
   const [appealPostId, setAppealPostId] = useState<string | null>(null);
   const [appealReason, setAppealReason] = useState("");
 
+  // ================= RENDER HASHTAGS =================
+  const renderContentWithHashtags = (text: string) => {
+    if (!text) return null;
+    const parts = text.split(/(#[a-zA-Z0-9_A-Za-zÀ-ỹ]+)/g);
+    return parts.map((part, index) => {
+      if (part.startsWith("#")) {
+        const tag = part.substring(1);
+        return (
+          <Link
+            key={index}
+            href={`/hashtags/${tag}`}
+            className="text-blue-500 hover:underline"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {part}
+          </Link>
+        );
+      }
+      return part;
+    });
+  };
+
   // ================= PREVIEW URLS (FIX FLICKER KHI GÕ PHÍM) =================
   useEffect(() => {
     const urls = files.map((f) => URL.createObjectURL(f));
@@ -1889,7 +1911,7 @@ export default function HomePage() {
 
                 {tempPost.content && (
                   <div className="px-4 pb-3 text-sm whitespace-pre-wrap text-gray-700 dark:text-gray-300">
-                    {tempPost.content}
+                    {renderContentWithHashtags(tempPost.content)}
                   </div>
                 )}
 
@@ -2159,7 +2181,7 @@ export default function HomePage() {
                     >
                       {post.is_flagged
                         ? "Nội dung này đã bị ẩn do vi phạm tiêu chuẩn cộng đồng."
-                        : post.content}
+                        : renderContentWithHashtags(post.content)}
                       {post.is_flagged && user?.id === post.user_id && (
                         <button
                           onClick={(e) => {
@@ -2869,7 +2891,7 @@ export default function HomePage() {
                   >
                     {selectedPost.is_flagged
                       ? "Nội dung này đã bị ẩn do vi phạm tiêu chuẩn cộng đồng."
-                      : selectedPost.content}
+                      : renderContentWithHashtags(selectedPost.content)}
                     {selectedPost.is_flagged &&
                       user?.id === selectedPost.user_id && (
                         <button

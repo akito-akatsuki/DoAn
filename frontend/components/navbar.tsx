@@ -570,7 +570,14 @@ export default function Navbar({ user: propUser }: any) {
             onKeyDown={(e) => {
               if (e.key === "Enter" && query.trim().length > 0) {
                 saveToHistory(query);
-                router.push(`/search?q=${encodeURIComponent(query.trim())}`);
+                const trimmedQuery = query.trim();
+                if (trimmedQuery.startsWith("#") && trimmedQuery.length > 1) {
+                  router.push(
+                    `/hashtags/${encodeURIComponent(trimmedQuery.substring(1))}`,
+                  );
+                } else {
+                  router.push(`/search?q=${encodeURIComponent(trimmedQuery)}`);
+                }
                 setResults([]);
                 setIsSearchFocused(false);
                 setQuery("");
