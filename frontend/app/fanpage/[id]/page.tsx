@@ -634,7 +634,7 @@ export default function FanpageProfile({
       let imageUrls: string[] = [];
 
       if (postFiles.length > 0) {
-        for (const f of postFiles) {
+        const uploadPromises = postFiles.map(async (f) => {
           const cleanName = f.name.replace(/[^a-zA-Z0-9.]/g, "_");
           const fileName = `${Date.now()}_${cleanName}`;
           const { error: uploadError } = await supabase.storage
@@ -644,8 +644,10 @@ export default function FanpageProfile({
           const { data } = supabase.storage
             .from("posts")
             .getPublicUrl(fileName);
-          imageUrls.push(data.publicUrl);
-        }
+          return data.publicUrl;
+        });
+        const results = await Promise.all(uploadPromises);
+        imageUrls = results.filter(Boolean) as string[];
       }
 
       let is_flagged = false;

@@ -846,7 +846,7 @@ export default function MessagesPage() {
     try {
       let uploadedImageUrls: string[] = [];
       if (currentImages.length > 0) {
-        for (const f of currentImages) {
+        const uploadPromises = currentImages.map(async (f) => {
           const cleanName = f.name.replace(/[^a-zA-Z0-9.]/g, "_");
           const fileName = `chat_${Date.now()}_${cleanName}`;
           const { error: uploadError } = await supabase.storage
@@ -860,8 +860,10 @@ export default function MessagesPage() {
           const { data } = supabase.storage
             .from("chat_images")
             .getPublicUrl(fileName);
-          uploadedImageUrls.push(data.publicUrl);
-        }
+          return data.publicUrl;
+        });
+        const results = await Promise.all(uploadPromises);
+        uploadedImageUrls = results.filter(Boolean) as string[];
       }
 
       let uploadedFileUrl = null;

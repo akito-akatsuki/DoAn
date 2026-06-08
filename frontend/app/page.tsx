@@ -1622,28 +1622,32 @@ export default function HomePage() {
 
                           // ================= UPLOAD IMAGES =================
                           if (currentFiles.length > 0) {
-                            for (const f of currentFiles) {
-                              const cleanName = f.name.replace(
-                                /[^a-zA-Z0-9.]/g,
-                                "_",
-                              );
-                              const fileName = `${Date.now()}_${cleanName}`;
-                              const { error: uploadError } =
-                                await supabase.storage
-                                  .from("posts")
-                                  .upload(fileName, f);
-                              if (uploadError) {
-                                console.error(
-                                  "UPLOAD ERROR:",
-                                  uploadError.message,
+                            const uploadPromises = currentFiles.map(
+                              async (f) => {
+                                const cleanName = f.name.replace(
+                                  /[^a-zA-Z0-9.]/g,
+                                  "_",
                                 );
-                                continue;
-                              }
-                              const { data } = supabase.storage
-                                .from("posts")
-                                .getPublicUrl(fileName);
-                              imageUrls.push(data.publicUrl);
-                            }
+                                const fileName = `${Date.now()}_${cleanName}`;
+                                const { error: uploadError } =
+                                  await supabase.storage
+                                    .from("posts")
+                                    .upload(fileName, f);
+                                if (uploadError) {
+                                  console.error(
+                                    "UPLOAD ERROR:",
+                                    uploadError.message,
+                                  );
+                                  return null;
+                                }
+                                const { data } = supabase.storage
+                                  .from("posts")
+                                  .getPublicUrl(fileName);
+                                return data.publicUrl;
+                              },
+                            );
+                            const results = await Promise.all(uploadPromises);
+                            imageUrls = results.filter(Boolean) as string[];
                           }
 
                           // ================= KIỂM DUYỆT AI =================
@@ -1729,13 +1733,13 @@ export default function HomePage() {
                                   "-i",
                                   "input.mp4",
                                   "-vf",
-                                  "scale='min(1080,iw)':-2",
+                                  "scale='min(720,iw)':-2",
                                   "-c:v",
                                   "libx264",
                                   "-crf",
-                                  "23",
+                                  "28",
                                   "-preset",
-                                  "veryfast",
+                                  "ultrafast",
                                   "-c:a",
                                   "aac",
                                   "-b:a",
