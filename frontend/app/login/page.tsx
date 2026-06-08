@@ -102,6 +102,7 @@ export default function AuthPage() {
       }
       const { error } = await supabase.auth.updateUser({
         password: password,
+        data: { has_password: true },
       });
       if (error) {
         toast.error(error.message || "Không thể cập nhật mật khẩu.");

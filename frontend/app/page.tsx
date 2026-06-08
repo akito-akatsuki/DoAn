@@ -3619,44 +3619,6 @@ export default function HomePage() {
           </div>
         </div>
       )}
-      {/* Tailwind Extra Styles for Animations */}
-      <style jsx global>{`
-        @keyframes heart-pop {
-          0% {
-            transform: scale(0);
-            opacity: 0;
-          }
-          15% {
-            transform: scale(1.2);
-            opacity: 1;
-          }
-          30% {
-            transform: scale(1);
-            opacity: 1;
-          }
-          80% {
-            transform: scale(1);
-            opacity: 1;
-          }
-          100% {
-            transform: scale(1.5);
-            opacity: 0;
-          }
-        }
-        .animate-heart-pop {
-          animation: heart-pop 0.8s ease-out forwards;
-        }
-        html {
-          scroll-behavior: smooth;
-        }
-        .virtual-post {
-          will-change:
-            transform, opacity; /* Báo cho trình duyệt biết phần tử sẽ thay đổi */
-          transform: translateZ(
-            0
-          ); /* Ép trình duyệt sử dụng GPU phần cứng để render khung hình, triệt tiêu giật lag */
-        }
-      `}</style>
     </div>
   );
 }

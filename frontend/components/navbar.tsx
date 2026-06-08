@@ -287,9 +287,27 @@ export default function Navbar({ user: propUser }: any) {
           table: "notifications",
           filter: `user_id=eq.${user.id}`,
         },
-        (payload) => {
+        async (payload) => {
           if (payload.new.sender_id && payload.new.sender_id !== user.id) {
             setUnreadCount((prev) => prev + 1);
+
+            // Tự động hiển thị Toast khi có thông báo mới (Thích, Bình luận...)
+            const { data: sender } = await supabase
+              .from("users")
+              .select("name")
+              .eq("id", payload.new.sender_id)
+              .single();
+
+            const senderName = sender?.name || "Ai đó";
+            let message = "Bạn có thông báo mới";
+            if (payload.new.type === "like")
+              message = `${senderName} đã thích bài viết của bạn!`;
+            else if (payload.new.type === "comment")
+              message = `${senderName} đã bình luận bài viết của bạn!`;
+            else if (payload.new.type === "follow")
+              message = `${senderName} đã bắt đầu theo dõi bạn!`;
+
+            toast(message, { icon: "🔔" });
           }
         },
       )

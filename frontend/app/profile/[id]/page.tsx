@@ -24,6 +24,7 @@ import {
   Send,
   Link as LinkIcon,
   Share,
+  Play,
 } from "lucide-react";
 import { useRef } from "react";
 import {
@@ -356,7 +357,7 @@ export default function ProfilePage({
 
       const { data: postsData } = await supabase
         .from("posts")
-        .select("id, content, image_url, image_urls, created_at")
+        .select("id, content, image_url, image_urls, video_url, created_at")
         .eq("user_id", id)
         .order("created_at", { ascending: false });
 
@@ -1029,6 +1030,16 @@ export default function ProfilePage({
                     src={post.image_urls?.[0] || post.image_url}
                     className="w-full h-full object-cover hover:scale-105 transition-transform duration-300"
                   />
+                ) : post.video_url ? (
+                  <div className="w-full h-full relative group-hover:scale-105 transition-transform duration-300">
+                    <video
+                      src={post.video_url}
+                      className="w-full h-full object-cover pointer-events-none"
+                    />
+                    <div className="absolute top-2 right-2 bg-black/50 text-white p-1 rounded-md">
+                      <Play className="w-4 h-4 fill-current" />
+                    </div>
+                  </div>
                 ) : (
                   <div className="p-4 flex items-center justify-center w-full h-full text-center text-sm md:text-base break-words">
                     {post.content}
@@ -1062,86 +1073,99 @@ export default function ProfilePage({
           >
             {/* Phần Ảnh */}
             {(selectedPost.image_urls?.length > 0 ||
-              selectedPost.image_url) && (
+              selectedPost.image_url ||
+              selectedPost.video_url) && (
               <div
                 className={`flex-1 bg-[#1a1a1a] flex items-stretch justify-between relative ${selectedPost.image_urls?.length > 1 ? "h-[40vh] md:h-[85vh]" : "min-h-[300px] md:min-h-[500px]"}`}
               >
-                {selectedPost.image_urls?.length > 1 && (
-                  <div
-                    className="w-[12%] md:w-16 shrink-0 flex items-center justify-center z-10 cursor-pointer hover:bg-black/20 transition-colors"
-                    onClick={(e) =>
-                      handlePrevImage(
-                        e,
-                        selectedPost.id,
-                        selectedPost.image_urls.length - 1,
-                      )
-                    }
-                    onDoubleClick={(e) => e.stopPropagation()}
-                  >
-                    <button className="p-2 bg-white/80 hover:bg-white dark:bg-black/50 dark:hover:bg-black/80 rounded-full shadow hover:scale-105 transition-transform">
-                      <ChevronLeft className="w-6 h-6 text-gray-900 dark:text-gray-100" />
-                    </button>
+                {selectedPost.video_url ? (
+                  <div className="flex-1 flex items-center justify-center w-full h-full bg-black">
+                    <video
+                      src={selectedPost.video_url}
+                      controls
+                      className="max-w-full max-h-[85vh] object-contain"
+                    />
                   </div>
-                )}
-                <div
-                  className="flex-1 overflow-hidden flex items-center justify-center h-full relative group cursor-pointer"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setViewingImage(
-                      selectedPost.image_urls?.[
-                        currentImageIndex[selectedPost.id] || 0
-                      ] || selectedPost.image_url,
-                    );
-                    setImageScale(1);
-                  }}
-                >
-                  <img
-                    src={
-                      selectedPost.image_urls?.[
-                        currentImageIndex[selectedPost.id] || 0
-                      ] || selectedPost.image_url
-                    }
-                    className="w-full h-full object-cover transition-all duration-300 select-none pointer-events-none"
-                    alt="Post"
-                  />
-                </div>
-                {selectedPost.image_urls?.length > 1 && (
-                  <div
-                    className="w-[12%] md:w-16 shrink-0 flex items-center justify-center z-10 cursor-pointer hover:bg-black/20 transition-colors"
-                    onClick={(e) =>
-                      handleNextImage(
-                        e,
-                        selectedPost.id,
-                        selectedPost.image_urls.length - 1,
-                      )
-                    }
-                    onDoubleClick={(e) => e.stopPropagation()}
-                  >
-                    <button className="p-2 bg-white/80 hover:bg-white dark:bg-black/50 dark:hover:bg-black/80 rounded-full shadow hover:scale-105 transition-transform">
-                      <ChevronRight className="w-6 h-6 text-gray-900 dark:text-gray-100" />
-                    </button>
-                  </div>
-                )}
-                {selectedPost.image_urls?.length > 1 && (
-                  <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5 z-20 pointer-events-none">
-                    {selectedPost.image_urls.map((_: any, idx: number) => (
+                ) : (
+                  <>
+                    {selectedPost.image_urls?.length > 1 && (
                       <div
-                        key={idx}
-                        className={`w-2 h-2 rounded-full shadow-sm transition-all duration-300 ${
-                          (currentImageIndex[selectedPost.id] || 0) === idx
-                            ? "bg-blue-500 scale-110"
-                            : "bg-white/60 dark:bg-black/60"
-                        }`}
+                        className="w-[12%] md:w-16 shrink-0 flex items-center justify-center z-10 cursor-pointer hover:bg-black/20 transition-colors"
+                        onClick={(e) =>
+                          handlePrevImage(
+                            e,
+                            selectedPost.id,
+                            selectedPost.image_urls.length - 1,
+                          )
+                        }
+                        onDoubleClick={(e) => e.stopPropagation()}
+                      >
+                        <button className="p-2 bg-white/80 hover:bg-white dark:bg-black/50 dark:hover:bg-black/80 rounded-full shadow hover:scale-105 transition-transform">
+                          <ChevronLeft className="w-6 h-6 text-gray-900 dark:text-gray-100" />
+                        </button>
+                      </div>
+                    )}
+                    <div
+                      className="flex-1 overflow-hidden flex items-center justify-center h-full relative group cursor-pointer"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setViewingImage(
+                          selectedPost.image_urls?.[
+                            currentImageIndex[selectedPost.id] || 0
+                          ] || selectedPost.image_url,
+                        );
+                        setImageScale(1);
+                      }}
+                    >
+                      <img
+                        src={
+                          selectedPost.image_urls?.[
+                            currentImageIndex[selectedPost.id] || 0
+                          ] || selectedPost.image_url
+                        }
+                        className="w-full h-full object-cover transition-all duration-300 select-none pointer-events-none"
+                        alt="Post"
                       />
-                    ))}
-                  </div>
+                    </div>
+                    {selectedPost.image_urls?.length > 1 && (
+                      <div
+                        className="w-[12%] md:w-16 shrink-0 flex items-center justify-center z-10 cursor-pointer hover:bg-black/20 transition-colors"
+                        onClick={(e) =>
+                          handleNextImage(
+                            e,
+                            selectedPost.id,
+                            selectedPost.image_urls.length - 1,
+                          )
+                        }
+                        onDoubleClick={(e) => e.stopPropagation()}
+                      >
+                        <button className="p-2 bg-white/80 hover:bg-white dark:bg-black/50 dark:hover:bg-black/80 rounded-full shadow hover:scale-105 transition-transform">
+                          <ChevronRight className="w-6 h-6 text-gray-900 dark:text-gray-100" />
+                        </button>
+                      </div>
+                    )}
+                    {selectedPost.image_urls?.length > 1 && (
+                      <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5 z-20 pointer-events-none">
+                        {selectedPost.image_urls.map((_: any, idx: number) => (
+                          <div
+                            key={idx}
+                            className={`w-2 h-2 rounded-full shadow-sm transition-all duration-300 ${
+                              (currentImageIndex[selectedPost.id] || 0) === idx
+                                ? "bg-blue-500 scale-110"
+                                : "bg-white/60 dark:bg-black/60"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
             )}
 
             {/* Phần Thông tin / Bình luận */}
             <div
-              className={`w-full flex flex-col h-[50vh] md:h-auto transition-colors duration-500 bg-white dark:bg-[#262626] ${selectedPost.image_urls?.length > 0 || selectedPost.image_url ? "md:w-[400px] border-l border-gray-200 dark:border-neutral-800" : "md:min-h-[500px]"}`}
+              className={`w-full flex flex-col h-[50vh] md:h-auto transition-colors duration-500 bg-white dark:bg-[#262626] ${selectedPost.image_urls?.length > 0 || selectedPost.image_url || selectedPost.video_url ? "md:w-[400px] border-l border-gray-200 dark:border-neutral-800" : "md:min-h-[500px]"}`}
             >
               {/* Header & Content */}
               <div className="flex flex-col border-b border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-[#333333]">
@@ -2233,8 +2257,8 @@ export default function ProfilePage({
                   if (navigator.share) {
                     try {
                       await navigator.share({
-                        title: "InstaMini",
-                        text: "Hãy xem bài viết này trên InstaMini!",
+                        title: "Apex",
+                        text: "Hãy xem bài viết này trên Apex!",
                         url: url,
                       });
                       setSharePost(null);

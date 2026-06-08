@@ -432,35 +432,6 @@ export default function ReelsViewer({
           Chưa có video Reels nào!
         </div>
       )}
-
-      {/* STYLE FOR ANIMATION */}
-      <style jsx global>{`
-        @keyframes heart-pop {
-          0% {
-            transform: scale(0);
-            opacity: 0;
-          }
-          15% {
-            transform: scale(1.2);
-            opacity: 1;
-          }
-          30% {
-            transform: scale(1);
-            opacity: 1;
-          }
-          80% {
-            transform: scale(1);
-            opacity: 1;
-          }
-          100% {
-            transform: scale(1.5);
-            opacity: 0;
-          }
-        }
-        .animate-heart-pop {
-          animation: heart-pop 0.8s ease-out forwards;
-        }
-      `}</style>
     </div>
   );
 }

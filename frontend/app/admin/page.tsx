@@ -15,6 +15,7 @@ import {
   AlertTriangle,
   X,
   Loader2,
+  ExternalLink,
 } from "lucide-react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -249,6 +250,16 @@ export default function AdminReportsPage() {
                           className="mt-3 max-h-40 rounded-lg border border-gray-200 dark:border-neutral-700"
                         />
                       )}
+                      {postData?.id && (
+                        <a
+                          href={`/post/${postData.id}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-500 hover:text-blue-600 hover:underline text-sm font-semibold mt-3 inline-flex items-center gap-1 transition-colors"
+                        >
+                          Xem bài viết gốc <ExternalLink className="w-4 h-4" />
+                        </a>
+                      )}
                     </div>
 
                     <div className="flex gap-3">
@@ -318,6 +329,16 @@ export default function AdminReportsPage() {
                         alt="Bài viết"
                         className="mt-3 max-h-40 rounded-lg border border-gray-200 dark:border-neutral-700"
                       />
+                    )}
+                    {appeal.posts?.id && (
+                      <a
+                        href={`/post/${appeal.posts.id}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-blue-500 hover:text-blue-600 hover:underline text-sm font-semibold mt-3 inline-flex items-center gap-1 transition-colors"
+                      >
+                        Xem bài viết gốc <ExternalLink className="w-4 h-4" />
+                      </a>
                     )}
                   </div>
 

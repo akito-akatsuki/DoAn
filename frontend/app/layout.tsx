@@ -25,7 +25,19 @@ export default async function RootLayout({
     <html lang="vi" className={theme === "dark" ? "dark" : ""}>
       <body className={inter.className}>
         {/* Toaster sẽ hiển thị các thông báo toast ở đây */}
-        <Toaster position="top-right" containerStyle={{ zIndex: 999999 }} />
+        <Toaster
+          position="bottom-left"
+          containerStyle={{ zIndex: 999999 }}
+          toastOptions={{
+            className:
+              "animate-in slide-in-from-left-8 fade-in duration-1000 !bg-white dark:!bg-[#333333] !text-gray-900 dark:!text-white border border-gray-200 dark:border-neutral-700 shadow-lg",
+            duration: 4000,
+            style: {
+              borderRadius: "12px",
+              padding: "12px 16px",
+            },
+          }}
+        />
         <Navbar user={null} /> <GlobalConfirm />
         {/* Navbar được đặt ở đây để hiển thị trên mọi trang */}
         {children}
