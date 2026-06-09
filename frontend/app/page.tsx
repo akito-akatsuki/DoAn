@@ -1663,13 +1663,6 @@ export default function HomePage() {
                               });
                               const modData = await modRes.json();
                               is_flagged = modData.flagged;
-
-                              if (is_flagged) {
-                                toast.error(
-                                  "Nội dung vi phạm tiêu chuẩn cộng đồng và đã bị hệ thống chặn!",
-                                  { duration: 4000 },
-                                );
-                              }
                             } catch (err) {
                               console.error("Lỗi quét AI:", err);
                             }
@@ -1677,6 +1670,54 @@ export default function HomePage() {
 
                           // ================= CHẶN & XÓA BÀI VI PHẠM =================
                           if (is_flagged) {
+                            // Đếm số lần vi phạm lịch sử của user
+                            const { count: violationCount } = await supabase
+                              .from("notifications")
+                              .select("*", { count: "exact", head: true })
+                              .eq("user_id", user.id)
+                              .eq("type", "system_alert");
+
+                            const currentViolations = (violationCount || 0) + 1;
+
+                            if (currentViolations >= 3) {
+                              toast.error(
+                                "⛔ TÀI KHOẢN ĐÃ BỊ KHÓA: Bạn đã vi phạm tiêu chuẩn cộng đồng 3 lần!",
+                                { duration: 10000 },
+                              );
+
+                              if (imageUrls.length > 0) {
+                                const uploadedFileNames = imageUrls
+                                  .map((url) => url.split("/").pop()!)
+                                  .filter(Boolean);
+                                if (uploadedFileNames.length > 0) {
+                                  await supabase.storage
+                                    .from("posts")
+                                    .remove(uploadedFileNames);
+                                }
+                              }
+
+                              setIsPosting(false);
+                              setTempPost(null);
+
+                              // Bắt buộc văng ra khỏi hệ thống (Đăng xuất)
+                              setTimeout(async () => {
+                                await supabase.auth.signOut();
+                                window.location.reload();
+                              }, 3000);
+                              return;
+                            }
+
+                            toast.error(
+                              `Cảnh báo vi phạm (Lần ${currentViolations}/3): Nội dung của bạn đã bị AI chặn lại!`,
+                              { duration: 8000 },
+                            );
+
+                            await supabase.from("notifications").insert({
+                              user_id: user.id,
+                              type: "system_alert",
+                              content: `CẢNH BÁO TỪ AI (Lần ${currentViolations}/3): Bài viết bạn vừa tạo bị chặn vì vi phạm tiêu chuẩn cộng đồng. Nếu cố tình vi phạm đủ 3 lần, tài khoản của bạn sẽ bị khóa!`,
+                            });
+
                             // Nếu có ảnh đi kèm thì xóa luôn ảnh đó khỏi Supabase Storage để tránh rác dữ liệu
                             if (imageUrls.length > 0) {
                               const uploadedFileNames = imageUrls
