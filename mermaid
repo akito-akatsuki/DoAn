@@ -1,395 +1,145 @@
-1 sơ đồ thực thể
-erDiagram
-    %% Định nghĩa các bảng và thuộc tính
-    USERS {
-        uuid id PK
-        string name
-        string email
-        string avatar_url
-        string cover_url
-        string bio
-        timestamp created_at
-    }
-
-    PAGES {
-        uuid id PK
-        string name
-        string avatar_url
-        string cover_url
-        string bio
-        string post_permission
-        uuid created_by FK
-    }
-
-    POSTS {
-        uuid id PK
-        uuid user_id FK
-        uuid page_id FK
-        text content
-        string image_urls
-        boolean is_flagged
-        timestamp created_at
-    }
-
-    COMMENTS {
-        uuid id PK
-        uuid user_id FK
-        uuid post_id FK
-        text content
-        string image_url
-        timestamp created_at
-    }
-
-    LIKES {
-        uuid id PK
-        uuid user_id FK
-        uuid post_id FK
-    }
-
-    FOLLOWS {
-        uuid id PK
-        uuid follower_id FK
-        uuid following_id FK
-    }
-
-    CONVERSATIONS {
-        uuid id PK
-        boolean is_group
-        string group_name
-        uuid admin_id FK
-        string last_message
-    }
-
-    MESSAGES {
-        uuid id PK
-        uuid conversation_id FK
-        uuid sender_id FK
-        text content
-        string file_url
-        boolean is_read
-        timestamp created_at
-    }
-
-    NOTIFICATIONS {
-        uuid id PK
-        uuid user_id FK
-        uuid sender_id FK
-        string type
-        boolean is_read
-    }
-
-    CALLS {
-        uuid id PK
-        uuid caller_id FK
-        uuid receiver_id FK
-        string room_id
-        string status
-    }
-
-    %% Các mối quan hệ (Relationships)
-    USERS ||--o{ POSTS : "đăng"
-    PAGES ||--o{ POSTS : "chứa"
-    USERS ||--o{ PAGES : "tạo/quản lý"
-
-    USERS ||--o{ COMMENTS : "viết"
-    POSTS ||--o{ COMMENTS : "có"
-
-    USERS ||--o{ LIKES : "thích"
-    POSTS ||--o{ LIKES : "nhận"
-
-    USERS ||--o{ FOLLOWS : "người theo dõi"
-    USERS ||--o{ FOLLOWS : "người đang theo dõi"
-
-    CONVERSATIONS ||--o{ MESSAGES : "chứa"
-    USERS ||--o{ MESSAGES : "gửi"
-
-    USERS ||--o{ NOTIFICATIONS : "nhận"
-    USERS ||--o{ CALLS : "thực hiện"
-
-
-sơ đồ usecase
-flowchart LR
-    %% Định nghĩa các Actor (Người dùng hệ thống)
-    Guest([👤 Khách vãng lai])
-    User([👤 Người dùng đăng nhập])
-    Admin([🛡️ Quản trị viên Fanpage])
-    AI([🤖 Hệ thống AI Gemini])
-
-    %% Group các chức năng chính của hệ thống
-    subgraph InstaMini["Hệ thống Mạng xã hội InstaMini"]
-        direction TB
-
-        %% Nhóm Xác thực
-        UC_Auth(Đăng nhập / Đăng ký)
-        UC_Forgot(Khôi phục mật khẩu)
-
-        %% Nhóm Tương tác MXH
-        UC_Post(Đăng bài viết mới)
-        UC_Interact(Thích & Bình luận bài viết)
-        UC_Save(Lưu bài viết)
-        UC_Follow(Theo dõi người dùng/trang)
-
-        %% Nhóm Nhắn tin & Gọi điện
-        UC_Chat(Nhắn tin thời gian thực)
-        UC_GroupChat(Tạo nhóm chat)
-        UC_Call(Gọi Video / Thoại WebRTC)
-
-        %% Nhóm Fanpage
-        UC_CreatePage(Tạo Fanpage)
-        UC_ManagePage(Quản lý Trang & Thành viên)
-
-        %% Nhóm Quản trị
-        UC_Report(Báo cáo nội dung)
-        UC_Moderate(Kiểm duyệt nội dung tự động)
-    end
-
-    %% Gán quan hệ cho Khách
-    Guest --> UC_Auth
-    Guest --> UC_Forgot
-
-    %% Gán quan hệ cho Người dùng (Được kế thừa quyền của Khách)
-    Guest -. "Trở thành" .-> User
-    User --> UC_Post
-    User --> UC_Interact
-    User --> UC_Save
-    User --> UC_Follow
-    User --> UC_Chat
-    User --> UC_GroupChat
-    User --> UC_Call
-    User --> UC_CreatePage
-    User --> UC_Report
-
-    %% Gán quan hệ cho Admin Fanpage
-    User -. "Đóng vai trò" .-> Admin
-    Admin --> UC_ManagePage
-    Admin --> UC_Post
-
-    %% Gán quan hệ cho AI
-    UC_Post -. "<<include>>\nGửi text kiểm tra" .-> UC_Moderate
     AI -. "Trả về kết quả (is_flagged)" .-> UC_Moderate
 
     %% Style cho đẹp
     classDef actor fill:#f9f9f9,stroke:#333,stroke-width:2px,font-weight:bold;
     class Guest,User,Admin,AI actor;
 
-sequence đăng nhập
+Workflow 1: Đăng nhập & Xác thực (Authentication Flow)
 sequenceDiagram
     autonumber
     actor User as 👤 Người dùng
     participant FE as 🖥️ Frontend (Next.js)
     participant Auth as 🔐 Supabase Auth
-    participant DB as 🗃️ Supabase DB (Bảng users)
+    participant DB as 🗃️ Supabase DB
 
-    User->>FE: Nhập Email, Mật khẩu & Bấm "Đăng nhập"
+    User->>FE: Nhập Email, Mật khẩu & "Đăng nhập"
     activate FE
-    FE->>Auth: Gọi hàm signInWithPassword({email, password})
+    FE->>Auth: Gọi signInWithPassword()
     activate Auth
 
     alt Thông tin hợp lệ
-        Auth-->>FE: Trả về Session & JWT Token
-        FE->>DB: Gọi getUser() lấy thông tin chi tiết (role, avatar...)
+        Auth-->>FE: JWT Session Token
+        FE->>DB: Truy vấn getUser()
         activate DB
-        DB-->>FE: Trả về chi tiết User
+        DB-->>FE: Trả về chi tiết User (role, avatar)
         deactivate DB
-        FE->>User: ✅ Báo "Đăng nhập thành công" & Tải lại trang (Mount app)
-    else Sai mật khẩu / Email chưa đăng ký
-        Auth-->>FE: Trả về Lỗi (Invalid login credentials)
-        FE->>User: ❌ Hiển thị thông báo "Email hoặc mật khẩu không đúng"
+        FE->>User: ✅ Báo thành công & Vào trang chủ
+    else Thông tin không hợp lệ
+        Auth-->>FE: Lỗi (Invalid credentials)
+        FE->>User: ❌ Thông báo lỗi đăng nhập
     end
     deactivate Auth
     deactivate FE
-sequence nhắn tin
+
+Workflow 2: Nhắn tin thời gian thực (Real-time Chat Flow)
 sequenceDiagram
     autonumber
-    actor UserA as 👤 Người gửi (A)
-    participant FE_A as 🖥️ Frontend (Máy A)
-    participant DB as 🗃️ Supabase DB
-    participant Realtime as ⚡ Supabase Realtime
-    participant FE_B as 🖥️ Frontend (Máy B)
-    actor UserB as 👤 Người nhận (B)
+    actor UserA as 👤 Người gửi
+    participant FE_A as 🖥️ Client Gửi
+    participant DB as 🗃️ Database
+    participant RT as ⚡ Supabase Realtime
+    participant FE_B as 🖥️ Client Nhận
+    actor UserB as 👤 Người nhận
 
-    Note over FE_B, Realtime: Máy B đã subscribe channel "postgres_changes" từ trước
+    Note over FE_B, RT: Đã Subscribe WebSocket Channel
 
-    UserA->>FE_A: Gõ tin nhắn và nhấn "Gửi"
-    FE_A->>DB: INSERT INTO messages (sender_id, content, ...)
+    UserA->>FE_A: Nhập tin nhắn & Bấm gửi
+    activate FE_A
+    FE_A->>DB: INSERT INTO messages
     activate DB
-    DB-->>FE_A: Trả về bản ghi tin nhắn mới tạo
+    DB-->>FE_A: Xác nhận đã lưu
+    FE_A->>UserA: Hiển thị tin nhắn gửi đi
+    deactivate FE_A
 
-    %% Kích hoạt Realtime
-    DB-->>Realtime: Kích hoạt Trigger "INSERT" sự kiện
+    DB->>RT: Trigger sự kiện INSERT
     deactivate DB
+    activate RT
+    RT->>FE_B: Broadcast tin nhắn mới (< 0.1s)
+    deactivate RT
 
-    FE_A->>UserA: Cập nhật giao diện ChatBox của A (Hiển thị tin gửi đi)
+    activate FE_B
+    FE_B->>UserB: Hiển thị tin nhắn & Báo chưa đọc
+    deactivate FE_B
 
-    activate Realtime
-    Realtime->>FE_B: Broadcast Payload (Bản ghi tin nhắn mới)
-    deactivate Realtime
-
-    FE_B->>UserB: Hiển thị tin nhắn mới / Tăng số đếm "Thông báo chưa đọc"
-sequence đăng bài
+Workflow 3: Đăng bài viết & Kiểm duyệt tự động bằng AI (AI Moderation Flow)
 sequenceDiagram
     autonumber
     actor User as 👤 Người dùng
-    participant FE as 🖥️ Frontend (Next.js)
+    participant FE as 🖥️ Frontend
     participant Storage as 🗄️ Supabase Storage
-    participant API as ⚙️ Server API (/api/moderate)
+    participant API as ⚙️ Middleware API
     participant AI as 🤖 Gemini AI
-    participant DB as 🗃️ Supabase DB
+    participant DB as 🗃️ Database
 
-    User->>FE: Nhập văn bản, chọn ảnh & Nhấn "Đăng bài"
+    User->>FE: Tải ảnh/nhập chữ & "Đăng bài"
     activate FE
-
-    opt Có đính kèm ảnh
-        FE->>Storage: Gọi upload() lưu file ảnh vào bucket "posts"
+    opt Có ảnh
+        FE->>Storage: Upload ảnh lên bucket
         activate Storage
-        Storage-->>FE: Trả về Public URLs của ảnh
+        Storage-->>FE: Trả về URL ảnh
         deactivate Storage
     end
 
-    opt Có nội dung văn bản
-        FE->>API: POST { content }
-        activate API
-        API->>AI: Gửi prompt + nội dung để phân tích ngữ nghĩa
-        activate AI
-        AI-->>API: Trả về kết quả JSON { "flagged": true/false }
-        deactivate AI
-        API-->>FE: Trả kết quả kiểm duyệt (is_flagged)
-        deactivate API
-    end
+    FE->>API: Gửi nội dung text để kiểm duyệt
+    activate API
+    API->>AI: Yêu cầu phân tích ngữ nghĩa
+    activate AI
+    AI-->>API: Trả về JSON { "flagged": boolean }
+    deactivate AI
+    API-->>FE: is_flagged
+    deactivate API
 
-    alt Nếu is_flagged == true (Nội dung vi phạm)
-        FE->>User: ❌ Báo lỗi "Vi phạm tiêu chuẩn cộng đồng"
-        opt Nếu có ảnh đã upload trước đó
-            FE->>Storage: Gửi yêu cầu remove() để xóa ảnh rác
-            Storage-->>FE: Xác nhận đã xóa thành công
+    alt is_flagged == true (Vi phạm)
+        FE->>User: ❌ Báo lỗi vi phạm tiêu chuẩn
+        opt Đã upload ảnh
+            FE->>Storage: Xóa ảnh rác trên Storage
         end
-    else Nếu is_flagged == false (Nội dung an toàn)
-        FE->>DB: Gọi API createPost(content, image_urls)
+    else is_flagged == false (An toàn)
+        FE->>DB: INSERT INTO posts
         activate DB
-        DB-->>FE: Lưu thành công, trả về dữ liệu Bài viết mới
+        DB-->>FE: Lưu thành công
         deactivate DB
-        FE->>User: ✅ Cập nhật Bảng tin & Báo "Đăng bài thành công!"
+        FE->>User: ✅ Bài viết được hiển thị
     end
-
     deactivate FE
-sequence báo cáo
+
+Workflow 4a: Người dùng gửi báo cáo (User Report Flow)
 sequenceDiagram
     autonumber
-    actor User as 👤 Người dùng (Reporter)
+    actor User as 👤 Người báo cáo
     participant FE as 🖥️ Frontend
-    participant DB as 🗃️ Supabase DB
-    actor Admin as 🛡️ Quản trị viên (Admin)
+    participant DB as 🗃️ Database
 
-    %% Giai đoạn gửi báo cáo
-    User->>FE: Bấm "Báo cáo bài viết", nhập lý do & Gửi
+    User->>FE: Bấm "Báo cáo", nhập lý do
     activate FE
-    FE->>DB: INSERT INTO reports (target_id, type, reason)
+    FE->>DB: INSERT INTO reports
     activate DB
-    DB-->>FE: Xác nhận lưu báo cáo thành công
+    DB-->>FE: Lưu báo cáo
     deactivate DB
-    FE->>User: ✅ Báo "Đã gửi báo cáo thành công!"
+    FE->>User: ✅ Thông báo gửi thành công
     deactivate FE
 
-    %% Giai đoạn Admin xử lý
-    Note over Admin, DB: Admin truy cập Trung tâm kiểm duyệt (/admin)
-    Admin->>FE: Mở tab "Báo cáo chờ duyệt"
-    activate FE
-    FE->>DB: GET pending reports (kèm dữ liệu bài viết/bằng chứng)
-    activate DB
-    DB-->>FE: Trả về danh sách báo cáo
-    deactivate DB
-    FE->>Admin: Hiển thị giao diện danh sách
-
-    Admin->>FE: Xem xét & Chọn "Xóa bài / Ẩn bài" + Nhập lời nhắn
-    FE->>DB: Xóa Post/Comment, Đổi status Report, Gửi Notification
-    activate DB
-    DB-->>FE: Cập nhật thành công
-    deactivate DB
-
-    FE->>FE: Cập nhật giao diện (Xóa thẻ báo cáo khỏi danh sách)
-    FE->>Admin: ✅ Báo "Đã gỡ bài và gửi thông báo!"
-    deactivate FE
-sequence bình luận
+Workflow 4b: Admin kiểm duyệt & xử lý (Admin Resolution Flow)
 sequenceDiagram
     autonumber
-    actor User as 👤 Người dùng
+    actor Admin as 🛡️ Quản trị viên
     participant FE as 🖥️ Frontend
-    participant Storage as 🗄️ Supabase Storage
-    participant DB as 🗃️ Supabase DB
+    participant DB as 🗃️ Database
 
-    User->>FE: Nhập bình luận, đính kèm ảnh & Bấm "Đăng"
+    Admin->>FE: Xem danh sách báo cáo chờ duyệt
     activate FE
-
-    %% Optimistic Update
-    FE->>User: Hiển thị ngay Comment tạm (Loading state) trên UI
-
-    opt Nếu có đính kèm ảnh
-        FE->>Storage: upload(file) lên bucket "comment_images"
-        activate Storage
-        Storage-->>FE: Trả về URL ảnh (publicUrl)
-        deactivate Storage
-    end
-
-    FE->>DB: INSERT INTO comments (post_id, content, image_url)
+    FE->>DB: Lấy danh sách vi phạm
     activate DB
-    DB-->>FE: Trả về bản ghi Comment chính thức (Có ID từ DB)
+    DB-->>FE: Trả về báo cáo + bằng chứng
     deactivate DB
+    FE->>Admin: Hiển thị Dashboard
 
-    FE->>FE: Tráo đổi ID ảo bằng ID thật trong State (để cho phép xóa/sửa)
-    FE->>User: Hoàn tất quá trình hiển thị
-    deactivate FE
-
-sequence đổi mật khẩu
-sequenceDiagram
-    autonumber
-    actor User as 👤 Người dùng
-    participant FE as 🖥️ Frontend (Navbar)
-    participant Auth as 🔐 Supabase Auth
-
-    User->>FE: Nhập Mật khẩu cũ, Mật khẩu mới & Bấm "Đổi mật khẩu"
-    activate FE
-
-    opt Nếu tài khoản đã có mật khẩu từ trước
-        FE->>Auth: Gọi signInWithPassword(oldPassword) để xác thực
-        activate Auth
-        Auth-->>FE: Trả về kết quả xác thực
-        deactivate Auth
-    end
-
-    alt Xác thực mật khẩu cũ thành công / Tài khoản chưa có mật khẩu
-        FE->>Auth: Gọi updateUser({ password: newPassword })
-        activate Auth
-        Auth-->>FE: Xác nhận cập nhật thành công
-        deactivate Auth
-        FE->>User: ✅ Báo "Đổi mật khẩu thành công" & Tải lại trang
-    else Sai mật khẩu cũ
-        FE->>User: ❌ Hiển thị lỗi "Mật khẩu hiện tại không đúng"
-    end
-    deactivate FE
-
-sequence cập nhật hồ sơ
-sequenceDiagram
-    autonumber
-    actor User as 👤 Người dùng
-    participant FE as 🖥️ Frontend (Profile)
-    participant Storage as 🗄️ Supabase Storage
-    participant DB as 🗃️ Supabase DB
-
-    User->>FE: Sửa Tên, Bio, chọn Ảnh đại diện/Ảnh bìa mới & "Lưu"
-    activate FE
-
-    opt Có thay đổi Ảnh đại diện / Ảnh bìa
-        FE->>Storage: Gọi upload() lưu file ảnh vào bucket "posts"
-        activate Storage
-        Storage-->>FE: Trả về Public URL của ảnh mới
-        deactivate Storage
-    end
-
-    FE->>DB: UPDATE users SET name, bio, avatar_url, cover_url
+    Admin->>FE: Chọn "Gỡ bài" & Gửi cảnh cáo
+    FE->>DB: Xóa Post (CASCADE Comments/Likes)
     activate DB
-    DB-->>FE: Xác nhận cập nhật thành công
+    DB->>DB: Cập nhật status báo cáo
+    DB->>DB: Thêm cảnh cáo vào Notifications
+    DB-->>FE: Hoàn tất
     deactivate DB
-
-    FE->>FE: Cập nhật lại State Profile và CurrentUser trên UI
-    FE->>User: ✅ Báo "Cập nhật thông tin thành công!" & Đóng Modal
+    FE->>Admin: ✅ Đã xử lý & Gửi thông báo
     deactivate FE

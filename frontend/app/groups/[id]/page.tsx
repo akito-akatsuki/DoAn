@@ -709,8 +709,10 @@ export default function GroupDetailPage({
                         value={postContent}
                         onChange={(e) => setPostContent(e.target.value)}
                         placeholder="Viết điều gì đó cho nhóm..."
-                        className="w-full resize-none outline-none min-h-[60px] bg-transparent text-sm pt-1"
-                        rows={2}
+                        className="w-full text-[15px] resize-none outline-none min-h-[44px] text-gray-900 dark:text-gray-100 bg-gray-100 dark:bg-[#333333] hover:bg-gray-200 dark:hover:bg-[#3f3f3f] focus:bg-transparent dark:focus:bg-transparent focus:min-h-[80px] rounded-2xl px-4 py-2.5 placeholder:text-gray-500 dark:placeholder:text-gray-400 transition-all font-medium"
+                        rows={
+                          postContent.length > 0 || postFiles.length > 0 ? 3 : 1
+                        }
                       />
                       {postFiles.length > 0 && (
                         <div className="flex gap-2 overflow-x-auto pb-2 mt-2">

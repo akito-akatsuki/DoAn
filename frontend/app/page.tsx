@@ -28,6 +28,12 @@ import {
   Loader2,
   Link as LinkIcon,
   Share,
+  Globe,
+  Users,
+  Lock,
+  Settings,
+  Check,
+  Search,
 } from "lucide-react";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
@@ -64,6 +70,35 @@ export default function HomePage() {
   const [compressProgress, setCompressProgress] = useState(0);
   const [uploadProgress, setUploadProgress] = useState(0);
   const ffmpegRef = useRef<any>(null);
+
+  // ================= STORIES STATES =================
+  const [stories, setStories] = useState<any[]>([]);
+  const [showCreateStoryModal, setShowCreateStoryModal] = useState(false);
+  const [storyFile, setStoryFile] = useState<File | null>(null);
+  const [storyFilePreview, setStoryFilePreview] = useState<string | null>(null);
+  const [storyContent, setStoryContent] = useState("");
+  const [storyError, setStoryError] = useState("");
+  const [isUploadingStory, setIsUploadingStory] = useState(false);
+  const [isCompressingStory, setIsCompressingStory] = useState(false);
+  const [storyCompressProgress, setStoryCompressProgress] = useState(0);
+  const [storyUploadProgress, setStoryUploadProgress] = useState(0);
+  const [tempStoryGroup, setTempStoryGroup] = useState<any | null>(null);
+  const [activeStoryGroup, setActiveStoryGroup] = useState<any | null>(null);
+  const [currentStoryIndex, setCurrentStoryIndex] = useState(0);
+  const [showStoryMenu, setShowStoryMenu] = useState(false);
+  const [storyPrivacy, setStoryPrivacy] = useState<
+    "public" | "followers" | "custom"
+  >("public");
+  const [storyCustomUsers, setStoryCustomUsers] = useState<string[]>([]);
+  const [privacyModalState, setPrivacyModalState] = useState<{
+    isOpen: boolean;
+    context: "create" | "edit";
+    storyId?: string;
+    privacy: "public" | "followers" | "custom";
+    customUsers: string[];
+  }>({ isOpen: false, context: "create", privacy: "public", customUsers: [] });
+  const [myFollowers, setMyFollowers] = useState<any[]>([]);
+  const [searchFollower, setSearchFollower] = useState("");
 
   // State lưu tạm thông tin bài đang đăng để hiển thị ở Feed (Optimistic UI)
   const [tempPost, setTempPost] = useState<{
@@ -186,6 +221,16 @@ export default function HomePage() {
     }
   }, [videoFile]);
 
+  useEffect(() => {
+    if (storyFile) {
+      const url = URL.createObjectURL(storyFile);
+      setStoryFilePreview(url);
+      return () => URL.revokeObjectURL(url);
+    } else {
+      setStoryFilePreview(null);
+    }
+  }, [storyFile]);
+
   const [viewingImage, setViewingImage] = useState<string | null>(null);
   const [imageScale, setImageScale] = useState(1);
 
@@ -256,6 +301,7 @@ export default function HomePage() {
     const init = async () => {
       try {
         const loadedUser = await loadUser();
+        await loadStories();
         await loadFeed(loadedUser);
       } catch (err) {
         console.error("Lỗi khởi tạo trang chủ:", err);
@@ -765,6 +811,147 @@ export default function HomePage() {
   const handleLogout = async () => {
     await supabase.auth.signOut();
     window.location.reload();
+  };
+
+  // ================= LOAD STORIES =================
+  const loadStories = async () => {
+    const twentyFourHoursAgo = new Date(
+      Date.now() - 24 * 60 * 60 * 1000,
+    ).toISOString();
+    const { data, error } = await supabase
+      .from("stories")
+      .select("*, users(id, name, avatar_url)")
+      .gte("created_at", twentyFourHoursAgo)
+      .order("created_at", { ascending: true });
+
+    if (!error && data) {
+      const grouped = data.reduce((acc: any, story: any) => {
+        if (!acc[story.user_id]) {
+          acc[story.user_id] = { user: story.users, items: [] };
+        }
+        acc[story.user_id].items.push(story);
+        return acc;
+      }, {});
+      setStories(Object.values(grouped));
+    }
+  };
+
+  // ================= XÓA TIN =================
+  const handleDeleteStory = async (storyId: string) => {
+    showConfirm("Bạn có chắc chắn muốn xóa tin này không?", async () => {
+      try {
+        const { error } = await supabase
+          .from("stories")
+          .delete()
+          .eq("id", storyId);
+        if (error) throw error;
+        toast.success("Đã xóa tin");
+        setShowStoryMenu(false);
+
+        const updatedItems = activeStoryGroup.items.filter(
+          (s: any) => s.id !== storyId,
+        );
+        if (updatedItems.length === 0) {
+          setActiveStoryGroup(null);
+        } else {
+          setActiveStoryGroup({ ...activeStoryGroup, items: updatedItems });
+          setCurrentStoryIndex((prev) =>
+            prev >= updatedItems.length
+              ? Math.max(0, updatedItems.length - 1)
+              : prev,
+          );
+        }
+        loadStories();
+      } catch (err) {
+        toast.error("Lỗi khi xóa tin");
+      }
+    });
+  };
+
+  // ================= QUYỀN RIÊNG TƯ TIN =================
+  const handleOpenPrivacyModal = async (
+    context: "create" | "edit",
+    storyId?: string,
+    currentPrivacy: "public" | "followers" | "custom" = "public",
+    currentCustomUsers: string[] = [],
+  ) => {
+    if (myFollowers.length === 0) {
+      const { data: follows } = await supabase
+        .from("follows")
+        .select("following_id")
+        .eq("follower_id", user?.id);
+      const ids = follows?.map((f: any) => f.following_id) || [];
+      if (ids.length > 0) {
+        const { data: users } = await supabase
+          .from("users")
+          .select("id, name, avatar_url")
+          .in("id", ids);
+        setMyFollowers(users || []);
+      }
+    }
+    setPrivacyModalState({
+      isOpen: true,
+      context,
+      storyId,
+      privacy: currentPrivacy,
+      customUsers: currentCustomUsers,
+    });
+  };
+
+  const handleSavePrivacy = async () => {
+    if (privacyModalState.context === "create") {
+      setStoryPrivacy(privacyModalState.privacy);
+      setStoryCustomUsers(privacyModalState.customUsers);
+      setPrivacyModalState((prev) => ({ ...prev, isOpen: false }));
+    } else {
+      if (!privacyModalState.storyId) return;
+      try {
+        const { error } = await supabase
+          .from("stories")
+          .update({
+            privacy: privacyModalState.privacy,
+            custom_users: privacyModalState.customUsers,
+          })
+          .eq("id", privacyModalState.storyId);
+        if (error) throw error;
+
+        toast.success("Đã cập nhật quyền riêng tư");
+        setPrivacyModalState((prev) => ({ ...prev, isOpen: false }));
+
+        const updatedItems = activeStoryGroup.items.map((s: any) =>
+          s.id === privacyModalState.storyId
+            ? {
+                ...s,
+                privacy: privacyModalState.privacy,
+                custom_users: privacyModalState.customUsers,
+              }
+            : s,
+        );
+        setActiveStoryGroup({ ...activeStoryGroup, items: updatedItems });
+
+        setStories((prev) =>
+          prev.map((group) => {
+            if (group.user?.id === user?.id) {
+              return {
+                ...group,
+                items: group.items.map((s: any) =>
+                  s.id === privacyModalState.storyId
+                    ? {
+                        ...s,
+                        privacy: privacyModalState.privacy,
+                        custom_users: privacyModalState.customUsers,
+                      }
+                    : s,
+                ),
+              };
+            }
+            return group;
+          }),
+        );
+      } catch (err) {
+        toast.error("Lỗi cập nhật quyền riêng tư");
+      }
+    }
   };
 
   const loadFeed = async (activeUser?: any) => {
@@ -1479,8 +1666,12 @@ export default function HomePage() {
                     value={content}
                     onChange={(e) => setContent(e.target.value)}
                     placeholder={placeholder}
-                    className="w-full text-base resize-none outline-none min-h-[80px] text-gray-900 dark:text-gray-100 font-semibold bg-transparent pt-1 placeholder:text-gray-500 dark:placeholder:text-gray-400"
-                    rows={2}
+                    className="w-full text-[15px] resize-none outline-none min-h-[44px] text-gray-900 dark:text-gray-100 bg-gray-100 dark:bg-[#333333] hover:bg-gray-200 dark:hover:bg-[#3f3f3f] focus:bg-transparent dark:focus:bg-transparent focus:min-h-[80px] rounded-2xl px-4 py-2.5 placeholder:text-gray-500 dark:placeholder:text-gray-400 transition-all font-medium"
+                    rows={
+                      content.length > 0 || files.length > 0 || videoFile
+                        ? 3
+                        : 1
+                    }
                   />
 
                   {/* IMAGES PREVIEW */}
@@ -1925,6 +2116,183 @@ export default function HomePage() {
               </div>
             </div>
           )}
+
+          {/* ================= STORIES BAR ================= */}
+          <div className="flex gap-2 overflow-x-auto snap-x [&::-webkit-scrollbar]:hidden mb-4 pb-2">
+            {/* Tạo tin */}
+            <div
+              className="relative w-[110px] h-[200px] shrink-0 snap-start rounded-xl overflow-hidden cursor-pointer group shadow-sm border border-gray-200 dark:border-neutral-800 flex flex-col bg-white dark:bg-[#262626]"
+              onClick={() => {
+                if (checkLogin()) {
+                  setShowCreateStoryModal(true);
+                  setStoryError("");
+                  setStoryFile(null);
+                  setStoryContent("");
+                }
+              }}
+            >
+              <img
+                src={
+                  user?.avatar_url ||
+                  (user
+                    ? `https://api.dicebear.com/7.x/identicon/svg?seed=${user.id}`
+                    : "/sukhoi.jpg")
+                }
+                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                style={{ height: "65%" }}
+                alt="avatar"
+              />
+              <div className="h-[35%] flex flex-col items-center justify-end pb-2 relative bg-gray-50 dark:bg-[#262626]">
+                <div className="absolute -top-4 w-8 h-8 bg-blue-500 rounded-full border-4 border-gray-50 dark:border-[#262626] flex items-center justify-center text-white">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="M12 5v14" />
+                  </svg>
+                </div>
+                <span className="text-[12px] font-semibold text-gray-900 dark:text-gray-100">
+                  Tạo tin
+                </span>
+              </div>
+            </div>
+
+            {/* Tin đang tải lên (Optimistic UI Temp Story) */}
+            {isUploadingStory && tempStoryGroup && (
+              <div className="relative w-[110px] h-[200px] shrink-0 snap-start rounded-xl overflow-hidden shadow-sm border border-gray-200 dark:border-neutral-800 flex items-center justify-center bg-gray-900 animate-in fade-in zoom-in duration-300">
+                <div className="absolute inset-0 z-0">
+                  {tempStoryGroup.mediaType === "video" ? (
+                    <video
+                      src={tempStoryGroup.previewUrl}
+                      className="w-full h-full object-cover opacity-60"
+                    />
+                  ) : tempStoryGroup.mediaType === "image" ? (
+                    <img
+                      src={tempStoryGroup.previewUrl}
+                      className="w-full h-full object-cover opacity-60"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-gradient-to-tr from-blue-600 to-purple-600 opacity-60 flex items-center justify-center p-2">
+                      <span className="text-[10px] text-white break-words line-clamp-6 text-center">
+                        {tempStoryGroup.content}
+                      </span>
+                    </div>
+                  )}
+                </div>
+                <div className="absolute inset-0 bg-black/30 z-10" />
+                <div className="relative flex flex-col items-center z-20 gap-2">
+                  <div className="relative flex items-center justify-center">
+                    <svg className="w-10 h-10 transform -rotate-90 drop-shadow-md">
+                      <circle
+                        cx="20"
+                        cy="20"
+                        r="18"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        fill="transparent"
+                        className="text-gray-400/50"
+                      />
+                      <circle
+                        cx="20"
+                        cy="20"
+                        r="18"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                        fill="transparent"
+                        strokeDasharray="113.1"
+                        strokeDashoffset={
+                          113.1 -
+                          ((isCompressingStory
+                            ? storyCompressProgress
+                            : storyUploadProgress) /
+                            100) *
+                            113.1
+                        }
+                        className="text-blue-500 transition-all duration-300"
+                      />
+                    </svg>
+                  </div>
+                  <span className="text-[11px] font-bold text-white drop-shadow-md bg-black/40 px-2 py-0.5 rounded-full">
+                    {isCompressingStory ? "Đang nén..." : "Đang đăng..."}
+                  </span>
+                </div>
+
+                <div className="absolute top-3 left-3 w-10 h-10 rounded-full border-[3px] border-gray-300 overflow-hidden z-20 shadow-sm bg-white opacity-80">
+                  <img
+                    src={
+                      user?.avatar_url ||
+                      `https://api.dicebear.com/7.x/identicon/svg?seed=${user?.id}`
+                    }
+                    className="w-full h-full object-cover"
+                    alt="avatar"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Danh sách tin */}
+            {stories.map((group: any, idx: number) => {
+              const firstStory = group.items[0];
+              const isImage = firstStory.media_type === "image";
+              const isVideo = firstStory.media_type === "video";
+
+              return (
+                <div
+                  key={idx}
+                  className="relative w-[110px] h-[200px] shrink-0 snap-start rounded-xl overflow-hidden cursor-pointer group shadow-sm border border-gray-200 dark:border-neutral-800 bg-gray-900"
+                  onClick={() => {
+                    setActiveStoryGroup(group);
+                    setCurrentStoryIndex(0);
+                  }}
+                >
+                  <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors z-10" />
+
+                  {isVideo ? (
+                    <video
+                      src={firstStory.media_url}
+                      className="absolute inset-0 w-full h-full object-cover opacity-90"
+                      preload="metadata"
+                    />
+                  ) : isImage ? (
+                    <img
+                      src={firstStory.media_url}
+                      className="absolute inset-0 w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-tr from-blue-600 to-purple-600 p-3">
+                      <span className="text-white text-[11px] font-medium text-center line-clamp-6 break-words opacity-90">
+                        {firstStory.content}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="absolute top-3 left-3 w-10 h-10 rounded-full border-[3px] border-blue-500 overflow-hidden z-20 shadow-sm bg-white">
+                    <img
+                      src={
+                        group.user?.avatar_url ||
+                        `https://api.dicebear.com/7.x/identicon/svg?seed=${group.user?.id}`
+                      }
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+
+                  <div className="absolute bottom-3 left-2 right-2 z-20">
+                    <span className="text-[12px] font-semibold text-white drop-shadow-md line-clamp-2 leading-tight">
+                      {group.user?.name}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
 
           {/* FEED */}
           <div className="space-y-3">
@@ -3683,6 +4051,738 @@ export default function HomePage() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* ================= MODAL TẠO STORY ================= */}
+      {showCreateStoryModal && (
+        <div
+          className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in"
+          onClick={() => {
+            setShowCreateStoryModal(false);
+            setStoryError("");
+          }}
+        >
+          <div
+            className="bg-white dark:bg-[#262626] rounded-2xl w-full max-w-[400px] overflow-hidden shadow-2xl animate-in zoom-in-95 border border-gray-200 dark:border-neutral-800"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex justify-between items-center">
+              <h3 className="font-bold text-lg">Tạo tin (Story 24h)</h3>
+              <button
+                onClick={() => {
+                  setShowCreateStoryModal(false);
+                  setStoryError("");
+                }}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 space-y-4">
+              {storyError && (
+                <div className="bg-red-50 dark:bg-red-900/20 text-red-500 border border-red-200 dark:border-red-900/30 px-4 py-3 rounded-xl text-sm font-semibold flex items-center justify-between">
+                  <span>{storyError}</span>
+                  <button onClick={() => setStoryError("")}>
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+              {storyFile ? (
+                <div className="relative w-full h-48 bg-black rounded-lg overflow-hidden flex items-center justify-center">
+                  {storyFile.type.startsWith("video/") ? (
+                    <video
+                      src={storyFilePreview || undefined}
+                      className="max-h-full"
+                      controls={!isUploadingStory}
+                    />
+                  ) : (
+                    <img
+                      src={storyFilePreview || undefined}
+                      className="max-h-full object-contain"
+                    />
+                  )}
+                  {!isUploadingStory && (
+                    <button
+                      onClick={() => setStoryFile(null)}
+                      className="absolute top-2 right-2 bg-black/50 text-white rounded-full p-1 hover:bg-black/70 transition-colors"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                  {isUploadingStory && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/60 backdrop-blur-sm z-20">
+                      <div className="relative flex items-center justify-center mb-3">
+                        <svg className="w-14 h-14 transform -rotate-90 drop-shadow-md">
+                          <circle
+                            cx="28"
+                            cy="28"
+                            r="24"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                            fill="transparent"
+                            className="text-gray-400/30"
+                          />
+                          <circle
+                            cx="28"
+                            cy="28"
+                            r="24"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                            fill="transparent"
+                            strokeDasharray="150.8"
+                            strokeDashoffset={
+                              150.8 -
+                              ((isCompressingStory
+                                ? storyCompressProgress
+                                : storyUploadProgress) /
+                                100) *
+                                150.8
+                            }
+                            className="text-blue-500 transition-all duration-300"
+                          />
+                        </svg>
+                        <span className="absolute text-[11px] font-bold">
+                          {isCompressingStory
+                            ? storyCompressProgress
+                            : storyUploadProgress}
+                          %
+                        </span>
+                      </div>
+                      <span className="text-xs font-bold px-3 py-1.5 bg-black/50 rounded-full shadow-lg">
+                        {isCompressingStory
+                          ? "Đang nén video..."
+                          : storyFile.type.startsWith("video/")
+                            ? storyUploadProgress === 100
+                              ? "Đang xử lý..."
+                              : "Đang tải lên..."
+                            : "Đang tải lên..."}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <label className="border-2 border-dashed border-gray-300 dark:border-neutral-700 rounded-xl w-full h-32 flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 dark:hover:bg-neutral-800 transition-colors">
+                  <ImageIcon className="w-8 h-8 text-gray-400 mb-2" />
+                  <span className="text-sm font-medium text-gray-500">
+                    Chọn Ảnh hoặc Video
+                  </span>
+                  <input
+                    type="file"
+                    accept="image/*,video/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      if (e.target.files && e.target.files[0]) {
+                        const file = e.target.files[0];
+                        setStoryError(""); // Xóa lỗi cũ nếu có
+                        if (file.type.startsWith("video/")) {
+                          const video = document.createElement("video");
+                          video.preload = "metadata";
+                          video.onloadedmetadata = () => {
+                            URL.revokeObjectURL(video.src);
+                            if (video.duration > 60) {
+                              setStoryError(
+                                "Video Story không được vượt quá 1 phút (60 giây). Vui lòng chọn lại!",
+                              );
+                            } else {
+                              setStoryFile(file);
+                            }
+                          };
+                          video.src = URL.createObjectURL(file);
+                        } else {
+                          setStoryFile(file);
+                        }
+                      }
+                    }}
+                  />
+                </label>
+              )}
+              <textarea
+                value={storyContent}
+                onChange={(e) => setStoryContent(e.target.value)}
+                placeholder="Thêm văn bản cho tin của bạn..."
+                className="w-full bg-gray-50 dark:bg-[#333333] border border-gray-200 dark:border-neutral-700 rounded-xl p-3 outline-none resize-none text-sm"
+                rows={3}
+              />
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-bold text-gray-700 dark:text-gray-300">
+                  Quyền riêng tư
+                </label>
+                <button
+                  className="w-full flex items-center justify-between bg-gray-50 dark:bg-[#333333] border border-gray-200 dark:border-neutral-700 rounded-xl p-3 text-sm font-medium text-gray-700 dark:text-gray-300 cursor-pointer hover:bg-gray-100 dark:hover:bg-neutral-800 transition-colors"
+                  onClick={() =>
+                    handleOpenPrivacyModal(
+                      "create",
+                      undefined,
+                      storyPrivacy,
+                      storyCustomUsers,
+                    )
+                  }
+                >
+                  <div className="flex items-center gap-2">
+                    {storyPrivacy === "public" && <Globe size={18} />}
+                    {storyPrivacy === "followers" && <Users size={18} />}
+                    {storyPrivacy === "custom" && <Lock size={18} />}
+                    <span>
+                      {storyPrivacy === "public"
+                        ? "Công khai (Ai cũng có thể xem)"
+                        : storyPrivacy === "followers"
+                          ? "Chỉ người theo dõi"
+                          : `Tùy chỉnh (${storyCustomUsers.length} người)`}
+                    </span>
+                  </div>
+                  <ChevronRight size={18} />
+                </button>
+              </div>
+
+              <button
+                disabled={
+                  isUploadingStory || (!storyFile && !storyContent.trim())
+                }
+                onClick={async () => {
+                  // 1. Lưu lại giá trị hiện tại trước khi đóng modal
+                  const fileToUpload = storyFile;
+                  const contentToUpload = storyContent;
+                  const previewUrl = fileToUpload
+                    ? URL.createObjectURL(fileToUpload)
+                    : null;
+
+                  setIsUploadingStory(true);
+                  setStoryUploadProgress(0);
+                  setStoryCompressProgress(0);
+                  setIsCompressingStory(false);
+
+                  setTempStoryGroup({
+                    previewUrl,
+                    content: contentToUpload,
+                    mediaType: fileToUpload
+                      ? fileToUpload.type.startsWith("video/")
+                        ? "video"
+                        : "image"
+                      : "text",
+                  });
+
+                  // 2. Đóng Modal ngay lập tức để hiện Tin giả
+                  setShowCreateStoryModal(false);
+                  setStoryFile(null);
+                  setStoryContent("");
+                  setStoryPrivacy("public");
+
+                  try {
+                    let mediaUrl = null;
+                    let mediaType = "text";
+                    if (fileToUpload) {
+                      mediaType = fileToUpload.type.startsWith("video/")
+                        ? "video"
+                        : "image";
+
+                      if (mediaType === "video") {
+                        let uploadFile = fileToUpload;
+
+                        if (fileToUpload.size > 20 * 1024 * 1024) {
+                          setIsCompressingStory(true);
+                          try {
+                            if (!ffmpegRef.current)
+                              ffmpegRef.current = new FFmpeg();
+                            const ffmpeg = ffmpegRef.current;
+                            if (!ffmpeg.loaded) {
+                              const baseURL =
+                                "https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd";
+                              await ffmpeg.load({
+                                coreURL: await toBlobURL(
+                                  `${baseURL}/ffmpeg-core.js`,
+                                  "text/javascript",
+                                ),
+                                wasmURL: await toBlobURL(
+                                  `${baseURL}/ffmpeg-core.wasm`,
+                                  "application/wasm",
+                                ),
+                              });
+                            }
+                            ffmpeg.on("progress", ({ progress }: any) =>
+                              setStoryCompressProgress(
+                                Math.round(progress * 100),
+                              ),
+                            );
+                            await ffmpeg.writeFile(
+                              "input.mp4",
+                              await fetchFile(fileToUpload),
+                            );
+                            await ffmpeg.exec([
+                              "-i",
+                              "input.mp4",
+                              "-vf",
+                              "scale='min(720,iw)':-2",
+                              "-c:v",
+                              "libx264",
+                              "-crf",
+                              "28",
+                              "-preset",
+                              "ultrafast",
+                              "-c:a",
+                              "aac",
+                              "-b:a",
+                              "128k",
+                              "output.mp4",
+                            ]);
+                            const fileData =
+                              await ffmpeg.readFile("output.mp4");
+                            const data = new Uint8Array(
+                              fileData as ArrayBuffer,
+                            );
+                            uploadFile = new File([data], "compressed.mp4", {
+                              type: "video/mp4",
+                            });
+                          } catch (err) {
+                            console.error("Lỗi nén video story:", err);
+                            toast.error(
+                              "Không thể nén video. Đang thử tải lên file gốc...",
+                            );
+                          } finally {
+                            setIsCompressingStory(false);
+                            setStoryCompressProgress(0);
+                          }
+                        }
+
+                        try {
+                          const cloudName =
+                            process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME ||
+                            "dgdwsra8c";
+                          const uploadPreset =
+                            process.env.NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET ||
+                            "apex_reels";
+                          mediaUrl = await new Promise<string>(
+                            (resolve, reject) => {
+                              const xhr = new XMLHttpRequest();
+                              const url = `https://api.cloudinary.com/v1_1/${cloudName}/video/upload`;
+                              xhr.open("POST", url, true);
+                              xhr.upload.onprogress = (event) => {
+                                if (event.lengthComputable) {
+                                  setStoryUploadProgress(
+                                    Math.round(
+                                      (event.loaded / event.total) * 100,
+                                    ),
+                                  );
+                                }
+                              };
+                              xhr.onload = () => {
+                                if (xhr.status === 200) {
+                                  const response = JSON.parse(xhr.responseText);
+                                  if (response.secure_url) {
+                                    resolve(
+                                      response.secure_url.replace(
+                                        "/upload/",
+                                        "/upload/q_auto,f_auto/",
+                                      ),
+                                    );
+                                  } else
+                                    reject(new Error("Lỗi không lấy được URL"));
+                                } else reject(new Error("Upload thất bại"));
+                              };
+                              xhr.onerror = () =>
+                                reject(new Error("Lỗi mạng khi upload video"));
+                              const formData = new FormData();
+                              formData.append("file", uploadFile);
+                              formData.append("upload_preset", uploadPreset);
+                              xhr.send(formData);
+                            },
+                          );
+                        } catch (err) {
+                          throw new Error("Lỗi tải lên video");
+                        }
+                      } else {
+                        const cleanName = fileToUpload.name.replace(
+                          /[^a-zA-Z0-9.]/g,
+                          "_",
+                        );
+                        const fileName = `story_${Date.now()}_${cleanName}`;
+
+                        let progress = 0;
+                        const interval = setInterval(() => {
+                          progress += 10;
+                          if (progress > 90) progress = 90;
+                          setStoryUploadProgress(progress);
+                        }, 100);
+
+                        const { error: uploadError } = await supabase.storage
+                          .from("stories_media")
+                          .upload(fileName, fileToUpload);
+
+                        clearInterval(interval);
+                        if (uploadError) throw uploadError;
+
+                        setStoryUploadProgress(100);
+                        const { data } = supabase.storage
+                          .from("stories_media")
+                          .getPublicUrl(fileName);
+                        mediaUrl = data.publicUrl;
+                      }
+                    }
+                    await supabase.from("stories").insert({
+                      user_id: user.id,
+                      content: contentToUpload,
+                      media_url: mediaUrl,
+                      media_type: mediaType,
+                      privacy: storyPrivacy,
+                      custom_users: storyCustomUsers,
+                    });
+                    toast.success("Đăng tin thành công!");
+                    setShowCreateStoryModal(false);
+                    setStoryFile(null);
+                    setStoryContent("");
+                    loadStories();
+                  } catch (e) {
+                    toast.error("Lỗi đăng tin");
+                  } finally {
+                    setIsUploadingStory(false);
+                    if (previewUrl) URL.revokeObjectURL(previewUrl);
+                    setTempStoryGroup(null);
+                  }
+                }}
+                className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-xl flex justify-center items-center gap-2 disabled:opacity-50"
+              >
+                {isUploadingStory ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  "Đăng tin"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ================= MODAL XEM STORY ================= */}
+      {activeStoryGroup && (
+        <div
+          className="fixed inset-0 z-[99999] bg-black flex flex-col items-center justify-center animate-in fade-in"
+          onClick={() => setShowStoryMenu(false)}
+        >
+          {/* VÙNG CLICK CHUYỂN TIN TRÁI/PHẢI (FULL MÀN HÌNH) */}
+          <div
+            className="absolute inset-y-0 left-0 w-1/3 z-10 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowStoryMenu(false);
+              setCurrentStoryIndex(Math.max(0, currentStoryIndex - 1));
+            }}
+          />
+          <div
+            className="absolute inset-y-0 right-0 w-1/3 z-10 cursor-pointer"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowStoryMenu(false);
+              if (currentStoryIndex < activeStoryGroup.items.length - 1)
+                setCurrentStoryIndex(currentStoryIndex + 1);
+              else {
+                setActiveStoryGroup(null);
+                setCurrentStoryIndex(0);
+              }
+            }}
+          />
+
+          <div className="absolute top-4 right-4 flex items-center gap-4 z-50">
+            <button
+              onClick={() => {
+                setActiveStoryGroup(null);
+                setCurrentStoryIndex(0);
+              }}
+              className="text-white p-2 bg-white/20 rounded-full hover:bg-white/40"
+            >
+              <X size={24} />
+            </button>
+          </div>
+
+          {/* Nút 3 chấm (Cài đặt / Xóa) cho chính chủ */}
+          {user?.id === activeStoryGroup.user?.id && (
+            <div className="absolute top-4 right-16 flex items-center gap-4 z-50">
+              <div className="relative">
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowStoryMenu(!showStoryMenu);
+                  }}
+                  className="text-white p-2 bg-white/20 rounded-full hover:bg-white/40 transition-colors"
+                >
+                  <MoreHorizontal size={24} />
+                </button>
+                {showStoryMenu && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-[#262626] rounded-xl shadow-xl py-1 z-50 overflow-hidden border border-gray-200 dark:border-neutral-800 animate-in fade-in zoom-in duration-200">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setShowStoryMenu(false);
+                        handleOpenPrivacyModal(
+                          "edit",
+                          activeStoryGroup.items[currentStoryIndex].id,
+                          activeStoryGroup.items[currentStoryIndex].privacy ||
+                            "public",
+                          activeStoryGroup.items[currentStoryIndex]
+                            .custom_users || [],
+                        );
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-neutral-800 flex items-center gap-2 transition-colors font-semibold"
+                    >
+                      <Settings size={16} /> Chỉnh sửa quyền riêng tư
+                    </button>
+                    <div className="border-t border-gray-100 dark:border-neutral-800 my-1"></div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteStory(
+                          activeStoryGroup.items[currentStoryIndex].id,
+                        );
+                      }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 font-semibold flex items-center gap-2 transition-colors"
+                    >
+                      <Trash2 size={16} /> Xóa tin này
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Thanh tiến trình */}
+          <div className="absolute top-4 left-4 right-16 flex gap-1 z-50">
+            {activeStoryGroup.items.map((_: any, idx: number) => (
+              <div
+                key={idx}
+                className="h-1 flex-1 bg-white/30 rounded-full overflow-hidden"
+              >
+                <div
+                  className={`h-full bg-white transition-all duration-300 ${idx < currentStoryIndex ? "w-full" : idx === currentStoryIndex ? "w-full" : "w-0"}`}
+                />
+              </div>
+            ))}
+          </div>
+
+          {/* Thông tin user */}
+          <div className="absolute top-8 left-4 flex items-center gap-3 z-50">
+            <img
+              src={
+                activeStoryGroup.user?.avatar_url ||
+                `https://api.dicebear.com/7.x/identicon/svg?seed=${activeStoryGroup.user?.id}`
+              }
+              className="w-10 h-10 rounded-full object-cover border border-white/50"
+            />
+            <div className="flex flex-col text-white shadow-sm">
+              <span className="font-bold text-sm drop-shadow-md">
+                {activeStoryGroup.user?.name}
+              </span>
+              <div className="flex items-center gap-1.5 text-xs opacity-80 drop-shadow-md mt-0.5">
+                <span>
+                  {new Date(
+                    activeStoryGroup.items[currentStoryIndex].created_at,
+                  ).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+                <span className="text-[10px]">•</span>
+                {activeStoryGroup.items[currentStoryIndex].privacy ===
+                  "public" && <Globe size={12} />}
+                {activeStoryGroup.items[currentStoryIndex].privacy ===
+                  "followers" && <Users size={12} />}
+                {(!activeStoryGroup.items[currentStoryIndex].privacy ||
+                  activeStoryGroup.items[currentStoryIndex].privacy ===
+                    "custom") && <Lock size={12} />}
+              </div>
+            </div>
+          </div>
+
+          {/* Nội dung Story */}
+          <div className="relative w-full max-w-[500px] h-full flex items-center justify-center">
+            {activeStoryGroup?.items?.[currentStoryIndex]?.media_type ===
+            "video" ? (
+              <video
+                src={activeStoryGroup.items[currentStoryIndex].media_url}
+                autoPlay
+                controls
+                className="w-full max-h-full object-contain"
+              />
+            ) : activeStoryGroup?.items?.[currentStoryIndex]?.media_type ===
+              "image" ? (
+              <img
+                src={activeStoryGroup.items[currentStoryIndex].media_url}
+                className="w-full max-h-full object-contain"
+              />
+            ) : null}
+
+            {activeStoryGroup?.items?.[currentStoryIndex]?.content && (
+              <div className="absolute bottom-12 w-full px-6 text-center z-30 pointer-events-none">
+                <span className="bg-black/60 text-white px-4 py-2 rounded-xl inline-block max-w-full break-words text-sm md:text-base">
+                  {activeStoryGroup.items[currentStoryIndex].content}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+      {/* ================= MODAL PRIVACY STORY ================= */}
+      {privacyModalState.isOpen && (
+        <div
+          className="fixed inset-0 z-[999999] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in"
+          onClick={() =>
+            setPrivacyModalState((prev) => ({ ...prev, isOpen: false }))
+          }
+        >
+          <div
+            className="bg-white dark:bg-[#262626] rounded-2xl w-full max-w-[400px] overflow-hidden shadow-2xl animate-in zoom-in-95 border border-gray-200 dark:border-neutral-800 flex flex-col max-h-[85vh]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="p-4 border-b border-gray-200 dark:border-neutral-800 flex justify-between items-center shrink-0 bg-gray-50 dark:bg-[#333333]">
+              <h3 className="font-bold text-lg">Quyền riêng tư</h3>
+              <button
+                onClick={() =>
+                  setPrivacyModalState((prev) => ({ ...prev, isOpen: false }))
+                }
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 flex-1 overflow-y-auto space-y-3">
+              <div
+                onClick={() =>
+                  setPrivacyModalState((prev) => ({
+                    ...prev,
+                    privacy: "public",
+                  }))
+                }
+                className={`flex gap-3 p-3 rounded-xl cursor-pointer transition-colors ${privacyModalState.privacy === "public" ? "bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900 shadow-sm" : "hover:bg-gray-50 dark:hover:bg-neutral-800 border border-transparent"}`}
+              >
+                <Globe
+                  className={`w-6 h-6 mt-0.5 ${privacyModalState.privacy === "public" ? "text-blue-500" : "text-gray-500"}`}
+                />
+                <div className="flex-1">
+                  <p className="font-bold text-[15px]">Công khai</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Bất kỳ ai trên Apex cũng có thể xem tin này.
+                  </p>
+                </div>
+                {privacyModalState.privacy === "public" && (
+                  <Check className="w-5 h-5 text-blue-500 my-auto" />
+                )}
+              </div>
+
+              <div
+                onClick={() =>
+                  setPrivacyModalState((prev) => ({
+                    ...prev,
+                    privacy: "followers",
+                  }))
+                }
+                className={`flex gap-3 p-3 rounded-xl cursor-pointer transition-colors ${privacyModalState.privacy === "followers" ? "bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900 shadow-sm" : "hover:bg-gray-50 dark:hover:bg-neutral-800 border border-transparent"}`}
+              >
+                <Users
+                  className={`w-6 h-6 mt-0.5 ${privacyModalState.privacy === "followers" ? "text-blue-500" : "text-gray-500"}`}
+                />
+                <div className="flex-1">
+                  <p className="font-bold text-[15px]">Chỉ người theo dõi</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Những người theo dõi bạn mới có thể xem tin.
+                  </p>
+                </div>
+                {privacyModalState.privacy === "followers" && (
+                  <Check className="w-5 h-5 text-blue-500 my-auto" />
+                )}
+              </div>
+
+              <div
+                onClick={() =>
+                  setPrivacyModalState((prev) => ({
+                    ...prev,
+                    privacy: "custom",
+                  }))
+                }
+                className={`flex gap-3 p-3 rounded-xl cursor-pointer transition-colors ${privacyModalState.privacy === "custom" ? "bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900 shadow-sm" : "hover:bg-gray-50 dark:hover:bg-neutral-800 border border-transparent"}`}
+              >
+                <Lock
+                  className={`w-6 h-6 mt-0.5 ${privacyModalState.privacy === "custom" ? "text-blue-500" : "text-gray-500"}`}
+                />
+                <div className="flex-1">
+                  <p className="font-bold text-[15px]">Tùy chỉnh</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Chọn những người cụ thể được phép xem tin.
+                  </p>
+                </div>
+                {privacyModalState.privacy === "custom" && (
+                  <Check className="w-5 h-5 text-blue-500 my-auto" />
+                )}
+              </div>
+
+              {privacyModalState.privacy === "custom" && (
+                <div className="mt-4 animate-in fade-in slide-in-from-top-2">
+                  <div className="flex items-center gap-2 border border-gray-200 dark:border-neutral-700 shadow-inner bg-white dark:bg-[#262626] p-2.5 rounded-xl mb-3">
+                    <Search size={16} className="text-muted-foreground" />
+                    <input
+                      value={searchFollower}
+                      onChange={(e) => setSearchFollower(e.target.value)}
+                      className="flex-1 outline-none text-sm bg-transparent placeholder:text-gray-500"
+                      placeholder="Tìm kiếm bạn bè..."
+                    />
+                  </div>
+                  <div className="max-h-48 overflow-y-auto space-y-1">
+                    {myFollowers
+                      .filter((u) =>
+                        u.name
+                          .toLowerCase()
+                          .includes(searchFollower.toLowerCase()),
+                      )
+                      .map((u) => {
+                        const isSelected =
+                          privacyModalState.customUsers.includes(u.id);
+                        return (
+                          <div
+                            key={u.id}
+                            className="flex items-center justify-between p-2 hover:bg-gray-50 dark:hover:bg-neutral-800 rounded-xl cursor-pointer"
+                            onClick={() => {
+                              setPrivacyModalState((prev) => ({
+                                ...prev,
+                                customUsers: isSelected
+                                  ? prev.customUsers.filter((id) => id !== u.id)
+                                  : [...prev.customUsers, u.id],
+                              }));
+                            }}
+                          >
+                            <div className="flex items-center gap-3">
+                              <img
+                                src={
+                                  u.avatar_url ||
+                                  `https://api.dicebear.com/7.x/identicon/svg?seed=${u.id}`
+                                }
+                                className="w-8 h-8 rounded-full border border-gray-200 dark:border-neutral-700"
+                              />
+                              <span className="text-sm font-semibold">
+                                {u.name}
+                              </span>
+                            </div>
+                            <div
+                              className={`w-5 h-5 rounded border flex items-center justify-center transition-colors ${isSelected ? "bg-blue-500 border-blue-500 text-white" : "border-gray-300 dark:border-neutral-600"}`}
+                            >
+                              {isSelected && <Check size={14} />}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    {myFollowers.length === 0 && (
+                      <p className="text-xs text-center text-muted-foreground py-4">
+                        Bạn chưa theo dõi ai.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-200 dark:border-neutral-800 bg-gray-50 dark:bg-[#333333]">
+              <button
+                onClick={handleSavePrivacy}
+                className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 rounded-xl transition-colors"
+              >
+                Xong
+              </button>
+            </div>
           </div>
         </div>
       )}
