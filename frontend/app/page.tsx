@@ -4480,70 +4480,8 @@ export default function HomePage() {
             }}
           />
 
-          <div className="absolute top-4 right-4 flex items-center gap-4 z-50">
-            <button
-              onClick={() => {
-                setActiveStoryGroup(null);
-                setCurrentStoryIndex(0);
-              }}
-              className="text-white p-2 bg-white/20 rounded-full hover:bg-white/40"
-            >
-              <X size={24} />
-            </button>
-          </div>
-
-          {/* Nút 3 chấm (Cài đặt / Xóa) cho chính chủ */}
-          {user?.id === activeStoryGroup.user?.id && (
-            <div className="absolute top-4 right-16 flex items-center gap-4 z-50">
-              <div className="relative">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowStoryMenu(!showStoryMenu);
-                  }}
-                  className="text-white p-2 bg-white/20 rounded-full hover:bg-white/40 transition-colors"
-                >
-                  <MoreHorizontal size={24} />
-                </button>
-                {showStoryMenu && (
-                  <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-[#262626] rounded-xl shadow-xl py-1 z-50 overflow-hidden border border-gray-200 dark:border-neutral-800 animate-in fade-in zoom-in duration-200">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowStoryMenu(false);
-                        handleOpenPrivacyModal(
-                          "edit",
-                          activeStoryGroup.items[currentStoryIndex].id,
-                          activeStoryGroup.items[currentStoryIndex].privacy ||
-                            "public",
-                          activeStoryGroup.items[currentStoryIndex]
-                            .custom_users || [],
-                        );
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-neutral-800 flex items-center gap-2 transition-colors font-semibold"
-                    >
-                      <Settings size={16} /> Chỉnh sửa quyền riêng tư
-                    </button>
-                    <div className="border-t border-gray-100 dark:border-neutral-800 my-1"></div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteStory(
-                          activeStoryGroup.items[currentStoryIndex].id,
-                        );
-                      }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 font-semibold flex items-center gap-2 transition-colors"
-                    >
-                      <Trash2 size={16} /> Xóa tin này
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* Thanh tiến trình */}
-          <div className="absolute top-4 left-4 right-16 flex gap-1 z-50">
+          <div className="absolute top-2 left-2 right-2 flex gap-1 z-50">
             {activeStoryGroup.items.map((_: any, idx: number) => (
               <div
                 key={idx}
@@ -4556,37 +4494,102 @@ export default function HomePage() {
             ))}
           </div>
 
-          {/* Thông tin user */}
-          <div className="absolute top-8 left-4 flex items-center gap-3 z-50">
-            <img
-              src={
-                activeStoryGroup.user?.avatar_url ||
-                `https://api.dicebear.com/7.x/identicon/svg?seed=${activeStoryGroup.user?.id}`
-              }
-              className="w-10 h-10 rounded-full object-cover border border-white/50"
-            />
-            <div className="flex flex-col text-white shadow-sm">
-              <span className="font-bold text-sm drop-shadow-md">
-                {activeStoryGroup.user?.name}
-              </span>
-              <div className="flex items-center gap-1.5 text-xs opacity-80 drop-shadow-md mt-0.5">
-                <span>
-                  {new Date(
-                    activeStoryGroup.items[currentStoryIndex].created_at,
-                  ).toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+          {/* Header Story: Avatar, Info, Menu, Close */}
+          <div className="absolute top-6 left-4 right-4 flex items-start justify-between z-50 pointer-events-none">
+            {/* Thông tin user */}
+            <div className="flex items-center gap-3 pointer-events-auto">
+              <img
+                src={
+                  activeStoryGroup.user?.avatar_url ||
+                  `https://api.dicebear.com/7.x/identicon/svg?seed=${activeStoryGroup.user?.id}`
+                }
+                className="w-10 h-10 rounded-full object-cover border border-white/50 shadow-sm"
+              />
+              <div className="flex flex-col text-white shadow-sm">
+                <span className="font-bold text-sm drop-shadow-md">
+                  {activeStoryGroup.user?.name}
                 </span>
-                <span className="text-[10px]">•</span>
-                {activeStoryGroup.items[currentStoryIndex].privacy ===
-                  "public" && <Globe size={12} />}
-                {activeStoryGroup.items[currentStoryIndex].privacy ===
-                  "followers" && <Users size={12} />}
-                {(!activeStoryGroup.items[currentStoryIndex].privacy ||
-                  activeStoryGroup.items[currentStoryIndex].privacy ===
-                    "custom") && <Lock size={12} />}
+                <div className="flex items-center gap-1.5 text-xs opacity-80 drop-shadow-md mt-0.5">
+                  <span>
+                    {new Date(
+                      activeStoryGroup.items[currentStoryIndex].created_at,
+                    ).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                  <span className="text-[10px]">•</span>
+                  {activeStoryGroup.items[currentStoryIndex].privacy ===
+                    "public" && <Globe size={12} />}
+                  {activeStoryGroup.items[currentStoryIndex].privacy ===
+                    "followers" && <Users size={12} />}
+                  {(!activeStoryGroup.items[currentStoryIndex].privacy ||
+                    activeStoryGroup.items[currentStoryIndex].privacy ===
+                      "custom") && <Lock size={12} />}
+                </div>
               </div>
+            </div>
+
+            {/* Nút thao tác */}
+            <div className="flex items-center gap-2 pointer-events-auto">
+              {/* Nút 3 chấm (Cài đặt / Xóa) cho chính chủ */}
+              {user?.id === activeStoryGroup.user?.id && (
+                <div className="relative">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setShowStoryMenu(!showStoryMenu);
+                    }}
+                    className="text-white p-2 bg-black/20 hover:bg-black/40 rounded-full transition-colors backdrop-blur-sm"
+                  >
+                    <MoreHorizontal size={24} />
+                  </button>
+                  {showStoryMenu && (
+                    <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-[#262626] rounded-xl shadow-xl py-1 z-50 overflow-hidden border border-gray-200 dark:border-neutral-800 animate-in fade-in zoom-in duration-200">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setShowStoryMenu(false);
+                          handleOpenPrivacyModal(
+                            "edit",
+                            activeStoryGroup.items[currentStoryIndex].id,
+                            activeStoryGroup.items[currentStoryIndex].privacy ||
+                              "public",
+                            activeStoryGroup.items[currentStoryIndex]
+                              .custom_users || [],
+                          );
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm hover:bg-gray-50 dark:hover:bg-neutral-800 flex items-center gap-2 transition-colors font-semibold"
+                      >
+                        <Settings size={16} /> Chỉnh sửa quyền riêng tư
+                      </button>
+                      <div className="border-t border-gray-100 dark:border-neutral-800 my-1"></div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteStory(
+                            activeStoryGroup.items[currentStoryIndex].id,
+                          );
+                        }}
+                        className="w-full text-left px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 font-semibold flex items-center gap-2 transition-colors"
+                      >
+                        <Trash2 size={16} /> Xóa tin này
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Nút Đóng (X) */}
+              <button
+                onClick={() => {
+                  setActiveStoryGroup(null);
+                  setCurrentStoryIndex(0);
+                }}
+                className="text-white p-2 bg-black/20 hover:bg-black/40 rounded-full transition-colors backdrop-blur-sm"
+              >
+                <X size={24} />
+              </button>
             </div>
           </div>
 
@@ -4609,13 +4612,47 @@ export default function HomePage() {
             ) : null}
 
             {activeStoryGroup?.items?.[currentStoryIndex]?.content && (
-              <div className="absolute bottom-12 w-full px-6 text-center z-30 pointer-events-none">
+              <div className="absolute bottom-24 sm:bottom-12 w-full px-6 text-center z-30 pointer-events-none">
                 <span className="bg-black/60 text-white px-4 py-2 rounded-xl inline-block max-w-full break-words text-sm md:text-base">
                   {activeStoryGroup.items[currentStoryIndex].content}
                 </span>
               </div>
             )}
           </div>
+
+          {/* THANH TƯƠNG TÁC (REPLY & LIKE) - GIAO DIỆN MOBILE */}
+          {user?.id !== activeStoryGroup.user?.id && (
+            <div className="absolute bottom-6 sm:bottom-8 left-4 right-4 z-50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4">
+              <div
+                className="flex-1 bg-black/40 border border-white/30 backdrop-blur-sm rounded-full px-4 py-3 flex items-center cursor-text"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <input
+                  type="text"
+                  placeholder={`Gửi tin nhắn cho ${activeStoryGroup.user?.name}...`}
+                  className="bg-transparent outline-none text-white text-sm w-full placeholder:text-white/80"
+                />
+              </div>
+              <button
+                className="text-white p-2 hover:scale-110 active:scale-90 transition-transform drop-shadow-md"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toast.success("Đã thả tym!");
+                }}
+              >
+                <Heart size={28} />
+              </button>
+              <button
+                className="text-white p-2 hover:scale-110 active:scale-90 transition-transform drop-shadow-md"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toast.success("Tính năng gửi tin nhắn đang được hoàn thiện!");
+                }}
+              >
+                <Send size={28} />
+              </button>
+            </div>
+          )}
         </div>
       )}
       {/* ================= MODAL PRIVACY STORY ================= */}
