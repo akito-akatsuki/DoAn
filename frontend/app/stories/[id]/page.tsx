@@ -109,7 +109,12 @@ export default function StoryDetailPage({
   }, [story, currentUser?.id]);
 
   const handleLikeStory = async () => {
-    if (!currentUser || isLikingStory || !story) return;
+    if (!currentUser) {
+      toast.error("Vui lòng đăng nhập để thả tim!");
+      router.push("/login");
+      return;
+    }
+    if (isLikingStory || !story) return;
 
     setIsLikingStory(true);
     try {
@@ -134,7 +139,12 @@ export default function StoryDetailPage({
   };
 
   const handleReplyStory = async () => {
-    if (!currentUser || !storyReplyText.trim() || !story) return;
+    if (!currentUser) {
+      toast.error("Vui lòng đăng nhập để gửi tin nhắn!");
+      router.push("/login");
+      return;
+    }
+    if (!storyReplyText.trim() || !story) return;
     const textToSend = storyReplyText.trim();
 
     setStoryReplyText("");
@@ -233,7 +243,7 @@ export default function StoryDetailPage({
       </div>
 
       {/* THANH TƯƠNG TÁC */}
-      {currentUser?.id && currentUser.id !== story.user_id && (
+      {currentUser?.id !== story.user_id && (
         <div className="absolute bottom-6 sm:bottom-8 left-4 right-4 z-50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-4">
           <div
             className="flex-1 bg-black/40 border border-white/30 backdrop-blur-sm rounded-full px-4 py-3 flex items-center cursor-text pointer-events-auto"
@@ -244,6 +254,13 @@ export default function StoryDetailPage({
               value={storyReplyText}
               onChange={(e) => setStoryReplyText(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleReplyStory()}
+              onFocus={(e) => {
+                if (!currentUser) {
+                  e.target.blur();
+                  toast.error("Vui lòng đăng nhập để gửi tin nhắn!");
+                  router.push("/login");
+                }
+              }}
               placeholder={`Gửi tin nhắn cho ${story.users?.name}...`}
               className="bg-transparent outline-none text-white text-sm w-full placeholder:text-white/80"
             />

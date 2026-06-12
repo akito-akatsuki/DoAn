@@ -34,6 +34,8 @@ import {
   Settings,
   Check,
   Search,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import { FFmpeg } from "@ffmpeg/ffmpeg";
 import { fetchFile, toBlobURL } from "@ffmpeg/util";
@@ -256,6 +258,7 @@ export default function HomePage() {
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
   const [loginLoading, setLoginLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const handlePopupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1021,7 +1024,8 @@ export default function HomePage() {
   }, [activeStoryGroup, currentStoryIndex, user?.id]);
 
   const handleLikeStory = async () => {
-    if (!user || isLikingStory || !activeStoryGroup) return;
+    if (!checkLogin()) return;
+    if (isLikingStory || !activeStoryGroup) return;
     const currentStory = activeStoryGroup.items[currentStoryIndex];
     const isLiked = likedStories.has(currentStory.id);
 
@@ -1056,7 +1060,8 @@ export default function HomePage() {
   };
 
   const handleReplyStory = async () => {
-    if (!user || !storyReplyText.trim() || !activeStoryGroup) return;
+    if (!checkLogin()) return;
+    if (!storyReplyText.trim() || !activeStoryGroup) return;
     const textToSend = storyReplyText.trim();
     const currentStory = activeStoryGroup.items[currentStoryIndex];
 
@@ -3978,14 +3983,23 @@ export default function HomePage() {
                 className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors text-sm"
               />
               {popupView === "login" && (
-                <input
-                  type="password"
-                  placeholder="Mật khẩu"
-                  value={loginPassword}
-                  onChange={(e) => setLoginPassword(e.target.value)}
-                  required
-                  className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors text-sm"
-                />
+                <div className="relative">
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Mật khẩu"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    required
+                    className="w-full border border-gray-300 dark:border-neutral-700 shadow-inner p-2.5 rounded-lg outline-none bg-gray-50 dark:bg-[#333333] focus:bg-white dark:focus:bg-[#202020] text-gray-900 dark:text-gray-100 transition-colors text-sm pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
+                </div>
               )}
 
               {popupView === "login" && (
@@ -4756,6 +4770,11 @@ export default function HomePage() {
                   value={storyReplyText}
                   onChange={(e) => setStoryReplyText(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && handleReplyStory()}
+                  onFocus={(e) => {
+                    if (!checkLogin()) {
+                      e.target.blur();
+                    }
+                  }}
                   placeholder={`Gửi tin nhắn cho ${activeStoryGroup.user?.name}...`}
                   className="bg-transparent outline-none text-white text-sm w-full placeholder:text-white/80"
                 />
