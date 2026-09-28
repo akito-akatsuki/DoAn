@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CV - Phạm Minh Hoàn</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: #f5f5f5;
+            padding: 10mm;
+        }
+
+        @page {
+            size: A4;
+            margin: 0;
+        }
+
+        .page {
+            width: 210mm;
+            min-height: 297mm;
+            background: white;
+            padding: 20mm;
+            margin: 10mm auto;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            page-break-after: always;
+            page-break-inside: avoid;
+        }
+
+        /* Header */
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #2c3e50;
+            padding-bottom: 15px;
+            margin-bottom: 15px;
+        }
+
+        .header h1 {
+            font-size: 32px;
+            color: #2c3e50;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .contact-info {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            font-size: 12px;
+            flex-wrap: wrap;
+        }
+
+        .contact-info span {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        /* Sections */
+        .section {
+            margin-bottom: 15px;
+            page-break-inside: avoid;
+        }
+
+        .section-title {
+            font-size: 15px;
+            font-weight: bold;
+            color: white;
+            background: #2c3e50;
+            padding: 10px 12px;
+            margin-bottom: 10px;
+            border-left: 4px solid #3498db;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-content {
+            margin-left: 0;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        /* Objective */
+        .objective {
+            background: #f0f7ff;
+            padding: 12px;
+            border-left: 4px solid #e74c3c;
+            font-size: 13px;
+            line-height: 1.6;
+            border-radius: 3px;
+        }
+
+        .objective strong {
+            color: #2c3e50;
+        }
+
+        /* Skills */
+        .skills-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            font-size: 12px;
+        }
+
+        .skill-item {
+            padding: 10px;
+            background: #f8f9fa;
+            border-left: 3px solid #3498db;
+            border-radius: 3px;
+        }
+
+        .skill-item strong {
+            color: #2c3e50;
+            display: block;
+            margin-bottom: 4px;
+            font-size: 13px;
+        }
+
+        /* Education */
+        .education-item {
+            margin-bottom: 12px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-left: 3px solid #27ae60;
+            border-radius: 3px;
+            font-size: 13px;
+        }
+
+        .education-item .degree {
+            font-weight: bold;
+            color: #2c3e50;
+            font-size: 14px;
+        }
+
+        .education-item .badge-excellent {
+            background: #27ae60;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-left: 5px;
+        }
+
+        .education-item .school {
+            color: #7f8c8d;
+            font-style: italic;
+            margin-top: 3px;
+        }
+
+        .education-item .year {
+            color: #95a5a6;
+            font-size: 12px;
+            margin-top: 3px;
+        }
+
+        /* Projects */
+        .project-item {
+            margin-bottom: 12px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-left: 4px solid #3498db;
+            border-radius: 3px;
+            font-size: 12px;
+            page-break-inside: avoid;
+        }
+
+        .project-item .project-title {
+            font-weight: bold;
+            color: #2c3e50;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            font-size: 13px;
+        }
+
+        .project-item .badge {
+            background: #e74c3c;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
+        .project-item .project-badge {
+            display: inline-block;
+            background: #27ae60;
+            color: white;
+            padding: 3px 8px;
+            border-radius: 3px;
+            font-size: 11px;
+            margin-bottom: 6px;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+
+        .project-item .project-desc {
+            color: #555;
+            margin-bottom: 6px;
+            line-height: 1.5;
+            font-size: 12px;
+        }
+
+        .project-item .project-tech {
+            color: #2980b9;
+            margin-top: 6px;
+            font-size: 11px;
+            line-height: 1.5;
+        }
+
+        .project-item .project-tech strong {
+            color: #2c3e50;
+        }
+
+        .project-item .project-links {
+            margin-top: 6px;
+            font-size: 11px;
+        }
+
+        .project-item .project-links a {
+            color: #3498db;
+            text-decoration: none;
+            word-break: break-all;
+        }
+
+        .features {
+            margin: 6px 0;
+            padding-left: 20px;
+            font-size: 12px;
+            color: #555;
+            line-height: 1.5;
+        }
+
+        .features li {
+            margin-bottom: 3px;
+            list-style: none;
+            position: relative;
+            padding-left: 16px;
+        }
+
+        .features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #27ae60;
+            font-weight: bold;
+        }
+
+        /* Certificates */
+        .cert-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 10px;
+            font-size: 12px;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        .cert-item .badge {
+            background: #f39c12;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 3px;
+            font-weight: bold;
+            white-space: nowrap;
+            font-size: 11px;
+            flex-shrink: 0;
+        }
+
+        .cert-item .badge.award {
+            background: #e74c3c;
+        }
+
+        .cert-item .badge.cert {
+            background: #9b59b6;
+        }
+
+        .cert-item .badge.complete {
+            background: #27ae60;
+        }
+
+        .cert-item span {
+            flex: 1;
+            line-height: 1.5;
+        }
+
+        /* Strengths */
+        .strengths {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            font-size: 12px;
+        }
+
+        .strength-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 6px;
+            line-height: 1.4;
+        }
+
+        .strength-item:before {
+            content: "✓";
+            color: #27ae60;
+            font-weight: bold;
+            font-size: 14px;
+            flex-shrink: 0;
+            margin-top: -2px;
+        }
+
+        .strength-item span {
+            line-height: 1.4;
+        }
+
+        /* Languages */
+        .language-item {
+            margin-bottom: 8px;
+            font-size: 12px;
+            padding: 8px;
+            background: #f8f9fa;
+            border-left: 3px solid #9b59b6;
+            border-radius: 3px;
+        }
+
+        .language-item strong {
+            color: #2c3e50;
+            display: inline-block;
+            min-width: 120px;
+        }
+
+        /* Footer */
+        .footer {
+            font-size: 11px;
+            color: #95a5a6;
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 12px;
+            border-top: 1px solid #ecf0f1;
+            page-break-inside: avoid;
+        }
+
+        /* Print styles */
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+            }
+
+            .page {
+                margin: 0;
+                padding: 20mm;
+                box-shadow: none;
+                min-height: auto;
+            }
+
+            .section {
+                page-break-inside: avoid;
+            }
+        }
+
+        .link {
+            color: #3498db;
+            text-decoration: none;
+        }
+
+        .link:hover {
+            text-decoration: underline;
+        }
+
+        /* Ensure text wraps properly */
+        body, .page {
+            word-wrap: break-word;
+            overflow-wrap: break-word;
+        }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <!-- Header -->
+        <div class="header">
+            <h1>PHẠM MINH HOÀN</h1>
+            <div class="contact-info">
+                <span><strong>📱</strong> 0705826936</span>
+                <span><strong>📍</strong> Phường Trà Lý, Tỉnh Hưng Yên</span>
+                <span><strong>🔗</strong> <a href="https://github.com/akito-akatsuki" class="link">github.com/akito-akatsuki</a></span>
+            </div>
+        </div>
+
+        <!-- Objective -->
+        <div class="section">
+            <div class="section-title">🎯 MỤC TIÊU NGHỀ NGHIỆP</div>
+            <div class="objective">
+                <strong>Ứng tuyển vị trí Business Analyst (BA) / BrSE</strong> để phát triển kỹ năng phân tích nghiệp vụ, quản lý dự án và giao tiếp với các stakeholder. 
+                <br/><br/>
+                Với nền tảng kỹ thuật vững chắc (Full-Stack Developer), tôi muốn áp dụng kiến thức lập trình vào lĩnh vực Business Analysis - tạo ra những specs rõ ràng, mockup giao diện chuyên nghiệp, và đảm bảo chất lượng sản phẩm trước khi UAT. 
+                <br/><br/>
+                <strong>Đặc biệt quan tâm đến ngành Game</strong> - mong được tham gia vào các dự án sản phẩm web tại các công ty game như Garena, nhằm kết hợp đam mê với công nghệ và tư duy business để tạo ra những sản phẩm có tác động thực tế.
+            </div>
+        </div>
+
+        <!-- Education -->
+        <div class="section">
+            <div class="section-title">🎓 HỌC VẤN</div>
+            <div class="section-content">
+                <div class="education-item">
+                    <div class="degree">
+                        Cử Nhân Công Nghệ Thông Tin
+                        <span class="badge-excellent">Loại Giỏi</span>
+                    </div>
+                    <div class="school">Đại Học Thái Bình</div>
+                    <div class="year">📅 Năm tốt nghiệp: 2026</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Skills -->
+        <div class="section">
+            <div class="section-title">💻 KỸ NĂNG CHÍNH</div>
+            <div class="skills-grid">
+                <div class="skill-item">
+                    <strong>Frontend Development</strong>
+                    React, Next.js, TypeScript, HTML5, CSS3, Tailwind CSS
+                </div>
+                <div class="skill-item">
+                    <strong>Backend & Database</strong>
+                    Node.js, Express, Supabase, PostgreSQL, REST API
+                </div>
+                <div class="skill-item">
+                    <strong>BA/BrSE Relevant</strong>
+                    Spec Writing, UI/UX Feedback, Figma (cơ bản), Wireframing
+                </div>
+                <div class="skill-item">
+                    <strong>Project Management</strong>
+                    Agile/Scrum (cơ bản), Issue Tracking, Timeline Management
+                </div>
+                <div class="skill-item">
+                    <strong>Real-time & Security</strong>
+                    WebSocket, Supabase RLS, System Design
+                </div>
+                <div class="skill-item">
+                    <strong>Soft Skills</strong>
+                    Communication, Problem-solving, Structured Thinking, Deadline-driven
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Projects -->
+        <div class="section">
+            <div class="section-title">🚀 DỰ ÁN NỔI BẬT</div>
+            <div class="section-content">
+                <!-- Project 1 -->
+                <div class="project-item">
+                    <div class="project-title">
+                        🌐 Social Network Platform - Website Mạng Xã Hội
+                        <span class="badge">⭐ KHÓA LUẬN TỐT NGHIỆP</span>
+                    </div>
+                    <div class="project-badge">✍️ Làm 1 mình - BA + Developer</div>
+                    <div class="project-desc">
+                        Nền tảng mạng xã hội hoàn chỉnh được trình lên hội đồng chấm khóa luận tốt nghiệp và trả lời câu hỏi chuyên môn. <strong>Tự thực hiện toàn bộ quy trình: yêu cầu → mockup → thiết kế → phát triển → test → deploy.</strong>
+                    </div>
+
+                    <strong style="color: #2c3e50; display: block; margin: 6px 0;">🎯 Tính năng chính & Linh vực BA:</strong>
+                    <ul class="features">
+                        <li><strong>Spec & Requirements:</strong> Soạn thảo đầy đủ specs cho tính năng Feed, Comment, Message, Video Call</li>
+                        <li><strong>Mockup & Design:</strong> Dùng Figma để wireframe giao diện, đảm bảo UX logic và rõ ràng</li>
+                        <li><strong>Architecture & Technical Decision:</strong> Lựa chọn Supabase RLS cho bảo mật, WebSocket cho real-time</li>
+                        <li><strong>Testing & QA:</strong> Kiểm thử tính năng theo specs, đảm bảo bug-free trước khi triển khai</li>
+                        <li>Hệ thống xác thực người dùng an toàn với Supabase Auth</li>
+                        <li>Tạo, chia sẻ, bình luận bài viết real-time (WebSocket)</li>
+                        <li>Hệ thống theo dõi, kết bạn, nhắn tin trực tiếp</li>
+                        <li>Bảo mật dữ liệu với Row Level Security (RLS) của Supabase</li>
+                        <li>Thông báo real-time cho tương tác người dùng</li>
+                        <li>Upload hình ảnh, video tối ưu với Cloudinary</li>
+                        <li>Video call trực tiếp với Zego Cloud</li>
+                        <li>Responsive design, tối ưu trên mobile và desktop</li>
+                    </ul>
+
+                    <div class="project-tech">
+                        <strong>Tech Stack:</strong> Next.js 16.2, TypeScript, React 19, Tailwind CSS 4, Supabase PostgreSQL, WebSocket, Cloudinary, Zego Cloud, FFmpeg, Figma
+                    </div>
+                    <div class="project-tech">
+                        <strong>Thành tựu:</strong> Hoàn thành 100% tính năng, vượt qua đánh giá hội đồng chấm, mã nguồn clean, có documentation đầy đủ, trả lời thành công các câu hỏi chuyên môn
+                    </div>
+                    <div class="project-links">
+                        <strong>🔗 Links:</strong> <br/>
+                        Demo: <a href="https://do-an-mauve.vercel.app" class="link">https://do-an-mauve.vercel.app</a><br/>
+                        Repository: <a href="https://github.com/akito-akatsuki/DoAn" class="link">https://github.com/akito-akatsuki/DoAn</a>
+                    </div>
+                </div>
+
+                <!-- Project 2 -->
+                <div class="project-item">
+                    <div class="project-title">
+                        📦 Smart Warehouse Management System - Hệ Thống Quản Lý Kho Hàng Thông Minh
+                    </div>
+                    <div class="project-badge">🏢 Thực Tập Tốt Nghiệp - BA & Developer</div>
+                    <div class="project-desc">
+                        Ứng dụng quản lý kho hàng được phát triển trong chương trình thực tập tốt nghiệp. <strong>Tham gia từ khâu thu thập yêu cầu, soạn specs, mockup giao diện cho đến development và QA.</strong>
+                    </div>
+
+                    <strong style="color: #2c3e50; display: block; margin: 6px 0;">🎯 Tính năng chính & Linh vực BA:</strong>
+                    <ul class="features">
+                        <li><strong>Requirement Gathering:</strong> Thu thập yêu cầu từ team warehouse, làm rõ pain points</li>
+                        <li><strong>Specs & Mockup:</strong> Soạn chi tiết specs cho quản lý sản phẩm, nhập xuất, báo cáo</li>
+                        <li><strong>Project Tracking:</strong> Theo dõi tiến độ development, cảnh báo rủi ro khi phát sinh</li>
+                        <li><strong>Testing & UAT:</strong> Kiểm thử các quy trình nghiệp vụ theo specs trước khi UAT</li>
+                        <li>Quản lý sản phẩm, danh mục hàng hóa chi tiết</li>
+                        <li>Theo dõi nhập/xuất kho, quản lý tồn kho theo thời gian thực</li>
+                        <li>Báo cáo tồn kho, thống kê doanh thu và chi phí</li>
+                        <li>Tìm kiếm, lọc sản phẩm nâng cao theo nhiều tiêu chí</li>
+                        <li>Dashboard tổng quan với biểu đồ thống kê trực quan</li>
+                        <li>Xuất báo cáo, in phiếu nhập xuất</li>
+                    </ul>
+
+                    <div class="project-tech">
+                        <strong>Tech Stack:</strong> JavaScript, React, CSS3, REST API, Figma
+                    </div>
+                    <div class="project-tech">
+                        <strong>Thành tựu:</strong> Hoàn thành đúng yêu cầu, được áp dụng thử nghiệp tại doanh nghiệp, nhận feedback tích cực từ end-users
+                    </div>
+                    <div class="project-links">
+                        <strong>🔗 Links:</strong> <br/>
+                        Demo: <a href="https://thuc-tap-cn.vercel.app" class="link">https://thuc-tap-cn.vercel.app</a><br/>
+                        Repository: <a href="https://github.com/akito-akatsuki/ThucTap" class="link">https://github.com/akito-akatsuki/ThucTap</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Certificates & Awards -->
+        <div class="section">
+            <div class="section-title">🏆 CHỨNG CHỈ & GIẢI THƯỞNG</div>
+            <div class="section-content">
+                <div class="cert-item">
+                    <span class="badge award">🏆 GIẢI THƯỞNG</span>
+                    <span><strong>Giải Thưởng Sinh Viên Nghiên Cứu Khoa Học Hạng Nhất</strong> năm 2025 - Công nhân viên đã đạt thành tựu xuất sắc trong lĩnh vực nghiên cứu khoa học và phát triển sản phẩm</span>
+                </div>
+                <div class="cert-item">
+                    <span class="badge cert">📜 CHỨNG CHỈ</span>
+                    <span><strong>Chứng Chỉ Tiếng Anh APTIS B2</strong> - Trình độ Upper Intermediate (Đọc, viết, nghe, nói) - Đủ năng lực giao tiếp với stakeholder nước ngoài</span>
+                </div>
+                <div class="cert-item">
+                    <span class="badge complete">✓ HOÀN THÀNH</span>
+                    <span><strong>Khóa Luận Tốt Nghiệp - Loại Giỏi</strong> tại Đại Học Thái Bình - Trình lên hội đồng chấm, trả lời thành công các câu hỏi chuyên môn, chứng minh khả năng tư duy logic và giải quyết vấn đề</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Strengths -->
+        <div class="section">
+            <div class="section-title">⭐ ĐIỂM MẠNH</div>
+            <div class="strengths">
+                <div class="strength-item">
+                    <span><strong>Background kỹ thuật vững</strong> - Biết lập trình giúp hiểu rõ technical constraints khi soạn specs</span>
+                </div>
+                <div class="strength-item">
+                    <span><strong>Kinh nghiệm BA thực tế</strong> - Đã làm spec, mockup, tracking project, QA trong khóa luận và thực tập</span>
+                </div>
+                <div class="strength-item">
+                    <span><strong>Khả năng giao tiếp tốt</strong> - Trình bày được ý tưởng rõ ràng, có thể briefing với teams khác nhau</span>
+                </div>
+                <div class="strength-item">
+                    <span><strong>Tư duy structured</strong> - Giải quyết vấn đề có logic, không làm việc hỗn loạn</span>
+                </div>
+                <div class="strength-item">
+                    <span><strong>Chủ động học hỏi & nhanh thích nghi</strong> - Tự học Figma, Supabase, WebSocket để hoàn thành project</span>
+                </div>
+                <div class="strength-item">
+                    <span><strong>Chịu được áp lực deadline</strong> - Đã hoàn thành khóa luận đúng hạn với chất lượng cao</span>
+                </div>
+                <div class="strength-item">
+                    <span><strong>Đam mê ngành Game</strong> - Luôn cập nhật xu hướng, có ý tưởng về product game</span>
+                </div>
+                <div class="strength-item">
+                    <span><strong>Tư duy đầu dùng</strong> - Luôn nghĩ từ góc độ end-user khi thiết kế tính năng</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Languages -->
+        <div class="section">
+            <div class="section-title">🌐 NGÔN NGỮ</div>
+            <div class="section-content">
+                <div class="language-item">
+                    <strong>Tiếng Việt:</strong> Thành thạo (Tiếng mẹ đẻ)
+                </div>
+                <div class="language-item">
+                    <strong>Tiếng Anh:</strong> APTIS B2 - Upper Intermediate Level (Đọc, viết, nghe, nói) - Có thể giao tiếp với các team nước ngoài, đọc tài liệu technical tiếng Anh
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>📧 Email: <em>[Thêm email của bạn]</em> | 📞 Điện thoại: 0705826936 | 💼 GitHub: github.com/akito-akatsuki</p>
+            <p style="margin-top: 8px; font-size: 10px;">CV được cập nhật lần cuối: Tháng 9 - 2026 | Sẵn sàng cung cấp portfolio, demo project, video hướng dẫn hoặc tham khảo từ hội đồng chấm</p>
+        </div>
+    </div>
+</body>
+</html>
